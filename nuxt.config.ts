@@ -1,7 +1,17 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const defaultAppsScriptApiUrl = 'https://script.google.com/macros/s/AKfycbxAikXauXo-Ct_FfawqXjrdMxa3K-cK6eyBZFuG74IlrVNW2bE2vwX4BLsEo-CS7AwIyA/exec'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   modules: ['@nuxt/fonts', '@nuxt/ui', '@nuxt/eslint'],
-  css: ['~/assets/css/main.css']
+  css: ['~/assets/css/main.css'],
+  runtimeConfig: {
+    public: {
+      appsScriptApiUrl: import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
+      appName: import.meta.env.NUXT_PUBLIC_APP_NAME || 'Mau KaGa',
+      maxUploadMb: Number(import.meta.env.NUXT_PUBLIC_MAX_UPLOAD_MB || 10),
+      maxItems: Number(import.meta.env.NUXT_PUBLIC_MAX_ITEMS || 10)
+    }
+  }
 })
