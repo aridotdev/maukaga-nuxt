@@ -179,9 +179,9 @@ function statusTextClass(status?: string) {
 function statusCheckInfoText(status?: string) {
   const map: Record<string, string> = {
     Baru: 'Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin.',
-    Disetujui: 'Pengajuan telah disetujui dan akan diproses ke tahap berikutnya.',
-    Ditolak: 'Pengajuan ditolak. Silakan periksa kembali data pengajuan atau hubungi admin.',
-    Selesai: 'Pengajuan telah selesai diproses.',
+    Disetujui: 'Pengajuan telah diperiksa dan disetujui dan akan dibuatkan dan langsung dikirimkan.',
+    Ditolak: 'Pengajuan telah diperiksa dan ditolak, silakan hubungi admin untuk informasi lebih lanjut.',
+    Selesai: 'Kartu sudah selesai dibuat dan dikirimkan ke alamat yang tertera di pengajuan.',
     'Menunggu Upload': 'Pengajuan masih berupa draft. Lanjutkan draft untuk upload hard copy bertanda tangan dan submit final.'
   }
 
