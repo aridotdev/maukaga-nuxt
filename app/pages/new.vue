@@ -378,8 +378,6 @@ async function handleSaveDraftAndPrint() {
     savedPrintId.value = currentDraftId.value
     showPrintPreview.value = true
     showToast('Draft berhasil disimpan', 'success', `ID Pengajuan: ${currentDraftId.value}`)
-
-    window.setTimeout(() => window.print(), 100)
   } catch (error) {
     showToast('Draft gagal disimpan', 'error', getErrorMessage(error))
   } finally {
