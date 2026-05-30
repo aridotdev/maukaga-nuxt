@@ -173,62 +173,76 @@ function onDraftSubmit() {
           </div>
 
           <!-- Item List -->
-          <div class="mb-8 flex flex-col gap-4">
-            <div
-              v-for="(product, index) in formState.products"
-              :key="index"
-              class="relative rounded-2xl border border-muted border-l-4 border-l-primary bg-default/35 p-5 shadow-sm backdrop-blur-lg transition-colors hover:bg-default/50"
-            >
-              <div class="mb-4 flex items-start justify-between">
-                <div>
-                  <span class="mb-1 block text-xs font-semibold uppercase tracking-wider text-dimmed">Item {{ index + 1 }}</span>
-                  <h3 class="text-base font-bold text-highlighted">
-                    Detail Produk
-                  </h3>
-                </div>
-                <UButton
-                  type="button"
-                  icon="i-lucide-trash-2"
-                  color="error"
-                  variant="ghost"
-                  size="sm"
-                  :aria-label="`Hapus item ${index + 1}`"
-                />
-              </div>
+          <div class="mb-8 overflow-hidden rounded-xl border border-muted bg-default/35 shadow-sm backdrop-blur-lg">
+            <div class="hidden grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_40px] gap-3 border-b border-muted px-4 py-3 text-xs font-semibold uppercase tracking-wider text-toned md:grid">
+              <span class="text-center">#</span>
+              <span>Model <span class="text-error">*</span></span>
+              <span>Produk / Nama Produk <span class="text-error">*</span></span>
+              <span>Nomor Seri <span class="text-error">*</span></span>
+              <span />
+            </div>
 
-              <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <UFormField :name="`products.${index}.model`" label="Model" size="sm">
+            <div class="flex flex-col gap-2 p-3">
+              <div
+                v-for="(product, index) in formState.products"
+                :key="index"
+                class="grid grid-cols-1 gap-3 rounded-lg border border-muted bg-default/60 p-3 shadow-xs md:grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_40px] md:items-start"
+              >
+                <div class="flex items-center gap-3 md:justify-center md:pt-1">
+                  <span class="flex size-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                    {{ index + 1 }}
+                  </span>
+                  <span class="text-xs font-semibold uppercase tracking-wider text-toned md:hidden">
+                    Item Produk
+                  </span>
+                </div>
+
+                <UFormField :name="`products.${index}.model`" size="sm">
                   <UInput
                     v-model="product.model"
-                    placeholder="Model Produk"
+                    aria-label="Tipe atau model produk"
+                    placeholder="Tipe/Model"
                     class="w-full"
                     color="neutral"
-                    variant="soft"
+                    variant="outline"
                     size="md"
                   />
                 </UFormField>
 
-                <UFormField :name="`products.${index}.namaProduk`" label="Nama Produk" size="sm">
+                <UFormField :name="`products.${index}.namaProduk`" size="sm">
                   <UInput
                     v-model="product.namaProduk"
-                    placeholder="Nama Produk Lengkap"
+                    aria-label="Produk atau nama produk"
+                    placeholder="Nama Produk"
                     class="w-full"
                     color="neutral"
-                    variant="soft"
+                    variant="outline"
                     size="md"
                   />
                 </UFormField>
 
-                <UFormField :name="`products.${index}.nomorSeri`" label="Nomor Seri" size="sm">
+                <UFormField :name="`products.${index}.nomorSeri`" size="sm">
                   <UInput
                     v-model="product.nomorSeri"
-                    placeholder="Nomor Seri / S/N"
+                    aria-label="Nomor seri produk"
+                    placeholder="S/N"
                     class="w-full"
                     color="neutral"
-                    variant="soft"
+                    variant="outline"
                     size="md"
                   />
                 </UFormField>
+
+                <div class="flex justify-end md:pt-1">
+                  <UButton
+                    type="button"
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="ghost"
+                    size="sm"
+                    :aria-label="`Hapus item ${index + 1}`"
+                  />
+                </div>
               </div>
             </div>
           </div>
