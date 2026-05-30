@@ -179,7 +179,7 @@ function statusTextClass(status?: string) {
 function statusCheckInfoText(status?: string) {
   const map: Record<string, string> = {
     Baru: 'Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin.',
-    Disetujui: 'Pengajuan telah diperiksa dan disetujui dan akan dibuatkan dan langsung dikirimkan.',
+    Disetujui: 'Pengajuan telah diperiksa dan disetujui. Kartu garansi akan segera dibuat dan dikirimkan.',
     Ditolak: 'Pengajuan telah diperiksa dan ditolak, silakan hubungi admin untuk informasi lebih lanjut.',
     Selesai: 'Kartu sudah selesai dibuat dan dikirimkan ke alamat yang tertera di pengajuan.',
     'Menunggu Upload': 'Pengajuan masih berupa draft. Lanjutkan draft untuk upload hard copy bertanda tangan dan submit final.'
@@ -202,7 +202,7 @@ function getErrorMessage(error: unknown) {
       class="mb-8 grow rounded-3xl border border-white/60 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-colors md:p-8"
       :class="hasStatusInputInteraction ? 'bg-white/65' : 'bg-white/45'"
     >
-      <div class="mx-auto max-w-md py-6 text-center">
+      <div class="mx-auto max-w-lg py-6 text-center">
         <h2 class="mb-2 text-xl font-bold text-slate-900 md:text-2xl">
           Lacak Status Pengajuan
         </h2>

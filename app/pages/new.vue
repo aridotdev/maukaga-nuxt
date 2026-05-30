@@ -443,13 +443,6 @@ function getErrorMessage(error: unknown) {
             Lengkapi data pengajuan, simpan draft, lalu cetak hard copy untuk ditandatangani.
           </p>
         </div>
-        <UButton
-          to="/final-submit"
-          label="Final Submit"
-          icon="i-lucide-upload"
-          color="neutral"
-          variant="subtle"
-        />
       </header>
 
       <!-- Main Content Layout (Left Form, Right Sidebar) -->
@@ -670,7 +663,7 @@ function getErrorMessage(error: unknown) {
             <!-- Footer Action in Form Area -->
             <div class="mt-auto flex flex-col items-center justify-between gap-4 border-t border-muted pt-6 sm:flex-row">
               <p class="text-xs italic text-muted">
-                Draft akan tersimpan di Google Apps Script sebelum dicetak. Upload final dilakukan di halaman Final Submit.
+                Draft akan tersimpan di database sebelum dicetak. Upload final dilakukan di halaman Final Submit.
               </p>
               <UButton
                 type="submit"
@@ -749,27 +742,6 @@ function getErrorMessage(error: unknown) {
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- Info Snippet -->
-          <div class="flex flex-col justify-center rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl">
-            <p class="mb-1 text-xs font-bold uppercase tracking-wider text-dimmed">
-              Referensi Draft
-            </p>
-            <p class="flex items-center gap-2 break-all text-base font-bold text-highlighted">
-              <UIcon :name="currentDraftId ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="size-5" :class="currentDraftId ? 'text-success' : 'text-warning'" />
-              {{ draftReferenceText }}
-            </p>
-            <UButton
-              v-if="currentDraftId"
-              :to="finalSubmitUrl"
-              label="Ke Final Submit"
-              icon="i-lucide-arrow-right"
-              color="primary"
-              variant="soft"
-              block
-              class="mt-4"
-            />
           </div>
         </aside>
       </div>
