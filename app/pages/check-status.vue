@@ -71,20 +71,19 @@ function showToast(message: string, type: ToastType = 'info') {
 }
 
 async function handleCheckStatus() {
+  const requestId = ++statusCheckRequestId.value
   const idPengajuan = idPengajuanInput.value.trim()
   hasInputError.value = false
+  resetStatusCheckResult()
 
   if (!idPengajuan) {
     hasInputError.value = true
-    // showStatusCheckResult('error', 'Masukkan ID Pengajuan terlebih dahulu.')
     showToast('Masukkan ID Pengajuan terlebih dahulu.', 'error')
     return
   }
 
-  const requestId = ++statusCheckRequestId.value
   setStatusCheckLoading(true)
   showStatusCheckResult('loading', 'Memeriksa status pengajuan...')
-  showToast('Mencari data pengajuan...', 'info')
 
   try {
     const result = await callAPI<StatusData>('checkPengajuanStatus', { idPengajuan })
@@ -92,7 +91,6 @@ async function handleCheckStatus() {
     if (!result.success) throw new Error(result.error || 'Status pengajuan gagal dimuat')
 
     renderStatusCheckResult(result.data || { idPengajuan })
-    showToast('Status pengajuan berhasil ditemukan.', 'success')
   } catch (error) {
     if (requestId === statusCheckRequestId.value) {
       const message = getErrorMessage(error)
@@ -114,6 +112,12 @@ function showStatusCheckResult(type: Exclude<ResultType, 'idle'>, message: strin
   statusData.value = {}
   resultMessage.value = message
   resultType.value = type
+}
+
+function resetStatusCheckResult() {
+  statusData.value = {}
+  resultMessage.value = ''
+  resultType.value = 'idle'
 }
 
 function setStatusCheckLoading(value: boolean) {
