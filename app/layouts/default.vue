@@ -80,7 +80,11 @@
 
     <!-- HEADER BRANDING -->
     <header class="relative z-10 mx-auto mt-2 flex w-full max-w-7xl flex-col items-center justify-between gap-4 md:flex-row md:gap-0">
-      <div class="flex items-center gap-3">
+      <NuxtLink
+        to="/"
+        class="flex items-center gap-3 rounded-2xl outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[#0F172A]/30 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
+        aria-label="Kembali ke halaman utama Mau KaGa"
+      >
         <!-- App Logo Box -->
         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0F172A] shadow-sm">
           <svg
@@ -104,7 +108,7 @@
             Sistem Pengajuan Kartu Garansi
           </p>
         </div>
-      </div>
+      </NuxtLink>
 
       <div class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm">
         Internal Portal QRCC - Cabang / CS
