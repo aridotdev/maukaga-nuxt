@@ -17,30 +17,9 @@ function showToast(message, type = 'success') {
 <template>
   <section class="mx-auto flex min-h-full w-full max-w-5xl flex-col p-4 md:p-8">
     <!-- Workspace Header -->
-    <div class="mb-6 flex flex-col items-start justify-between gap-4 border-b border-slate-200 pb-4 md:flex-row md:items-center">
-      <NuxtLink
-        to="/"
-        class="flex w-full items-center justify-center gap-2 rounded-full border bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900 md:w-auto"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-4 w-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-        </svg>
-        <span>Kembali ke Launcher</span>
-      </NuxtLink>
-      <span class="self-center rounded-full bg-slate-200 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-800 md:self-auto">
-        Lanjutkan Draft
-      </span>
-    </div>
 
     <!-- TARGET CONTENT CONTAINER -->
-    <div class="mb-8 grow rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+    <div class="mb-8 grow rounded-3xl border bg-white/45 border-white/60 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
       <div class="mx-auto max-w-xl">
         <h2 class="mb-2 text-xl font-bold text-slate-900 md:text-2xl">
           Upload Hard Copy Berkas
