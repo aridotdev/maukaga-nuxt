@@ -62,7 +62,7 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
       </NuxtLink>
 
       <!-- CARD 2: CEK STATUS PENGAJUAN -->
-      <NuxtLink to="/checkStatus" :class="glassCardClass">
+      <NuxtLink to="/check-status" :class="glassCardClass">
         <span>
           <span :class="iconContainerClass">
             <svg
@@ -103,7 +103,7 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
       </NuxtLink>
 
       <!-- CARD 3: LANJUTKAN DRAFT -->
-      <NuxtLink to="/finalSubmit" :class="glassCardClass">
+      <NuxtLink to="/final-submit" :class="glassCardClass">
         <span>
           <span :class="iconContainerClass">
             <svg
