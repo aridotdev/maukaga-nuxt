@@ -13,54 +13,25 @@ function showToast(message, type = 'success') {
 </script>
 
 <template>
-  <div class="relative mx-auto flex w-full max-w-[1400px] flex-col gap-6 p-4 sm:p-6 lg:gap-8 lg:p-8">
+  <div class="relative mx-auto flex w-full max-w-350 flex-col gap-6 p-4 sm:p-6 lg:p-8">
     <!-- Header Section -->
-    <header class="glass-panel flex flex-col items-start justify-between gap-6 rounded-[2rem] p-6 lg:flex-row lg:items-center lg:p-8">
-      <div class="flex-1">
-        <div class="mb-2 flex items-center gap-3">
-          <span class="rounded-full border border-white/60 bg-white/50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-400">Portal Pengajuan</span>
-          <span class="flex items-center gap-1 text-sm font-medium text-[#0a192f]">
-            <span class="h-2 w-2 rounded-full bg-amber-500" /> Mode Draft
-          </span>
-        </div>
-        <h1 class="mb-2 text-3xl font-bold text-[#0a192f]">
+    <header class="glass-panel flex flex-col items-start justify-between gap-3 rounded-2xl p-4 lg:flex-row lg:items-center lg:p-5">
+      <div class="min-w-0 flex-1">
+        <h1 class="mb-1 text-xl font-bold text-[#0a192f] lg:text-2xl">
           Form Pengajuan Kartu Garansi Baru
         </h1>
-        <p class="max-w-2xl text-sm text-slate-500 lg:text-base">
+        <p class="max-w-none truncate text-xs leading-relaxed text-slate-500 lg:text-sm">
           Lengkapi data pengajuan, cetak hard copy, lalu unggah kembali dokumen bertanda tangan untuk finalisasi.
         </p>
-      </div>
-
-      <div class="flex w-full flex-wrap gap-4 lg:w-auto">
-        <!-- Info Badges -->
-        <div class="glass-card flex min-w-[100px] flex-col justify-center rounded-2xl p-4">
-          <span class="mb-1 text-xs font-medium text-slate-500">Item</span>
-          <div class="flex items-baseline gap-1">
-            <span class="text-2xl font-bold text-[#0a192f]">2</span>
-            <span class="text-xs text-slate-400">Maks. 10</span>
-          </div>
-        </div>
-        <div class="glass-card flex min-w-[120px] flex-col justify-center rounded-2xl p-4">
-          <span class="mb-1 text-xs font-medium text-slate-500">Upload</span>
-          <div class="mb-1 flex items-baseline gap-1">
-            <span class="text-2xl font-bold text-[#0a192f]">10MB</span>
-          </div>
-          <span class="text-[10px] font-medium text-slate-400">PDF, JPG, PNG</span>
-        </div>
-        <div class="flex min-w-[120px] flex-col justify-center rounded-2xl bg-[#0a192f] p-4 text-white shadow-lg shadow-[#0a192f]/20">
-          <span class="mb-1 text-xs font-medium text-blue-200">Status</span>
-          <span class="mb-1 text-2xl font-bold">Draft</span>
-          <span class="text-[10px] font-medium text-blue-100">Siap dicetak</span>
-        </div>
       </div>
     </header>
 
     <!-- Main Content Layout (Left Form, Right Sidebar) -->
-    <div class="flex flex-col gap-6 lg:flex-row lg:gap-8">
+    <div class="flex flex-col gap-6 lg:flex-row">
       <!-- Left Column: Form Areas -->
       <div class="flex flex-1 flex-col gap-6">
         <!-- Section 1: Informasi Pemohon -->
-        <section class="glass-panel relative rounded-[2rem] p-6 lg:p-8">
+        <section class="glass-panel relative rounded-4xl p-6 lg:p-8">
           <div class="mb-8 flex items-center justify-between border-b border-white/40 pb-4">
             <div class="flex items-center gap-4">
               <div class="flex h-12 w-12 items-center justify-center rounded-full border border-white bg-white/60 text-[#0a192f] shadow-sm">
@@ -84,23 +55,6 @@ function showToast(message, type = 'success') {
                 </h2>
               </div>
             </div>
-            <button
-              type="button"
-              class="hidden items-center gap-2 rounded-xl border border-white/60 bg-white/50 px-4 py-2 text-sm font-semibold text-[#0a192f] shadow-sm transition-colors hover:bg-white/80 sm:flex"
-              @click="showToast('Draft berhasil dibuat! ID Pengajuan: KG-20260528-0001', 'success')"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V3h12v6M6 18H5a2 2 0 01-2-2v-5a2 2 0 012-2h14a2 2 0 012 2v5a2 2 0 01-2 2h-1M6 14h12v7H6v-7z" />
-              </svg>
-              Draft dan cetak
-            </button>
           </div>
 
           <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -150,7 +104,7 @@ function showToast(message, type = 'success') {
         </section>
 
         <!-- Section 2: Daftar Produk -->
-        <section class="glass-panel flex flex-col rounded-[2rem] p-6 lg:p-8">
+        <section class="glass-panel flex flex-col rounded-4xl p-6 lg:p-8">
           <div class="mb-6 flex items-center justify-between border-b border-white/40 pb-4">
             <div class="flex items-center gap-4">
               <div class="flex h-12 w-12 items-center justify-center rounded-full border border-white bg-white/60 text-[#0a192f] shadow-sm">
@@ -299,7 +253,7 @@ function showToast(message, type = 'success') {
       <!-- Right Column: Sidebar / Status Tracker -->
       <aside class="flex w-full flex-col gap-6 lg:w-80">
         <!-- Status Tracker Panel -->
-        <div class="glass-panel rounded-[2rem] p-6">
+        <div class="glass-panel rounded-4xl p-6">
           <div class="mb-6 flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-white/80 bg-white/60 text-[#0a192f] shadow-sm">
               <svg
@@ -325,7 +279,7 @@ function showToast(message, type = 'success') {
 
           <div class="relative flex flex-col gap-3">
             <!-- Connecting Line -->
-            <div class="absolute bottom-8 left-[22px] top-8 z-0 w-0.5 border-l border-white/40 bg-white" />
+            <div class="absolute bottom-8 left-5.5 top-8 z-0 w-0.5 border-l border-white/40 bg-white" />
 
             <!-- Step 1: Active -->
             <div class="relative z-10 flex gap-4 rounded-2xl border border-[#102a43] bg-[#0a192f] p-4 text-white shadow-lg shadow-[#0a192f]/20">
@@ -375,7 +329,7 @@ function showToast(message, type = 'success') {
         </div>
 
         <!-- Info Snippet -->
-        <div class="glass-panel flex flex-col justify-center rounded-[2rem] p-6">
+        <div class="glass-panel flex flex-col justify-center rounded-4xl p-6">
           <p class="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">
             Referensi Draft
           </p>
