@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { getLocalTimeZone, today } from '@internationalized/date'
 
+definePageMeta({
+  layout: 'cs'
+})
+
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
 type DateValueLike = {
@@ -83,7 +87,7 @@ const formState = reactive<FormState>({
   products: [createProductItem()]
 })
 
-const tanggalForm = shallowRef<any>(createTodayDateValue())
+const tanggalForm = shallowRef<DateValueLike>(createTodayDateValue())
 const fieldErrors = reactive<Record<string, string>>({})
 const modelProdukMap = ref<Record<string, string>>({})
 const currentDraftId = ref('')
@@ -255,11 +259,11 @@ function setFieldError(name: string, message: string) {
 }
 
 function clearFieldError(name: string) {
-  delete fieldErrors[name]
+  fieldErrors[name] = ''
 }
 
 function clearValidationErrors() {
-  for (const key of Object.keys(fieldErrors)) delete fieldErrors[key]
+  for (const key of Object.keys(fieldErrors)) fieldErrors[key] = ''
 }
 
 function validateForm() {
