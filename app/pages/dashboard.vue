@@ -1,7 +1,11 @@
-<script setup>
+<script setup lang="ts">
 definePageMeta({
-  layout: 'dashboard'
-  // middleware: ['dashboard']
+  layout: 'dashboard',
+  middleware: defineNuxtRouteMiddleware(() => {
+    if (import.meta.client && !sessionStorage.getItem('admin_token')) {
+      return navigateTo('/login')
+    }
+  })
 })
 </script>
 

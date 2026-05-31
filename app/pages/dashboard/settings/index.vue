@@ -6,7 +6,7 @@ const fileRef = ref<HTMLInputElement>()
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Too short'),
-  email: z.string().email('Invalid email'),
+  email: z.email('Invalid email'),
   username: z.string().min(2, 'Too short'),
   avatar: z.string().optional(),
   bio: z.string().optional()

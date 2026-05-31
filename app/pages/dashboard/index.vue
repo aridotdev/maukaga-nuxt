@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { sub } from 'date-fns'
+import HomePengajuan from '~/components/home/HomePengajuan.vue'
 import type { Period, Range } from '~/types'
 
 const { isNotificationsSlideoverOpen } = useDashboard()
@@ -39,7 +40,7 @@ const period = ref<Period>('daily')
     <template #body>
       <HomeStats :period="period" :range="range" />
       <HomeChart :period="period" :range="range" />
-      <HomeSales :period="period" :range="range" />
+      <HomePengajuan />
     </template>
   </UDashboardPanel>
 </template>
