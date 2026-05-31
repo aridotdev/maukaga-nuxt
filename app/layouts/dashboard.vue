@@ -125,12 +125,42 @@ onMounted(async () => {
       :ui="{ footer: 'lg:border-t lg:border-default' }"
     >
       <template #header="{ collapsed }">
-        <TeamsMenu :collapsed="collapsed" />
+        <div
+          class="flex h-17.5 items-center"
+          :class="collapsed ? 'justify-center' : 'gap-3 px-2'"
+        >
+          <div
+            class="flex shrink-0 items-center justify-center bg-[#B6F500] shadow-[0_0_15px_rgba(182,245,0,0.3)] transition-all"
+            :class="collapsed ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-xl'"
+          >
+            <svg
+              width="34"
+              height="32"
+              viewBox="0 0 34 32"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="block h-6 w-6"
+            >
+              <path
+                d="M25.8108 6.1863C26.6396 5.35742 27.9966 5.34999 28.7094 6.28054C30.7732 8.97476 32 12.3439 32 16C32 17.888 31.6724 19.6991 31.0715 21.3804C30.4545 23.1066 30.6507 25.1038 31.9469 26.4L33.3931 27.8462C34.1582 28.6113 34.1583 29.8517 33.3933 30.6169C32.6282 31.3824 31.3874 31.3825 30.6221 30.6172L27.317 27.3121C27.3156 27.3107 27.3134 27.3108 27.3125 27.3125C27.3116 27.3142 27.3094 27.3143 27.308 27.3129L25.81 25.8148C24.9808 24.9857 25.0001 23.6499 25.668 22.6862C26.9836 20.7882 27.7549 18.4844 27.7549 16C27.7549 13.516 26.9839 11.2126 25.6687 9.31476C25.0009 8.35108 24.9817 7.01535 25.8108 6.1863ZM16 0C17.9814 0 19.8786 0.360395 21.6297 1.01898C22.9864 1.52921 23.2039 3.25187 22.1788 4.27662C21.5116 4.94363 20.5019 5.09696 19.6038 4.80797C18.4682 4.44253 17.2572 4.24512 16 4.24512C9.50784 4.24512 4.24512 9.50784 4.24512 16C4.24512 22.4922 9.50784 27.7549 16 27.7549C17.2566 27.7549 18.4666 27.5569 19.6016 27.1914C20.4998 26.902 21.5097 27.0556 22.1769 27.7228C23.202 28.7479 22.9843 30.4708 21.6274 30.9811C19.8769 31.6395 17.9807 32 16 32C7.17794 32 0.0244211 24.86 0.000977863 16.0435C0.000977146 16.0432 0.000758446 16.043 0.000488923 16.043C0.000218898 16.043 0 16.0427 0 16.0425V8.21415C0 6.74321 1.19243 5.55078 2.66337 5.55078C3.43768 5.55078 4.16496 5.20486 4.71381 4.65867C7.60704 1.77944 11.5957 0 16 0Z"
+                fill="#0a0a0a"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="8"
+                fill="#0a0a0a"
+              />
+            </svg>
+          </div>
+          <span
+            v-if="!collapsed"
+            class="inline-flex h-10 items-center text-xl font-black leading-none tracking-tighter"
+          >RMA PORTAL</span>
+        </div>
       </template>
 
       <template #default="{ collapsed }">
-        <UDashboardSearchButton :collapsed="collapsed" class="bg-transparent ring-default" />
-
         <UNavigationMenu
           :collapsed="collapsed"
           :items="links[0]"
