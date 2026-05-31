@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
+definePageMeta({
+  layout: 'cs'
+})
+
+
 type ToastType = 'info' | 'success' | 'error'
 
 type ApiResult<T = Record<string, unknown>> = {

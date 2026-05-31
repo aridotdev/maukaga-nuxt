@@ -1,4 +1,8 @@
-<script setup>
+<script setup lang="ts">
+definePageMeta({
+  layout: 'cs'
+})
+
 const glassCardClass = 'group flex cursor-pointer flex-col items-start justify-between rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-all duration-400 ease-out hover:-translate-y-2.5 hover:scale-[1.02] hover:border-white/80 hover:bg-white/65 hover:shadow-[0_24px_48px_rgba(15,23,42,0.08)] md:p-8'
 const iconContainerClass = 'mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/60 text-[#0F172A] shadow-sm transition-all duration-400 ease-out group-hover:scale-110 group-hover:rotate-3 group-hover:bg-[#0F172A] group-hover:text-white md:mb-8 md:h-14 md:w-14'
 const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded-full bg-[#0F172A] px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition-all duration-300 ease-out group-hover:bg-[#1E293B] group-hover:shadow-[0_4px_12px_rgba(15,23,42,0.15)] md:w-auto'

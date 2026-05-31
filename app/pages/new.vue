@@ -93,7 +93,6 @@ const showPrintPreview = ref(false)
 const savedPrintPayload = ref<SubmissionPayload | null>(null)
 const savedPrintId = ref('')
 
-const draftReferenceText = computed(() => currentDraftId.value || 'Belum diterbitkan')
 const finalSubmitUrl = computed(() => {
   if (!currentDraftId.value) return '/final-submit'
 

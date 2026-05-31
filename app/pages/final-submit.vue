@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+
+definePageMeta({
+  layout: 'cs'
+})
+
 // Catatan: composables seperti useToast, useRoute, dll biasanya di-auto-import di Nuxt 3.
 
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -207,7 +212,9 @@ function setDraftReference(idPengajuan: string, resumeToken: string) {
       resumeUrl: resumeUrl.value,
       savedAt: new Date().toISOString()
     }))
-  } catch {}
+  } catch {
+    // localStorage may be unavailable; draft link still works in the current session.
+  }
 }
 
 function clearDraftReference() {
@@ -221,7 +228,9 @@ function clearDraftReference() {
 
   try {
     localStorage.removeItem(draftStorageKey)
-  } catch {}
+  } catch {
+    // localStorage may be unavailable; state has already been cleared in memory.
+  }
 }
 
 function getStoredDraftReference(): StoredDraftReference {
@@ -487,8 +496,8 @@ function getErrorMessage(error: unknown) {
             <Transition name="fade">
               <div v-if="isDraftReady" class="hidden items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 md:flex">
                 <span class="relative flex size-2.5">
-                  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
-                  <span class="relative inline-flex size-2.5 rounded-full bg-green-500"></span>
+                  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"/>
+                  <span class="relative inline-flex size-2.5 rounded-full bg-green-500"/>
                 </span>
                 <span class="text-xs font-semibold text-green-700">Draft Ditemukan</span>
               </div>
@@ -540,7 +549,7 @@ function getErrorMessage(error: unknown) {
         <Transition name="slide-up">
           <div v-if="isDraftReady" class="space-y-8">
             
-            <hr class="border-slate-200/60" />
+            <hr class="border-slate-200/60" >
 
             <!-- STEP 2: REVIEW DATA (FITUR BARU BERDASARKAN PERMINTAAN) -->
             <div>
@@ -572,7 +581,7 @@ function getErrorMessage(error: unknown) {
                 <!-- List Produk -->
                 <div class="rounded-2xl border border-slate-200 bg-white/50 p-5">
                   <p class="mb-3 text-xs font-medium text-slate-500">Item Produk ({{ loadedDraft?.items?.length || 0 }})</p>
-                  <div class="max-h-[220px] space-y-3 overflow-y-auto pr-2">
+                  <div class="max-h-55 space-y-3 overflow-y-auto pr-2">
                     <div 
                       v-for="(item, idx) in loadedDraft?.items" 
                       :key="idx"
