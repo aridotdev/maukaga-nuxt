@@ -9,14 +9,14 @@ const open = ref(false)
 const links = [[{
   label: 'Home',
   icon: 'i-lucide-house',
-  to: '/',
+  to: '/dashboard',
   onSelect: () => {
     open.value = false
   }
 }, {
   label: 'Inbox',
   icon: 'i-lucide-inbox',
-  to: '/inbox',
+  to: '/dashboard/inbox',
   badge: '4',
   onSelect: () => {
     open.value = false
@@ -24,52 +24,42 @@ const links = [[{
 }, {
   label: 'Customers',
   icon: 'i-lucide-users',
-  to: '/customers',
+  to: '/dashboard/customers',
   onSelect: () => {
     open.value = false
   }
 }, {
   label: 'Settings',
-  to: '/settings',
+  to: '/dashboard/settings',
   icon: 'i-lucide-settings',
   defaultOpen: true,
   type: 'trigger',
   children: [{
     label: 'General',
-    to: '/settings',
+    to: '/dashboard/settings',
     exact: true,
     onSelect: () => {
       open.value = false
     }
   }, {
     label: 'Members',
-    to: '/settings/members',
+    to: '/dashboard/settings/members',
     onSelect: () => {
       open.value = false
     }
   }, {
     label: 'Notifications',
-    to: '/settings/notifications',
+    to: '/dashboard/settings/notifications',
     onSelect: () => {
       open.value = false
     }
   }, {
     label: 'Security',
-    to: '/settings/security',
+    to: '/dashboard/settings/security',
     onSelect: () => {
       open.value = false
     }
   }]
-}], [{
-  label: 'Feedback',
-  icon: 'i-lucide-message-circle',
-  to: 'https://github.com/nuxt-ui-templates/dashboard',
-  target: '_blank'
-}, {
-  label: 'Help & Support',
-  icon: 'i-lucide-info',
-  to: 'https://github.com/nuxt-ui-templates/dashboard',
-  target: '_blank'
 }]] satisfies NavigationMenuItem[][]
 
 const groups = computed(() => [{
