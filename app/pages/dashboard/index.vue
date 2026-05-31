@@ -39,7 +39,10 @@ const period = ref<Period>('daily')
 
     <template #body>
       <HomeStats />
-      <HomeChart :period="period" :range="range" />
+      <div class="flex gap-6 max-w-full">
+        <HomeChart :period="period" :range="range" class="flex-1" />
+        <HomeReviewProductName />
+      </div>
       <HomePengajuan />
     </template>
   </UDashboardPanel>
