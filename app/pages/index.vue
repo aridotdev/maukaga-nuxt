@@ -13,7 +13,7 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
         Selamat Datang di Portal Garansi
       </h2>
       <p class="text-sm text-[#64748B] md:text-base">
-        Pilih salah satu menu di bawah ini untuk memulai pemrosesan data, pengecekan berkas, atau pemantauan status kartu pelanggan dengan cepat.
+        Pilih salah satu menu di bawah ini untuk memulai pemrosesan data, pengecekan berkas, atau pemantauan status kartu garansi dengan cepat.
       </p>
     </div>
 
@@ -43,7 +43,7 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
             Buat Permintaan Baru
           </span>
           <span class="mb-6 block text-left text-xs leading-relaxed text-[#64748B] md:text-sm">
-            Mulai pengisian formulir pengajuan kartu garansi baru untuk konsumen. Sistem akan menerbitkan ID Pengajuan & Resume Token secara otomatis.
+            Mulai pengisian formulir pengajuan kartu garansi baru untuk konsumen. Sistem akan menerbitkan ID Pengajuan secara otomatis.
           </span>
         </span>
         <span :class="actionButtonClass">
