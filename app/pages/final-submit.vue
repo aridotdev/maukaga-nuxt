@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+// Catatan: composables seperti useToast, useRoute, dll biasanya di-auto-import di Nuxt 3.
+
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
 type ApiResult<T = Record<string, unknown>> = {
@@ -71,7 +74,6 @@ const runtimeConfig = useRuntimeConfig()
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const draftStorageKey = 'pengajuan_kartu_garansi_draft'
-const inputClass = 'w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-slate-900 focus:bg-white focus:ring-4 focus:ring-slate-900/10'
 const maxUploadMb = computed(() => Number(runtimeConfig.public.maxUploadMb || 10))
 const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 
@@ -95,7 +97,6 @@ const fileInfoText = computed(() => {
   const error = validateFile(selectedFile.value)
   return `${selectedFile.value.name} (${formatBytes(selectedFile.value.size)})${error ? ` — ${error}` : ''}`
 })
-const fileInfoClass = computed(() => validateFile(selectedFile.value) ? 'text-red-700' : 'text-slate-400')
 const submitButtonText = computed(() => isSubmitting.value ? 'Mengirim...' : 'Submit Final Pengajuan')
 
 onMounted(() => {
@@ -438,135 +439,282 @@ function getErrorMessage(error: unknown) {
 
 <template>
   <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
-    <div v-if="successId" class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
-      <div class="mx-auto max-w-xl py-8">
-        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-700">
-          <UIcon name="i-lucide-check" class="size-8" />
+    <Transition name="layout" mode="out-in">
+      <!-- STATE: BERHASIL SUBMIT -->
+      <div v-if="successId" class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-12">
+        <div class="mx-auto max-w-xl py-8">
+          <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-green-600 ring-8 ring-green-50">
+            <UIcon name="i-lucide-check" class="size-10" />
+          </div>
+          <h2 class="text-3xl font-extrabold tracking-tight text-slate-900">
+            Pengajuan Berhasil!
+          </h2>
+          <p class="mt-4 text-base text-slate-500">
+            Pengajuan Anda telah berhasil dikirim dan masuk ke antrean verifikasi admin sebelum proses cetak dilanjutkan.
+          </p>
+          <div class="mt-8 rounded-2xl border border-slate-200/60 bg-slate-50/50 p-6">
+            <p class="text-sm font-medium text-slate-500">
+              ID Pengajuan Anda
+            </p>
+            <p class="mt-2 font-mono text-2xl font-bold tracking-wider text-blue-700">
+              {{ successId }}
+            </p>
+          </div>
+          <NuxtLink
+            to="/"
+            class="mt-8 inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-slate-800 hover:shadow-lg focus:ring-4 focus:ring-slate-900/20"
+          >
+            Kembali ke Beranda
+          </NuxtLink>
         </div>
-        <h2 class="text-2xl font-bold text-slate-900">
-          Pengajuan berhasil dikirim!
-        </h2>
-        <p class="mt-3 text-sm text-slate-500">
-          Pengajuan berhasil dikirim dan akan diverifikasi oleh admin sebelum proses cetak.
-        </p>
-        <p class="mt-5 text-sm text-slate-500">
-          ID Pengajuan Anda:
-        </p>
-        <p class="mt-2 rounded-xl bg-slate-100 px-4 py-3 font-mono text-lg font-bold text-blue-700">
-          {{ successId }}
-        </p>
-        <NuxtLink
-          to="/"
-          class="mt-6 inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-        >
-          Kembali ke Portal
-        </NuxtLink>
       </div>
-    </div>
 
-    <div v-else class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
-      <div class="mx-auto">
-        <h2 class="mb-2 text-xl font-bold text-slate-900 md:text-2xl">
-          Lanjutkan Draft
-        </h2>
-        <p class="mb-6 text-sm text-slate-500">
-          Lanjutkan draft terakhir dari browser ini, atau buka link lanjutkan dari saat draft disimpan.
-        </p>
-
-        <div class="space-y-6">
-          <div>
-            <label class="mb-2 block text-sm font-medium text-slate-700">ID Pengajuan</label>
-            <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:gap-4">
-              <UInput
-                v-model="resumeId"
-                type="text"
-                class="w-full"
-                size="lg"
-                color="neutral"
-                variant="outline"
-                :highlight="hasResumeInputError"
-                :ui="{ base: 'rounded-xl bg-slate-50 px-4 py-2.5 font-mono uppercase' }"
-                placeholder="KG-YYYYMMDD-0001"
-                autocomplete="off"
-                @keyup.enter="handleLoadDraft({ source: 'manual' })"
-              />
-              <UButton
-                type="button"
-                class="w-full justify-center rounded-xl px-6 py-3 font-semibold md:w-auto md:shrink-0"
-                color="neutral"
-                variant="outline"
-                size="lg"
-                icon="i-lucide-download"
-                :label="isLoadingDraft ? 'Memuat...' : 'Muat Draft'"
-                :loading="isLoadingDraft"
-                :disabled="isLoadingDraft || isLoadingStoredDraft"
-                @click="handleLoadDraft({ source: 'manual' })"
-              />
-              <UButton
-                type="button"
-                class="w-full justify-center rounded-xl px-6 py-3 font-semibold shadow-lg shadow-blue-600/20 md:w-auto md:shrink-0"
-                color="neutral"
-                variant="solid"
-                size="lg"
-                icon="i-lucide-folder-plus"
-                :label="isLoadingStoredDraft ? 'Memuat...' : 'Draft Terakhir'"
-                :loading="isLoadingStoredDraft"
-                :disabled="isLoadingDraft || isLoadingStoredDraft"
-                @click="handleLoadStoredDraft"
-              />
+      <!-- STATE: CARI DRAFT & UPLOAD -->
+      <div v-else class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
+        
+        <!-- STEP 1: CARI DRAFT -->
+        <div class="mb-8">
+          <div class="mb-6 flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl font-bold tracking-tight text-slate-900">
+                Penyelesaian Draft
+              </h2>
+              <p class="mt-1 text-sm text-slate-500">
+                Lanjutkan draft terakhir Anda untuk mengunggah dokumen fisik.
+              </p>
             </div>
-
-            <div v-if="currentDraftId" class="mt-3 rounded-xl bg-green-100 px-3 py-2 text-sm text-slate-900">
-              Draft aktif: <strong class="font-mono">{{ currentDraftId }}</strong>. Upload file signed lalu klik Submit Final.
-            </div>
+            <!-- Lencana Status Aktif -->
+            <Transition name="fade">
+              <div v-if="isDraftReady" class="hidden items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 md:flex">
+                <span class="relative flex size-2.5">
+                  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                  <span class="relative inline-flex size-2.5 rounded-full bg-green-500"></span>
+                </span>
+                <span class="text-xs font-semibold text-green-700">Draft Ditemukan</span>
+              </div>
+            </Transition>
           </div>
 
-          <Transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="translate-y-2 opacity-0"
-            enter-to-class="translate-y-0 opacity-100"
-          >
-            <div v-if="isDraftReady" class="space-y-6">
-              <div>
-                <label class="mb-2 block text-sm font-medium text-slate-700">Upload File Hard Copy Bertanda Tangan</label>
-                <button
-                  type="button"
-                  class="w-full cursor-pointer rounded-2xl border-2 border-dashed bg-slate-50 p-8 text-center transition-colors hover:bg-slate-100"
-                  :class="hasFileError ? 'border-red-300' : 'border-slate-300'"
-                  @click="triggerFilePicker"
-                >
-                  <UIcon name="i-lucide-file-plus-2" class="mx-auto mb-3 size-12 text-slate-400" />
-                  <span class="block text-sm font-semibold text-slate-700">Klik untuk memilih file hasil pindai</span>
-                  <span class="mt-1 block text-xs" :class="fileInfoClass">{{ fileInfoText }}</span>
-                  <span class="mt-1 block text-xs text-slate-400">Pastikan formulir fisik telah ditandatangani. (Maks {{ maxUploadMb }}MB)</span>
-                </button>
-                <input
-                  ref="fileInput"
-                  type="file"
-                  class="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                  @change="handleFileChange"
-                >
-              </div>
+          <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:gap-4">
+            <UInput
+              v-model="resumeId"
+              type="text"
+              class="w-full"
+              size="xl"
+              color="neutral"
+              variant="outline"
+              :highlight="hasResumeInputError"
+              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3 font-mono uppercase shadow-sm transition-all focus:bg-white focus:ring-2' }"
+              placeholder="Masukkan ID, contoh: KG-YYYYMMDD-0001"
+              autocomplete="off"
+              icon="i-lucide-search"
+              @keyup.enter="handleLoadDraft({ source: 'manual' })"
+            />
+            <UButton
+              type="button"
+              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold transition-all hover:bg-slate-100 md:w-auto md:shrink-0"
+              color="neutral"
+              variant="outline"
+              size="xl"
+              icon="i-lucide-download"
+              :label="isLoadingDraft ? 'Mencari...' : 'Muat ID'"
+              :loading="isLoadingDraft"
+              :disabled="isLoadingDraft || isLoadingStoredDraft"
+              @click="handleLoadDraft({ source: 'manual' })"
+            />
+            <UButton
+              type="button"
+              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold shadow-md shadow-blue-900/10 transition-all hover:-translate-y-0.5 hover:shadow-lg md:w-auto md:shrink-0"
+              color="neutral"
+              variant="solid"
+              size="xl"
+              icon="i-lucide-history"
+              :label="isLoadingStoredDraft ? 'Memuat...' : 'Draft Terakhir'"
+              :loading="isLoadingStoredDraft"
+              :disabled="isLoadingDraft || isLoadingStoredDraft"
+              @click="handleLoadStoredDraft"
+            />
+          </div>
+        </div>
 
-              <div class="flex justify-end pt-2">
-                <UButton
-                  type="button"
-                  class="w-full justify-center rounded-xl px-6 py-3 font-medium md:w-auto"
-                  color="primary"
-                  variant="solid"
-                  size="lg"
-                  icon="i-lucide-send"
-                  :label="submitButtonText"
-                  :loading="isSubmitting"
-                  :disabled="isSubmitting"
-                  @click="handleSubmitFinal"
-                />
+        <Transition name="slide-up">
+          <div v-if="isDraftReady" class="space-y-8">
+            
+            <hr class="border-slate-200/60" />
+
+            <!-- STEP 2: REVIEW DATA (FITUR BARU BERDASARKAN PERMINTAAN) -->
+            <div>
+              <h3 class="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
+                <UIcon name="i-lucide-file-text" class="size-5 text-blue-600" />
+                Ringkasan Data
+                <span class="ml-2 rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-semibold text-blue-800">{{ currentDraftId }}</span>
+              </h3>
+              
+              <div class="grid gap-6 md:grid-cols-[1fr_2fr]">
+                <!-- Info Pemohon -->
+                <div class="rounded-2xl border border-slate-200 bg-white/50 p-5">
+                  <dl class="space-y-4 text-sm">
+                    <div>
+                      <dt class="text-xs font-medium text-slate-500">Nama Pemohon</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900">{{ loadedDraft?.nama || '-' }}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs font-medium text-slate-500">Cabang / Bagian</dt>
+                      <dd class="mt-0.5 font-medium text-slate-900">{{ loadedDraft?.bagianCabang || '-' }}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs font-medium text-slate-500">Tgl. Form</dt>
+                      <dd class="mt-0.5 font-medium text-slate-900">{{ loadedDraft?.tanggalForm || '-' }}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <!-- List Produk -->
+                <div class="rounded-2xl border border-slate-200 bg-white/50 p-5">
+                  <p class="mb-3 text-xs font-medium text-slate-500">Item Produk ({{ loadedDraft?.items?.length || 0 }})</p>
+                  <div class="max-h-[220px] space-y-3 overflow-y-auto pr-2">
+                    <div 
+                      v-for="(item, idx) in loadedDraft?.items" 
+                      :key="idx"
+                      class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p class="font-bold text-slate-800">{{ item.model || 'Model tidak diketahui' }}</p>
+                        <p class="mt-0.5 text-xs text-slate-500">{{ item.produk || 'Produk' }}</p>
+                      </div>
+                      <div class="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100">
+                        <UIcon name="i-lucide-barcode" class="size-4 text-slate-400" />
+                        <span class="font-mono text-sm font-semibold text-slate-700">
+                          {{ item.nomorSeri || 'N/A' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </Transition>
-        </div>
+
+            <!-- STEP 3: UPLOAD FILE -->
+            <div>
+              <h3 class="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
+                <UIcon name="i-lucide-upload-cloud" class="size-5 text-blue-600" />
+                Upload Dokumen Fisik
+              </h3>
+              
+              <button
+                type="button"
+                class="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-white/50 px-6 py-10 transition-all hover:bg-slate-50/80 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
+                :class="[
+                  hasFileError ? 'border-red-400' : 
+                  selectedFile ? 'border-green-400 bg-green-50/30 hover:bg-green-50/50' : 'border-slate-300'
+                ]"
+                @click="triggerFilePicker"
+              >
+                <!-- Icon State -->
+                <div 
+                  class="mb-4 flex size-16 items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110"
+                  :class="selectedFile ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'"
+                >
+                  <UIcon 
+                    :name="selectedFile ? 'i-lucide-file-check-2' : 'i-lucide-file-up'" 
+                    class="size-8" 
+                  />
+                </div>
+
+                <!-- Text State -->
+                <span class="block text-base font-bold" :class="selectedFile ? 'text-green-800' : 'text-slate-700'">
+                  {{ selectedFile ? 'Ganti File Pindai' : 'Pilih File Pindai TTD' }}
+                </span>
+                
+                <span 
+                  class="mt-2 block max-w-md text-center text-sm transition-colors" 
+                  :class="hasFileError ? 'text-red-600 font-medium' : selectedFile ? 'text-green-600' : 'text-slate-500'"
+                >
+                  {{ fileInfoText }}
+                </span>
+                
+                <span v-if="!selectedFile" class="mt-2 block rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
+                  Format: PDF, JPG, PNG (Maks. {{ maxUploadMb }}MB)
+                </span>
+              </button>
+              
+              <input
+                ref="fileInput"
+                type="file"
+                class="hidden"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                @change="handleFileChange"
+              >
+            </div>
+
+            <!-- ACTIONS -->
+            <div class="flex flex-col-reverse justify-end gap-3 border-t border-slate-200/60 pt-6 sm:flex-row">
+              <UButton
+                type="button"
+                class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold text-slate-600 hover:bg-slate-100 sm:w-auto"
+                color="neutral"
+                variant="ghost"
+                size="lg"
+                label="Batalkan"
+                :disabled="isSubmitting"
+                @click="clearDraftReference"
+              />
+              <UButton
+                type="button"
+                class="w-full justify-center rounded-xl px-8 py-3.5 font-bold shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:w-auto"
+                color="primary"
+                variant="solid"
+                size="lg"
+                icon="i-lucide-send-to-back"
+                :label="submitButtonText"
+                :loading="isSubmitting"
+                :disabled="isSubmitting || !selectedFile || hasFileError"
+                @click="handleSubmitFinal"
+              />
+            </div>
+
+          </div>
+        </Transition>
+
       </div>
-    </div>
+    </Transition>
   </section>
 </template>
+
+<style scoped>
+/* Vue Transitions untuk Micro Interactions */
+.layout-enter-active,
+.layout-leave-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.layout-enter-from {
+  opacity: 0;
+  transform: scale(0.98) translateY(10px);
+}
+.layout-leave-to {
+  opacity: 0;
+  transform: scale(0.98) translateY(-10px);
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.2);
+}
+.slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
