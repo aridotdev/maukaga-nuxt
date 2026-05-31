@@ -146,15 +146,6 @@ const latestRows = computed(() => {
     .slice(0, 10)
     .map((row, index) => ({ ...row, nomor: index + 1 }))
 })
-const totalRowsLabel = computed(() => {
-  if (loadError.value) return 'Data pengajuan belum bisa dimuat'
-
-  const totalRows = dashboard.value?.totalRows || latestRows.value.length
-  if (!latestRows.value.length) return 'Belum ada pengajuan'
-  return totalRows > latestRows.value.length
-    ? `Menampilkan ${latestRows.value.length} dari ${totalRows} pengajuan`
-    : `Menampilkan ${latestRows.value.length} pengajuan`
-})
 
 onMounted(() => {
   refresh()
@@ -268,11 +259,8 @@ function getErrorMessage(error: unknown) {
     <div class="border-b border-muted px-4 py-4 sm:px-6">
       <div class="min-w-0">
         <h2 class="text-base font-semibold text-highlighted sm:text-lg">
-          Daftar Pengajuan Final
+          Daftar Pengajuan Terbaru
         </h2>
-        <p class="mt-1 text-sm text-muted">
-          {{ totalRowsLabel }}
-        </p>
       </div>
     </div>
 
@@ -284,7 +272,7 @@ function getErrorMessage(error: unknown) {
         class="w-full"
         :ui="{
           root: 'w-full',
-          base: 'w-full min-w-[760px] table-fixed border-separate border-spacing-0',
+          base: 'w-full min-w-190 table-fixed border-separate border-spacing-0',
           thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
           tbody: '[&>tr]:last:[&>td]:border-b-0',
           tr: 'transition-colors hover:bg-elevated/30',
