@@ -14,9 +14,9 @@ const links = [[{
     open.value = false
   }
 }, {
-  label: 'Review Product',
+  label: 'Product Name',
   icon: 'i-lucide-scan-search',
-  to: '/dashboard/inbox',
+  to: '/dashboard/product-name',
   badge: '4',
   onSelect: () => {
     open.value = false
