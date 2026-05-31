@@ -38,7 +38,7 @@ const period = ref<Period>('daily')
     </template>
 
     <template #body>
-      <HomeStats :period="period" :range="range" />
+      <HomeStats />
       <HomeChart :period="period" :range="range" />
       <HomePengajuan />
     </template>
