@@ -14,48 +14,43 @@ const links = [[{
     open.value = false
   }
 }, {
-  label: 'Inbox',
-  icon: 'i-lucide-inbox',
+  label: 'Review Product',
+  icon: 'i-lucide-scan-search',
   to: '/dashboard/inbox',
   badge: '4',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Customers',
-  icon: 'i-lucide-users',
+  label: 'Cetak Kartu Garansi',
+  icon: 'i-lucide-printer',
   to: '/dashboard/customers',
   onSelect: () => {
     open.value = false
   }
 }, {
-  label: 'Settings',
+  label: 'Cetak Label Pengiriman',
+  icon: 'i-lucide-tag',
+  to: '/dashboard/customers',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
+  label: 'Setting',
   to: '/dashboard/settings',
   icon: 'i-lucide-settings',
   defaultOpen: true,
   type: 'trigger',
   children: [{
-    label: 'General',
+    label: 'Layout Cetak',
     to: '/dashboard/settings',
     exact: true,
     onSelect: () => {
       open.value = false
     }
   }, {
-    label: 'Members',
+    label: 'User Management',
     to: '/dashboard/settings/members',
-    onSelect: () => {
-      open.value = false
-    }
-  }, {
-    label: 'Notifications',
-    to: '/dashboard/settings/notifications',
-    onSelect: () => {
-      open.value = false
-    }
-  }, {
-    label: 'Security',
-    to: '/dashboard/settings/security',
     onSelect: () => {
       open.value = false
     }
