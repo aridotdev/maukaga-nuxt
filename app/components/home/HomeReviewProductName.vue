@@ -164,16 +164,6 @@ function getTopProductOption(group: ReviewQueueGroup) {
   return group.produkOptions?.[0]?.produk || ''
 }
 
-function formatProductOptions(group: ReviewQueueGroup) {
-  const options = group.produkOptions || []
-  if (!options.length) return group.produk || '-'
-
-  return options
-    .slice(0, 3)
-    .map(option => `${option.produk} (${option.count})`)
-    .join(', ')
-}
-
 function clearAdminSession() {
   sessionStorage.removeItem('admin_token')
   sessionStorage.removeItem('admin_nama')
@@ -268,7 +258,7 @@ function getErrorMessage(error: unknown) {
 
     <div
       v-else
-      class="flex max-h-[29rem] flex-col gap-3 overflow-y-auto pr-1"
+      class="flex max-h-116 flex-col gap-3 overflow-y-auto pr-1"
     >
       <div
         v-for="group in visibleRows"
@@ -283,11 +273,8 @@ function getErrorMessage(error: unknown) {
             />
             <div class="min-w-0">
               <h3 class="truncate text-sm font-semibold text-highlighted">
-                {{ group.modelDisplay || group.modelNormalized }}
+                {{ group.modelDisplay || group.modelNormalized }} - {{ group.produk }}
               </h3>
-              <p class="mt-0.5 truncate font-mono text-[11px] text-muted">
-                {{ group.modelNormalized }}
-              </p>
             </div>
           </div>
 
@@ -297,25 +284,6 @@ function getErrorMessage(error: unknown) {
             label="Manual"
             size="sm"
           />
-        </div>
-
-        <p class="mt-3 line-clamp-2 text-xs text-muted">
-          <span class="font-medium text-toned">Usulan:</span>
-          {{ formatProductOptions(group) }}
-        </p>
-
-        <div
-          v-if="group.items?.length"
-          class="mt-3 space-y-1.5 rounded-md bg-default/55 px-3 py-2 text-xs text-muted"
-        >
-          <p
-            v-for="item in group.items.slice(0, 3)"
-            :key="`${item.idPengajuan}-${item.noItem}`"
-            class="truncate"
-          >
-            <span class="font-mono text-toned">{{ item.idPengajuan }}</span>
-            #{{ item.noItem }} - {{ item.produk || '-' }}
-          </p>
         </div>
 
         <div class="mt-4 flex flex-col gap-2">
