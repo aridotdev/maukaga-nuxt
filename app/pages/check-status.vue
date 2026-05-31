@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
+
 type ToastType = 'info' | 'success' | 'error'
 
 type ApiResult<T = Record<string, unknown>> = {
@@ -18,6 +20,8 @@ type StatusTone = {
   badge: string
   dotPing: string
   dot: string
+  icon: string
+  iconColor: string
 }
 
 const toast = useToast()
@@ -131,49 +135,49 @@ function clearInputError() {
 function statusCheckBadge(status?: string): StatusTone {
   const map: Record<string, StatusTone> = {
     'Menunggu Upload': {
-      badge: 'border-amber-200 bg-amber-100',
+      badge: 'border-amber-200 bg-amber-100/70 text-amber-800',
       dotPing: 'bg-amber-500',
-      dot: 'bg-amber-600'
+      dot: 'bg-amber-600',
+      icon: 'i-lucide-clock-3',
+      iconColor: 'text-amber-500 bg-amber-100'
     },
     Baru: {
-      badge: 'border-blue-200 bg-blue-100',
+      badge: 'border-blue-200 bg-blue-100/70 text-blue-700',
       dotPing: 'bg-blue-500',
-      dot: 'bg-blue-600'
+      dot: 'bg-blue-600',
+      icon: 'i-lucide-sparkles',
+      iconColor: 'text-blue-500 bg-blue-100'
     },
     Disetujui: {
-      badge: 'border-green-200 bg-green-100',
+      badge: 'border-green-200 bg-green-100/70 text-green-700',
       dotPing: 'bg-green-500',
-      dot: 'bg-green-600'
+      dot: 'bg-green-600',
+      icon: 'i-lucide-check-circle-2',
+      iconColor: 'text-green-500 bg-green-100'
     },
     Ditolak: {
-      badge: 'border-red-200 bg-red-100',
+      badge: 'border-red-200 bg-red-100/70 text-red-700',
       dotPing: 'bg-red-500',
-      dot: 'bg-red-600'
+      dot: 'bg-red-600',
+      icon: 'i-lucide-x-octagon',
+      iconColor: 'text-red-500 bg-red-100'
     },
     Selesai: {
-      badge: 'border-slate-300 bg-slate-200',
+      badge: 'border-slate-300 bg-slate-200/70 text-slate-800',
       dotPing: 'bg-slate-500',
-      dot: 'bg-slate-600'
+      dot: 'bg-slate-600',
+      icon: 'i-lucide-package-check',
+      iconColor: 'text-slate-600 bg-slate-200'
     }
   }
 
   return map[status || ''] || {
-    badge: 'border-slate-200 bg-slate-100',
+    badge: 'border-slate-200 bg-slate-100/70 text-slate-700',
     dotPing: 'bg-slate-500',
-    dot: 'bg-slate-600'
+    dot: 'bg-slate-600',
+    icon: 'i-lucide-search-code',
+    iconColor: 'text-slate-500 bg-slate-100'
   }
-}
-
-function statusTextClass(status?: string) {
-  const map: Record<string, string> = {
-    'Menunggu Upload': 'text-amber-800',
-    Baru: 'text-blue-700',
-    Disetujui: 'text-green-700',
-    Ditolak: 'text-red-700',
-    Selesai: 'text-slate-800'
-  }
-
-  return map[status || ''] || 'text-slate-700'
 }
 
 function statusCheckInfoText(status?: string) {
@@ -194,24 +198,24 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-5xl flex-col p-4 md:p-8">
-    <!-- Workspace Header -->
-
-    <!-- TARGET CONTENT CONTAINER -->
+  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
     <div
-      class="mb-8 grow rounded-3xl border border-white/60 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-colors md:p-8"
-      :class="hasStatusInputInteraction ? 'bg-white/65' : 'bg-white/45'"
+      class="mb-8 grow rounded-3xl border border-white/60 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-all duration-500 md:p-8"
+      :class="hasStatusInputInteraction ? 'bg-white/65 scale-[1.01] shadow-xl' : 'bg-white/45'"
     >
-      <div class="mx-auto max-w-lg py-6 text-center">
-        <h2 class="mb-2 text-xl font-bold text-slate-900 md:text-2xl">
+      <div class="mx-auto max-w-xl py-6 text-center">
+        <div class="mb-4 inline-flex items-center justify-center rounded-2xl bg-blue-100 p-3 text-blue-600">
+          <UIcon name="i-lucide-radar" class="size-8" />
+        </div>
+        <h2 class="mb-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
           Lacak Status Pengajuan
         </h2>
-        <p class="mb-6 text-sm text-slate-500">
-          Masukkan ID Pengajuan Anda untuk melihat progres dokumen terbaru.
+        <p class="mb-8 text-sm text-slate-500">
+          Masukkan ID Pengajuan Anda untuk melihat progres dokumen terbaru secara real-time.
         </p>
 
-        <form class="space-y-4" @submit.prevent="handleCheckStatus">
-          <div class="flex flex-col gap-2 md:flex-row">
+        <form class="space-y-6" @submit.prevent="handleCheckStatus">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
             <UInput
               v-model="idPengajuanInput"
               type="text"
@@ -220,8 +224,8 @@ function getErrorMessage(error: unknown) {
               color="neutral"
               variant="outline"
               :highlight="hasInputError"
-              :ui="{ base: 'rounded-xl bg-default px-4 py-3 font-mono uppercase' }"
-              placeholder="KG-YYYYMMDD-XXXX"
+              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3.5 font-mono uppercase shadow-inner transition-colors focus:bg-white' }"
+              placeholder="Contoh: KG-YYYYMMDD-XXXX"
               autocomplete="off"
               @focusin="hasStatusInputInteraction = true"
               @focusout="hasStatusInputInteraction = false"
@@ -229,50 +233,68 @@ function getErrorMessage(error: unknown) {
             />
             <UButton
               type="submit"
-              class="w-full justify-center rounded-xl px-6 py-3 md:w-auto"
-              color="neutral"
+              class="w-full justify-center rounded-xl px-8 py-3.5 font-semibold shadow-md transition-all active:scale-95 md:w-auto"
+              color="primary"
               variant="solid"
               size="xl"
               icon="i-lucide-search"
-              :label="isLoading ? 'Mencari...' : 'Cari'"
+              :label="isLoading ? 'Mencari...' : 'Cari Status'"
               :loading="isLoading"
               :disabled="isLoading"
             />
           </div>
 
-          <!-- Hasil Pencarian -->
-          <Transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="translate-y-2 opacity-0"
-            enter-to-class="translate-y-0 opacity-100"
-          >
-            <div v-if="showStatusResult" class="mt-8 rounded-2xl border bg-slate-50 p-6 text-center">
-              <template v-if="resultType === 'success'">
-                <span class="mb-4 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
-                <h3 class="mb-6 break-all font-mono text-2xl font-black text-slate-800">
-                  {{ statusData.idPengajuan || idPengajuanInput || '-' }}
-                </h3>
+          <!-- HASIL PENCARIAN -->
+          <Transition name="slide-fade">
+            <div v-if="showStatusResult" class="mt-8 relative overflow-hidden rounded-2xl border border-white/60 bg-white/60 p-6 text-center shadow-sm backdrop-blur-md">
+              
+              <!-- Dekorasi Background sesuai status -->
+              <div 
+                v-if="resultType === 'success'"
+                class="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-20 blur-3xl transition-colors duration-1000" 
+                :class="statusTone.dotPing"
+              />
 
-                <div class="mb-4 inline-flex items-center justify-center gap-3 rounded-full border px-6 py-2 shadow-sm" :class="statusTone.badge">
-                  <span class="relative flex h-2.5 w-2.5">
-                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="statusTone.dotPing" />
-                    <span class="relative inline-flex h-2.5 w-2.5 rounded-full" :class="statusTone.dot" />
-                  </span>
-                  <span class="text-sm font-bold tracking-wide" :class="statusTextClass(statusData.status)">{{ statusText }}</span>
+              <div class="relative z-10">
+                <template v-if="resultType === 'success'">
+                  <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="statusTone.iconColor">
+                    <UIcon :name="statusTone.icon" class="size-7" />
+                  </div>
+                  
+                  <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
+                  <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
+                    {{ statusData.idPengajuan || idPengajuanInput || '-' }}
+                  </h3>
+
+                  <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="statusTone.badge">
+                    <span class="relative flex size-2.5">
+                      <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="statusTone.dotPing" />
+                      <span class="relative inline-flex size-2.5 rounded-full" :class="statusTone.dot" />
+                    </span>
+                    <span class="text-sm font-bold tracking-wide">{{ statusText }}</span>
+                  </div>
+
+                  <div class="mx-auto max-w-sm rounded-xl bg-slate-50/80 p-4 border border-slate-100">
+                    <p class="text-sm font-medium leading-relaxed text-slate-600">
+                      {{ statusInfoText }}
+                    </p>
+                  </div>
+                </template>
+
+                <div v-else class="flex flex-col items-center justify-center py-6">
+                  <UIcon 
+                    :name="resultType === 'loading' ? 'i-lucide-loader-2' : 'i-lucide-file-warning'" 
+                    class="mb-3 size-10" 
+                    :class="[resultType === 'loading' ? 'animate-spin text-blue-500' : 'text-red-500']"
+                  />
+                  <p
+                    class="text-sm font-semibold"
+                    :class="resultType === 'loading' ? 'text-blue-700' : 'text-red-700'"
+                  >
+                    {{ resultMessage }}
+                  </p>
                 </div>
-
-                <p class="mt-2 text-sm font-medium text-slate-600">
-                  {{ statusInfoText }}
-                </p>
-              </template>
-
-              <p
-                v-else
-                class="text-sm font-semibold"
-                :class="resultType === 'loading' ? 'text-blue-700' : 'text-red-700'"
-              >
-                {{ resultMessage }}
-              </p>
+              </div>
             </div>
           </Transition>
         </form>
@@ -280,3 +302,21 @@ function getErrorMessage(error: unknown) {
     </div>
   </section>
 </template>
+
+<style scoped>
+/* Animasi Slide Fade untuk Hasil Pencarian */
+.slide-fade-enter-active {
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.2);
+}
+.slide-fade-leave-active {
+  transition: all 0.3s ease-in;
+}
+.slide-fade-enter-from {
+  transform: translateY(-20px);
+  opacity: 0;
+}
+.slide-fade-leave-to {
+  transform: translateY(10px);
+  opacity: 0;
+}
+</style>
