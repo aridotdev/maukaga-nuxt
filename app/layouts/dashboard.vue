@@ -14,6 +14,13 @@ const links = [[{
     open.value = false
   }
 }, {
+  label: 'Pengajuan',
+  icon: 'i-lucide-files',
+  to: '/dashboard/pengajuan',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
   label: 'Product Name',
   icon: 'i-lucide-scan-search',
   to: '/dashboard/product-name',

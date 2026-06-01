@@ -36,6 +36,25 @@ const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptAp
 const dashboard = ref<DashboardResponse>(createEmptyDashboardResponse())
 const isLoading = ref(false)
 const loadError = ref('')
+const globalFilter = ref('')
+const statusFilter = ref<'all' | DashboardStatus>('all')
+
+const statusFilterItems = [{
+  label: 'All',
+  value: 'all'
+}, {
+  label: 'Baru',
+  value: 'Baru'
+}, {
+  label: 'Disetujui',
+  value: 'Disetujui'
+}, {
+  label: 'Ditolak',
+  value: 'Ditolak'
+}, {
+  label: 'Selesai',
+  value: 'Selesai'
+}]
 
 const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'nomor',
@@ -129,7 +148,22 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
 }]
 
 const latestRows = computed(() => {
+  const keyword = globalFilter.value.trim().toLowerCase()
+
   return [...(dashboard.value?.rows || [])]
+    .filter((row) => statusFilter.value === 'all' || row.status === statusFilter.value)
+    .filter((row) => {
+      if (!keyword) return true
+
+      return [
+        row.idPengajuan,
+        row.timestampSubmit,
+        row.nama,
+        row.bagianCabang,
+        row.jumlahItem,
+        row.status
+      ].some((value) => String(value || '').toLowerCase().includes(keyword))
+    })
     .sort((a, b) => getTime(b.timestampSubmit) - getTime(a.timestampSubmit))
     .slice(0, 10)
     .map((row, index) => ({ ...row, nomor: index + 1 }))
@@ -245,47 +279,68 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="relative mt-6 rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
-    <div class="border-b border-muted px-4 py-4 sm:px-6">
-      <div class="min-w-0">
-        <h2 class="text-base font-semibold text-highlighted sm:text-lg">
-          Daftar Pengajuan Terbaru
-        </h2>
-      </div>
-    </div>
-
-    <div class="min-h-0 w-full overflow-x-auto">
-      <UTable
-        :data="latestRows"
-        :columns="columns"
-        :loading="isLoading"
-        class="w-full"
-        :ui="{
-          root: 'w-full',
-          base: 'w-full min-w-190 table-fixed border-separate border-spacing-0',
-          thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
-          tbody: '[&>tr]:last:[&>td]:border-b-0',
-          tr: 'transition-colors hover:bg-elevated/30',
-          th: 'border-b border-muted px-4 py-3 text-xs font-semibold uppercase text-muted',
-          td: 'border-b border-muted px-4 py-4 text-sm align-middle',
-          separator: 'h-0'
-        }"
-      >
-        <template #empty>
-          <div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <UIcon
-              :name="loadError ? 'i-lucide-circle-alert' : 'i-lucide-inbox'"
-              class="size-8 text-muted"
-            />
-            <p class="text-sm font-medium text-highlighted">
-              {{ loadError ? 'Data pengajuan belum bisa dimuat' : 'Belum ada pengajuan final' }}
-            </p>
-            <p v-if="loadError" class="max-w-md text-sm text-muted">
-              {{ loadError }}
-            </p>
-          </div>
+  <UDashboardPanel id="pengajuan">
+    <template #header>
+      <UDashboardNavbar title="Pengajuan" description="Daftar pengajuan admin">
+        <template #leading>
+          <UDashboardSidebarCollapse />
         </template>
-      </UTable>
-    </div>
-  </section>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
+
+        <div class="min-h-0 w-full overflow-x-auto">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3.5">
+            <UInput
+              v-model="globalFilter"
+              class="w-full max-w-sm"
+              icon="i-lucide-search"
+              placeholder="Global filter..."
+            />
+
+            <USelect
+              v-model="statusFilter"
+              :items="statusFilterItems"
+              class="w-full sm:w-40"
+              :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+            />
+          </div>
+
+          <UTable
+            :data="latestRows"
+            :columns="columns"
+            :loading="isLoading"
+            class="w-full"
+            :ui="{
+              root: 'w-full',
+              base: 'w-full min-w-190 table-fixed border-separate border-spacing-0',
+              thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
+              tbody: '[&>tr]:last:[&>td]:border-b-0',
+              tr: 'transition-colors hover:bg-elevated/30',
+              th: 'border-b border-muted px-4 py-3 text-xs font-semibold uppercase text-muted',
+              td: 'border-b border-muted px-4 py-4 text-sm align-middle',
+              separator: 'h-0'
+            }"
+          >
+            <template #empty>
+              <div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                <UIcon
+                  :name="loadError ? 'i-lucide-circle-alert' : 'i-lucide-inbox'"
+                  class="size-8 text-muted"
+                />
+                <p class="text-sm font-medium text-highlighted">
+                  {{ loadError ? 'Data pengajuan belum bisa dimuat' : 'Belum ada pengajuan final' }}
+                </p>
+                <p v-if="loadError" class="max-w-md text-sm text-muted">
+                  {{ loadError }}
+                </p>
+              </div>
+            </template>
+          </UTable>
+        </div>
+      </section>
+    </template>
+  </UDashboardPanel>
 </template>
