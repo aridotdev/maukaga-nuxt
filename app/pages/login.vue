@@ -111,7 +111,7 @@ function getErrorMessage(error: unknown) {
 
         <div class="mb-8">
           <h2 class="mb-1 text-2xl font-bold text-navy-900">
-            Selamat Datang
+            Selamat Datang 👋
           </h2>
           <p class="text-sm text-slate-500">
             Silakan masuk ke akun Anda untuk melanjutkan.

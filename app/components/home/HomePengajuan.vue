@@ -36,10 +36,6 @@ const props = defineProps<{
   range?: Range
 }>()
 
-const emit = defineEmits<{
-  detail: [row: DashboardPengajuanRow]
-}>()
-
 void props
 
 const runtimeConfig = useRuntimeConfig()
@@ -245,8 +241,10 @@ function getStatusColor(status: DashboardStatus) {
   return colors[status] || 'neutral'
 }
 
-function showDetail(row: DashboardPengajuanRow) {
-  emit('detail', row)
+async function showDetail(row: DashboardPengajuanRow) {
+  if (!row.idPengajuan) return
+
+  await router.push(`/dashboard/pengajuan/${encodeURIComponent(row.idPengajuan)}`)
 }
 
 function getErrorMessage(error: unknown) {
