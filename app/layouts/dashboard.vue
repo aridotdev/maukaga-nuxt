@@ -23,7 +23,7 @@ const links = [[{
 }, {
   label: 'Cetak Kartu Garansi',
   icon: 'i-lucide-printer',
-  to: '/dashboard/customers',
+  to: '/dashboard/cetak-kartu',
   onSelect: () => {
     open.value = false
   }
