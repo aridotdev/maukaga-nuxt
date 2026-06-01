@@ -281,7 +281,7 @@ function getErrorMessage(error: unknown) {
 <template>
   <UDashboardPanel id="pengajuan">
     <template #header>
-      <UDashboardNavbar title="Pengajuan" description="Daftar pengajuan admin">
+      <UDashboardNavbar title="Pengajuan Kartu Garansi" description="Daftar pengajuan admin">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>

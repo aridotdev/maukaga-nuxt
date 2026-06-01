@@ -2,6 +2,11 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 const links = [[{
+  label: 'Product Name',
+  icon: 'i-lucide-scan-search',
+  to: '/dashboard/settings/product-name',
+  exact: true
+},{
   label: 'Layout Cetak',
   icon: 'i-lucide-layout-template',
   to: '/dashboard/settings',

@@ -108,12 +108,6 @@ function goBack() {
       </div>
     </main>
 
-    <p
-      v-if="showFooter"
-      class="absolute bottom-6 left-1/2 z-10 w-full -translate-x-1/2 px-4 text-center text-xs font-medium text-slate-400"
-    >
-      &copy; 2026 Mau KaGa (Kartu Garansi). All rights reserved.
-    </p>
   </section>
 </template>
 
