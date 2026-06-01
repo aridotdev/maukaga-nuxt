@@ -384,7 +384,7 @@ function getErrorMessage(error: unknown) {
         </template>
         <template #right>
           <UButton
-            label="Kembali ke Daftar"
+            label="Kembali ke Home"
             icon="i-lucide-arrow-left"
             color="neutral"
             variant="ghost"
@@ -438,7 +438,7 @@ function getErrorMessage(error: unknown) {
           <div class="space-y-6 lg:col-span-8">
             
             <!-- Hero Section -->
-            <div class="rounded-2xl border border-muted bg-elevated px-6 py-5 shadow-sm">
+            <div class="rounded-2xl border border-primary/20 bg-green-50 px-6 py-5 shadow-sm">
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div class="flex items-center gap-3">
@@ -458,11 +458,11 @@ function getErrorMessage(error: unknown) {
                 </div>
                 <div v-if="detail.fileHardCopyUrl">
                   <UButton
-                    label="Lihat Hard Copy"
+                    label="Buka File"
                     icon="i-lucide-file-text"
                     trailing-icon="i-lucide-arrow-up-right"
                     color="primary"
-                    variant="outline"
+                    variant="solid"
                     :to="detail.fileHardCopyUrl"
                     target="_blank"
                   />
