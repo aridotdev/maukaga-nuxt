@@ -30,7 +30,7 @@ const links = [[{
 }, {
   label: 'Cetak Label Pengiriman',
   icon: 'i-lucide-tag',
-  to: '/dashboard/customers',
+  to: '/dashboard/cetak-label-pengiriman',
   onSelect: () => {
     open.value = false
   }
@@ -49,7 +49,7 @@ const links = [[{
     }
   }, {
     label: 'Layout Cetak',
-    to: '/dashboard/settings',
+    to: '/dashboard/settings/layout-kartu',
     exact: true,
     onSelect: () => {
       open.value = false
