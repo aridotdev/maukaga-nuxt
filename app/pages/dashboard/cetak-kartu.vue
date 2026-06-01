@@ -822,10 +822,6 @@ function getWarrantyPageStyle(row: WarrantyPrintQueueRow) {
   }
 }
 
-function getLayoutMetric(layout: PrintLayout) {
-  return `X ${layout.offsetX}mm, Y ${layout.offsetY}mm, Produk ke Model ${layout.gapProductModel}mm, Model ke Serial ${layout.gapModelSerial}mm`
-}
-
 function getAlertColor(type: NonNullable<AlertState>['type']) {
   const colors = {
     success: 'success',
@@ -921,16 +917,6 @@ if (import.meta.client) {
           :loading="isQueueLoading"
         />
 
-        <section class="grid gap-4 md:grid-cols-2">
-          <UPageCard
-            v-for="type in ['local', 'import'] as const"
-            :key="type"
-            :title="`${type === 'local' ? 'Local' : 'Import'} aktif`"
-            :description="getLayoutMetric(getActivePrintLayout(type))"
-            icon="i-lucide-ruler"
-            variant="subtle"
-          />
-        </section>
 
         <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
           <div class="min-h-0 w-full overflow-x-auto">
