@@ -1,18 +1,11 @@
 <script setup lang="ts">
-import { getLocalTimeZone, today } from '@internationalized/date'
+import { getLocalTimeZone, today, type DateValue as CalendarDateValue } from '@internationalized/date'
 
 definePageMeta({
   layout: 'cs'
 })
 
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
-
-type DateValueLike = {
-  year: number
-  month: number
-  day: number
-  toString: () => string
-}
 
 type ProductItem = {
   model: string
@@ -87,7 +80,7 @@ const formState = reactive<FormState>({
   products: [createProductItem()]
 })
 
-const tanggalForm = shallowRef<DateValueLike>(createTodayDateValue())
+const tanggalForm = shallowRef<CalendarDateValue | undefined>(createTodayDateValue())
 const fieldErrors = reactive<Record<string, string>>({})
 const modelProdukMap = ref<Record<string, string>>({})
 const currentDraftId = ref('')
@@ -322,7 +315,7 @@ function validateForm() {
   return true
 }
 
-function isDateMoreThanSevenDaysAhead(value: DateValueLike) {
+function isDateMoreThanSevenDaysAhead(value: CalendarDateValue) {
   const selected = new Date(value.year, value.month - 1, value.day)
   const max = new Date()
   max.setHours(23, 59, 59, 999)
@@ -330,12 +323,17 @@ function isDateMoreThanSevenDaysAhead(value: DateValueLike) {
   return selected > max
 }
 
-function dateToPayload(value: DateValueLike | undefined) {
+function dateToPayload(value: CalendarDateValue | undefined) {
   return value ? value.toString() : ''
 }
 
 function createTodayDateValue() {
   return today(getLocalTimeZone())
+}
+
+function updateTanggalForm(value: unknown) {
+  tanggalForm.value = value as CalendarDateValue | undefined
+  clearFieldError('tanggalForm')
 }
 
 function collectPayload(): SubmissionPayload {
@@ -508,10 +506,10 @@ function getErrorMessage(error: unknown) {
               <UFormField name="tanggalForm" label="Tanggal Form" size="lg" :error="fieldErrors.tanggalForm">
                 <UInputDate
                   ref="inputDate"
-                  v-model="tanggalForm"
+                  :model-value="tanggalForm as never"
                   class="w-full"
                   size="lg"
-                  @update:model-value="clearFieldError('tanggalForm')"
+                  @update:model-value="updateTanggalForm"
                 >
                   <template #trailing>
                     <UPopover :reference="inputDate?.inputsRef[3]?.$el">

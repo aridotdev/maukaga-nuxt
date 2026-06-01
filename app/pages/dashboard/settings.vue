@@ -9,7 +9,7 @@ const links = [[{
 },{
   label: 'Layout Cetak',
   icon: 'i-lucide-layout-template',
-  to: '/dashboard/settings',
+  to: '/dashboard/settings/layout-kartu',
   exact: true
 }, {
   label: 'User Management',
@@ -34,7 +34,7 @@ const links = [[{
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full lg:max-w-2xl mx-auto">
+      <div class="flex w-full max-w-4xl flex-col gap-4 sm:gap-6 lg:gap-12 mx-auto">
         <NuxtPage />
       </div>
     </template>
