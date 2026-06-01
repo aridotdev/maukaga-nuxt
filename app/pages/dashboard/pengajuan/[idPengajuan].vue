@@ -120,13 +120,6 @@ const infoFields = computed<InfoField[]>(() => {
   if (!detail.value) return []
 
   return [{
-    label: 'ID Pengajuan',
-    value: detail.value.idPengajuan || '-',
-    mono: true
-  }, {
-    label: 'Waktu Submit',
-    value: formatDateTime(detail.value.timestampSubmit)
-  }, {
     label: 'Nama',
     value: detail.value.nama || '-'
   }, {
@@ -136,21 +129,11 @@ const infoFields = computed<InfoField[]>(() => {
     label: 'Pemilik',
     value: detail.value.pemilik || '-'
   }, {
-    label: 'Tanggal Form',
-    value: formatDateOnly(detail.value.tanggalForm)
-  }, {
     label: 'Alasan Pengajuan',
     value: detail.value.alasanPengajuan || '-'
   }, {
     label: 'Catatan Tambahan',
     value: detail.value.catatanTambahan || '-'
-  }, {
-    label: 'Jumlah Item',
-    value: String(detail.value.jumlahItem || 0)
-  }, {
-    label: 'File Hard Copy',
-    value: detail.value.fileHardCopyUrl ? 'Buka file' : '-',
-    href: detail.value.fileHardCopyUrl
   }]
 })
 
@@ -377,19 +360,6 @@ function formatDateTime(value: string | undefined) {
   }).format(date)
 }
 
-function formatDateOnly(value: string | undefined) {
-  if (!value) return '-'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).format(date)
-}
-
 function clearAdminSession() {
   sessionStorage.removeItem('admin_token')
   sessionStorage.removeItem('admin_nama')
@@ -412,20 +382,12 @@ function getErrorMessage(error: unknown) {
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-
         <template #right>
-          <UBadge
-            v-if="detail"
-            :color="getStatusColor(detail.status)"
-            variant="subtle"
-            :label="detail.status"
-            class="font-semibold"
-          />
           <UButton
-            label="Kembali"
+            label="Kembali ke Daftar"
             icon="i-lucide-arrow-left"
             color="neutral"
-            variant="soft"
+            variant="ghost"
             to="/dashboard"
           />
         </template>
@@ -433,268 +395,243 @@ function getErrorMessage(error: unknown) {
     </template>
 
     <template #body>
-      <div class="space-y-6">
+      <div class="mx-auto w-full max-w-7xl px-2 py-4">
+
+        <!-- Error state -->
         <UAlert
           v-if="loadError && !isLoading"
           color="error"
           variant="subtle"
           icon="i-lucide-circle-alert"
-          title="Detail pengajuan belum bisa dimuat"
+          title="Gagal Memuat Data"
           :description="loadError"
+          class="mb-6 rounded-xl"
         />
 
-        <div
-          v-if="isLoading && !detail"
-          class="space-y-4"
-        >
-          <USkeleton class="h-24 rounded-lg" />
-          <USkeleton class="h-64 rounded-lg" />
-          <USkeleton class="h-48 rounded-lg" />
+        <!-- Loading skeleton -->
+        <div v-if="isLoading && !detail" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div class="lg:col-span-8 space-y-6">
+            <USkeleton class="h-32 rounded-2xl" />
+            <USkeleton class="h-64 rounded-2xl" />
+          </div>
+          <div class="lg:col-span-4 space-y-6">
+            <USkeleton class="h-48 rounded-2xl" />
+            <USkeleton class="h-96 rounded-2xl" />
+          </div>
         </div>
 
+        <!-- Empty state -->
         <div
           v-else-if="!detail"
-          class="flex flex-col items-center justify-center rounded-lg border border-dashed border-muted bg-elevated/30 px-4 py-12 text-center"
+          class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-muted bg-elevated/10 px-4 py-24 text-center"
         >
-          <UIcon
-            name="i-lucide-file-question"
-            class="size-10 text-muted"
-          />
-          <p class="mt-3 text-sm font-medium text-highlighted">
-            Pengajuan tidak ditemukan
-          </p>
-          <p class="mt-1 max-w-md text-sm text-muted">
-            Periksa kembali ID pengajuan atau kembali ke dashboard.
-          </p>
-          <UButton
-            label="Kembali ke Dashboard"
-            icon="i-lucide-arrow-left"
-            color="neutral"
-            variant="soft"
-            to="/dashboard"
-            class="mt-4"
-          />
+          <UIcon name="i-lucide-search-x" class="mb-4 size-12 text-muted" />
+          <h3 class="text-lg font-semibold text-highlighted">Data Tidak Ditemukan</h3>
+          <p class="mt-2 text-sm text-muted">ID Pengajuan mungkin salah atau telah dihapus.</p>
+          <UButton label="Kembali" icon="i-lucide-arrow-left" color="primary" variant="soft" to="/dashboard" class="mt-6" />
         </div>
 
-        <template v-else>
-          <UCard>
-            <template #header>
-              <div class="flex flex-wrap items-start justify-between gap-3">
+        <!-- Main Layout (Split Sidebar) -->
+        <div v-else class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          
+          <!-- KIRI: Konten Utama (Hero, Items, History) -->
+          <div class="space-y-6 lg:col-span-8">
+            
+            <!-- Hero Section -->
+            <div class="rounded-2xl border border-muted bg-elevated px-6 py-5 shadow-sm">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Informasi Pengajuan
-                  </h2>
+                  <div class="flex items-center gap-3">
+                    <h1 class="font-mono text-2xl font-bold tracking-tight text-highlighted">
+                      {{ detail.idPengajuan }}
+                    </h1>
+                    <UBadge
+                      :color="getStatusColor(detail.status)"
+                      variant="soft"
+                      :label="detail.status"
+                      class="px-2.5 py-1 text-xs font-bold uppercase tracking-wider"
+                    />
+                  </div>
                   <p class="mt-1 text-sm text-muted">
-                    Data lengkap dari action getDetail.
+                    Disubmit oleh <span class="font-medium text-highlighted">{{ detail.nama || '-' }}</span> pada {{ formatDateTime(detail.timestampSubmit) }}
                   </p>
                 </div>
-                <UButton
-                  v-if="detail.fileHardCopyUrl"
-                  label="Buka File Hard Copy"
-                  icon="i-lucide-external-link"
-                  color="neutral"
-                  variant="outline"
-                  :to="detail.fileHardCopyUrl"
-                  target="_blank"
+                <div v-if="detail.fileHardCopyUrl">
+                  <UButton
+                    label="Lihat Hard Copy"
+                    icon="i-lucide-file-text"
+                    trailing-icon="i-lucide-arrow-up-right"
+                    color="primary"
+                    variant="outline"
+                    :to="detail.fileHardCopyUrl"
+                    target="_blank"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Daftar Item -->
+            <UCard class="rounded-2xl shadow-sm" :ui="{ body: 'p-0 sm:p-0' }">
+              <template #header>
+                <div class="flex items-center justify-between px-2">
+                  <h2 class="text-base font-semibold text-highlighted flex items-center gap-2">
+                    <UIcon name="i-lucide-package" class="text-primary" />
+                    Daftar Item Pengajuan
+                  </h2>
+                  <span class="text-sm font-medium text-muted bg-muted/20 px-2 py-1 rounded-md">
+                    Total: {{ detail.jumlahItem || 0 }}
+                  </span>
+                </div>
+              </template>
+
+              <div class="p-4">
+                <UAlert
+                  v-if="hasUnverifiedItems"
+                  color="warning"
+                  variant="soft"
+                  icon="i-lucide-triangle-alert"
+                  title="Perhatian"
+                  description="Beberapa item belum diverifikasi dan tidak akan masuk antrean cetak."
                 />
               </div>
-            </template>
 
-            <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div
-                v-for="field in infoFields"
-                :key="field.label"
-                class="rounded-lg border border-muted bg-elevated/25 p-4"
+              <UTable
+                :data="detail.items || []"
+                :columns="itemColumns"
+                class="w-full border-t border-muted/50"
               >
-                <dt class="text-xs font-medium uppercase tracking-wide text-muted">
-                  {{ field.label }}
-                </dt>
-                <dd
-                  class="mt-1 text-sm font-semibold text-highlighted"
-                  :class="field.mono ? 'font-mono' : ''"
+                <template #empty>
+                  <div class="flex flex-col items-center py-12 text-center">
+                    <UIcon name="i-lucide-box" class="mb-3 size-10 text-muted/50" />
+                    <p class="text-sm text-muted">Tidak ada data item.</p>
+                  </div>
+                </template>
+              </UTable>
+            </UCard>
+
+            <!-- Riwayat Status -->
+            <UCard class="rounded-2xl shadow-sm" :ui="{ body: 'p-0 sm:p-0' }">
+              <template #header>
+                <h2 class="text-base font-semibold text-highlighted flex items-center gap-2 px-2">
+                  <UIcon name="i-lucide-history" class="text-primary" />
+                  Riwayat Perubahan Status
+                </h2>
+              </template>
+              
+              <UTable
+                :data="detail.riwayat || []"
+                :columns="historyColumns"
+                class="w-full border-t border-muted/50"
+              >
+                <template #empty>
+                  <div class="p-8 text-center text-sm text-muted">
+                    Belum ada riwayat perubahan status tercatat.
+                  </div>
+                </template>
+              </UTable>
+            </UCard>
+
+          </div>
+
+          <!-- KANAN: Form Aksi & Info Detail (Sidebar) -->
+          <div class="space-y-6 lg:col-span-4 lg:sticky lg:top-4">
+            
+            <!-- Update Status Panel -->
+            <UCard class="rounded-2xl border-primary/20 bg-primary/5 shadow-sm ring-1 ring-primary/20">
+              <template #header>
+                <h2 class="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                  <UIcon name="i-lucide-zap" />
+                  Tindakan Admin
+                </h2>
+              </template>
+
+              <div class="space-y-4">
+                <div class="text-sm border-b border-muted/40 pb-3 mb-3">
+                  <span class="text-muted block mb-1">Status Terakhir:</span>
+                  <div class="font-medium text-highlighted">
+                    {{ formatDateTime(detail.tanggalUpdateStatusTerakhir) }}
+                    <span class="text-muted font-normal block text-xs mt-0.5">oleh {{ detail.userUpdateStatus || '-' }}</span>
+                  </div>
+                </div>
+
+                <UAlert v-if="transitionWarning" color="warning" variant="subtle" :description="transitionWarning" class="text-xs" />
+                <UAlert v-if="statusNotice" color="info" variant="subtle" :description="statusNotice" class="text-xs" />
+                <UAlert v-if="statusError" color="error" variant="subtle" :description="statusError" class="text-xs" />
+
+                <form class="space-y-4" @submit.prevent="submitStatus">
+                  <UFormField label="Ubah Status Ke" name="statusBaru">
+                    <USelect
+                      v-model="formState.statusBaru"
+                      :items="statusItems"
+                      class="w-full"
+                      size="lg"
+                    />
+                  </UFormField>
+
+                  <UFormField label="Catatan Admin" name="catatanAdmin">
+                    <UTextarea
+                      v-model="formState.catatanAdmin"
+                      :rows="3"
+                      placeholder="Alasan penolakan / catatan internal..."
+                      class="w-full"
+                    />
+                  </UFormField>
+
+                  <UButton
+                    type="submit"
+                    label="Simpan Perubahan"
+                    icon="i-lucide-check"
+                    color="primary"
+                    block
+                    size="lg"
+                    :loading="isSubmitting"
+                    :disabled="isSubmitting"
+                  />
+                </form>
+              </div>
+            </UCard>
+
+            <!-- Informasi Lengkap List -->
+            <UCard class="rounded-2xl shadow-sm">
+              <template #header>
+                <h2 class="text-base font-semibold text-highlighted flex items-center gap-2">
+                  <UIcon name="i-lucide-info" class="text-primary" />
+                  Informasi Detail
+                </h2>
+              </template>
+              
+              <div class="divide-y divide-muted/40">
+                <div 
+                  v-for="field in infoFields" 
+                  :key="field.label" 
+                  class="py-3 first:pt-0 last:pb-0 flex flex-col gap-1"
                 >
+                  <span class="text-xs font-medium text-muted uppercase tracking-wide">{{ field.label }}</span>
+                  
                   <UButton
                     v-if="field.href"
                     :to="field.href"
                     target="_blank"
                     color="primary"
                     variant="link"
-                    trailing-icon="i-lucide-external-link"
-                    class="p-0"
+                    class="p-0 justify-start h-auto font-medium"
+                  >
+                    {{ field.value }} <UIcon name="i-lucide-external-link" class="ml-1 size-3" />
+                  </UButton>
+                  
+                  <span 
+                    v-else 
+                    class="text-sm text-highlighted"
+                    :class="field.mono ? 'font-mono' : 'font-medium'"
                   >
                     {{ field.value }}
-                  </UButton>
-                  <span v-else>{{ field.value }}</span>
-                </dd>
-              </div>
-            </dl>
-          </UCard>
-
-          <UCard>
-            <template #header>
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">
-                    Daftar Item
-                  </h2>
-                  <p class="mt-1 text-sm text-muted">
-                    Item pengajuan dan status verifikasi nama produk.
-                  </p>
+                  </span>
                 </div>
-                <UBadge
-                  :label="`${detail.items?.length || 0} Item`"
-                  color="neutral"
-                  variant="subtle"
-                />
               </div>
-            </template>
+            </UCard>
 
-            <UAlert
-              v-if="hasUnverifiedItems"
-              color="warning"
-              variant="subtle"
-              icon="i-lucide-triangle-alert"
-              title="Ada nama produk belum terverifikasi"
-              description="Item yang belum verified tidak masuk antrean cetak sampai diverifikasi."
-              class="mb-4"
-            />
-
-            <UTable
-              :data="detail.items || []"
-              :columns="itemColumns"
-              class="w-full"
-              :ui="{
-                base: 'min-w-190',
-                th: 'text-xs font-semibold uppercase text-muted',
-                td: 'text-sm align-middle'
-              }"
-            >
-              <template #empty>
-                <div class="py-8 text-center text-sm text-muted">
-                  Tidak ada item pada pengajuan ini.
-                </div>
-              </template>
-            </UTable>
-          </UCard>
-
-          <UCard>
-            <template #header>
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">
-                  Update Status / Catatan
-                </h2>
-                <p class="mt-1 text-sm text-muted">
-                  Catatan admin hanya disimpan saat status berubah.
-                </p>
-              </div>
-            </template>
-
-            <div class="space-y-4">
-              <div class="rounded-lg border border-muted bg-elevated/25 p-4 text-sm text-muted">
-                <div>Status saat ini: <UBadge :color="getStatusColor(detail.status)" variant="subtle" :label="detail.status" /></div>
-                <div class="mt-2">Update terakhir: {{ formatDateTime(detail.tanggalUpdateStatusTerakhir) }}</div>
-                <div class="mt-1">User updater: {{ detail.userUpdateStatus || '-' }}</div>
-              </div>
-
-              <UAlert
-                v-if="transitionWarning"
-                color="warning"
-                variant="subtle"
-                icon="i-lucide-triangle-alert"
-                title="Perhatikan konsekuensi status"
-                :description="transitionWarning"
-              />
-
-              <UAlert
-                v-if="statusNotice"
-                color="warning"
-                variant="subtle"
-                icon="i-lucide-info"
-                title="Tidak ada perubahan"
-                :description="statusNotice"
-              />
-
-              <UAlert
-                v-if="statusError"
-                color="error"
-                variant="subtle"
-                icon="i-lucide-circle-alert"
-                title="Update status gagal"
-                :description="statusError"
-              />
-
-              <form
-                class="grid gap-4 sm:grid-cols-2"
-                @submit.prevent="submitStatus"
-              >
-                <UFormField
-                  label="Status Baru"
-                  name="statusBaru"
-                >
-                  <USelect
-                    v-model="formState.statusBaru"
-                    :items="statusItems"
-                    class="w-full"
-                    placeholder="Pilih status"
-                  />
-                </UFormField>
-
-                <UFormField
-                  label="Catatan Admin"
-                  name="catatanAdmin"
-                  class="sm:col-span-2"
-                >
-                  <UTextarea
-                    v-model="formState.catatanAdmin"
-                    :rows="5"
-                    placeholder="Isi catatan admin saat status berubah. Wajib jika status Ditolak."
-                  />
-                </UFormField>
-
-                <div class="flex justify-end sm:col-span-2">
-                  <UButton
-                    type="submit"
-                    label="Simpan Status"
-                    icon="i-lucide-save"
-                    color="primary"
-                    :loading="isSubmitting"
-                    :disabled="isSubmitting"
-                  />
-                </div>
-              </form>
-            </div>
-          </UCard>
-
-          <UCard>
-            <template #header>
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">
-                  Riwayat Status
-                </h2>
-                <p class="mt-1 text-sm text-muted">
-                  Log audit perubahan status pengajuan.
-                </p>
-              </div>
-            </template>
-
-            <UTable
-              :data="detail.riwayat || []"
-              :columns="historyColumns"
-              class="w-full"
-              :ui="{
-                base: 'min-w-160',
-                th: 'text-xs font-semibold uppercase text-muted',
-                td: 'text-sm align-middle'
-              }"
-            >
-              <template #empty>
-                <div class="py-8 text-center text-sm text-muted">
-                  Belum ada riwayat status.
-                </div>
-              </template>
-            </UTable>
-          </UCard>
-        </template>
+          </div>
+        </div>
       </div>
     </template>
   </UDashboardPanel>
