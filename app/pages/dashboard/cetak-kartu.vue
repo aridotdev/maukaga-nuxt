@@ -149,13 +149,13 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
     }
   }
 }, {
-  accessorKey: 'id',
+  accessorKey: 'idPengajuan',
   header: 'ID',
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'font-mono text-sm font-bold text-highlighted' }, row.original.idPengajuan),
   ])
 }, {
-  accessorKey: 'item',
+  accessorKey: 'noItem',
   header: 'Item',
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'mt-1 text-xs text-muted' }, `Item #${row.original.noItem}`)
@@ -163,41 +163,53 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
 }, {
   accessorKey: 'bagianCabang',
   header: 'Cabang',
-  cell: ({ row }) => h('div', { class: 'min-w-36' }, [
-    h('p', { class: 'font-semibold text-toned' }, row.original.bagianCabang || '-'),
-    h('p', { class: 'mt-1 text-xs text-muted' }, row.original.nama || '-')
+  cell: ({ row }) => h('div', [
+    h('p', { class: 'text-sm' }, row.original.bagianCabang || '-'),
+  ])
+}, {
+  accessorKey: 'nama',
+  header: 'Nama',
+  cell: ({ row }) => h('div', [
+    h('p', { class: 'text-sm' }, row.original.nama || '-')
   ])
 }, {
   accessorKey: 'produk',
   header: 'Detail Produk',
-  cell: ({ row }) => h('div', { class: 'min-w-72' }, [
-    h('p', { class: 'font-semibold text-highlighted' }, row.original.produk || '-'),
-    h('div', { class: 'mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted' }, [
-      h('span', {}, `Model: ${row.original.model || '-'}`),
-      h('span', { class: 'font-mono text-toned' }, `SN: ${row.original.nomorSeri || '-'}`)
-    ])
+  cell: ({ row }) => h('div', [
+    h('p', { class: 'text-sm' }, row.original.produk || '-'),
   ])
 }, {
-  accessorKey: 'jenisKartuKey',
+  accessorKey: 'model',
+  header: 'Name Model',
+  cell: ({ row }) => h('div', [
+    h('p', { class: 'text-sm' }, row.original.model || '-'),
+  ])
+}, {
+  accessorKey: 'nomorSeri',
+  header: 'Nomor Seri',
+  cell: ({ row }) => h('div', [
+    h('p', { class: 'text-sm' }, row.original.nomorSeri || '-'),
+  ])
+}, {
+  accessorKey: 'jenisKartu',
   header: 'Jenis Kartu',
-  cell: ({ row }) => h(USelect, {
-    modelValue: row.original.jenisKartuKey || '',
-    items: cardTypeItems,
-    class: 'w-34',
-    size: 'sm',
-    color: row.original.jenisKartuKey ? 'neutral' : 'warning',
-    disabled: isActionLoading.value,
-    'onUpdate:modelValue': (value: string) => changeWarrantyCardType(row.original, value)
-  })
+  cell: ({ row }) => h('div', [
+    h(UBadge, {
+      color: row.original.jenisKartuKey === 'local' ? 'info' : row.original.jenisKartuKey === 'import' ? 'warning' : 'neutral',
+      variant: 'subtle',
+      label: row.original.jenisKartuKey === 'local' ? 'Local' : row.original.jenisKartuKey === 'import' ? 'Import' : 'Belum Dipilih',
+      class: 'w-fit text-xs text-muted'
+    }),
+  ])
 }, {
   accessorKey: 'statusCetak',
   header: 'Status',
   cell: ({ row }) => h('div', { class: 'flex flex-col gap-1' }, [
     h(UBadge, {
-      color: row.original.statusCetak === 'Printed' ? 'success' : 'neutral',
+      color: row.original.statusCetak === 'Printed' ? 'success' : 'error',
       variant: 'subtle',
       label: row.original.statusCetak === 'Printed' ? 'Printed' : 'Belum Dicetak',
-      class: 'w-fit font-semibold'
+      class: 'w-fit text-xs text-muted'
     }),
     row.original.reprintCount
       ? h('span', { class: 'text-xs text-muted' }, `Reprint ${row.original.reprintCount}x`)
