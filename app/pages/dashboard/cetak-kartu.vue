@@ -61,6 +61,11 @@ const cardTypeItems = [{
   value: 'import'
 }]
 
+const printTableGlobalFilterOptions = {
+  globalFilterFn: (row: { original: WarrantyPrintQueueRow }, _columnId: string, filterValue: unknown) =>
+    matchesPrintRowSearch(row.original, String(filterValue || '').trim().toLowerCase())
+}
+
 const visiblePrintRows = computed(() => {
   const typeOrder: Record<string, number> = { local: 1, import: 2, '': 3 }
   const keyword = search.value.trim().toLowerCase()
@@ -74,14 +79,7 @@ const visiblePrintRows = computed(() => {
     .filter((row) => {
       if (!keyword) return true
 
-      return [
-        row.idPengajuan,
-        row.bagianCabang,
-        row.nama,
-        row.produk,
-        row.model,
-        row.nomorSeri
-      ].some((value) => String(value || '').toLowerCase().includes(keyword))
+      return matchesPrintRowSearch(row, keyword)
     })
     .toSorted((a, b) =>
       (typeOrder[a.jenisKartuKey || ''] || 3) - (typeOrder[b.jenisKartuKey || ''] || 3)
@@ -437,6 +435,17 @@ function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem
   return id && noItem ? `${id}::${noItem}` : row.key
 }
 
+function matchesPrintRowSearch(row: WarrantyPrintQueueRow, keyword: string) {
+  return [
+    row.idPengajuan,
+    row.bagianCabang,
+    row.nama,
+    row.produk,
+    row.model,
+    row.nomorSeri
+  ].some((value) => String(value || '').toLowerCase().includes(keyword))
+}
+
 function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {
   const missing = rows.filter((row) => !row.jenisKartuKey)
   if (missing.length) {
@@ -613,9 +622,11 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
               
 
               <UTable
+                v-model:global-filter="search"
                 :get-row-id="getPrintRowKey"
                 :data="visiblePrintRows"
                 :columns="warrantyColumns"
+                :global-filter-options="printTableGlobalFilterOptions"
                 :loading="isQueueLoading"
                 class="w-full"
                 :ui="{
