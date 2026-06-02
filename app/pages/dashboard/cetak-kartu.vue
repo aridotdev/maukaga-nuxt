@@ -104,7 +104,7 @@ const visibleSummary = computed(() => {
 
 const selectedRows = computed(() => {
   return Array.from(selectedPrintKeys.value)
-    .map((key) => printQueue.value.find((row) => row.key === key))
+    .map((key) => printQueue.value.find((row) => getPrintRowKey(row) === key))
     .filter(Boolean) as WarrantyPrintQueueRow[]
 })
 
@@ -118,7 +118,7 @@ const selectedRowsSorted = computed(() => {
   )
 })
 
-const visibleKeys = computed(() => visiblePrintRows.value.map((row) => row.key))
+const visibleKeys = computed(() => visiblePrintRows.value.map((row) => getPrintRowKey(row)))
 const selectedVisibleCount = computed(() => visibleKeys.value.filter((key) => selectedPrintKeys.value.has(key)).length)
 const allVisibleSelected = computed(() => visibleKeys.value.length > 0 && selectedVisibleCount.value === visibleKeys.value.length)
 const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && selectedVisibleCount.value < visibleKeys.value.length)
@@ -140,9 +140,9 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
     'onUpdate:modelValue': (value: boolean | 'indeterminate') => toggleVisiblePrintRows(!!value)
   }),
   cell: ({ row }) => h(UCheckbox, {
-    modelValue: selectedPrintKeys.value.has(row.original.key),
+    modelValue: selectedPrintKeys.value.has(getPrintRowKey(row.original)),
     'aria-label': `Pilih ${row.original.idPengajuan} item ${row.original.noItem}`,
-    'onUpdate:modelValue': (value: boolean | 'indeterminate') => handlePrintRowCheck(row.original.key, !!value)
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => handlePrintRowCheck(getPrintRowKey(row.original), !!value)
   }),
   meta: {
     class: {
@@ -151,10 +151,15 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
     }
   }
 }, {
-  accessorKey: 'idPengajuan',
-  header: 'ID & Item',
+  accessorKey: 'id',
+  header: 'ID',
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'font-mono text-sm font-bold text-highlighted' }, row.original.idPengajuan),
+  ])
+}, {
+  accessorKey: 'item',
+  header: 'Item',
+  cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'mt-1 text-xs text-muted' }, `Item #${row.original.noItem}`)
   ])
 }, {
@@ -245,7 +250,7 @@ async function loadWarrantyPrintQueue(showLoading = true) {
     const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue')
     if (!result.success || !result.data) throw new Error(result.error || 'Gagal memuat antrean cetak')
 
-    printQueue.value = result.data.rows || []
+    printQueue.value = normalizePrintRows(result.data.rows || [])
     pruneSelection()
     if (showLoading && pageAlert.value?.type === 'loading') pageAlert.value = null
   } catch (error) {
@@ -282,7 +287,7 @@ async function changeWarrantyCardType(row: WarrantyPrintQueueRow, value: string)
     jenisKartu: value
   }], 'Jenis kartu disimpan')
 
-  updateRowsCardType([row.key], value)
+  updateRowsCardType([getPrintRowKey(row)], value)
 }
 
 async function setSelectedCardType(jenisKartu: CardTypeKey) {
@@ -298,7 +303,7 @@ async function setSelectedCardType(jenisKartu: CardTypeKey) {
     jenisKartu
   })), `Jenis kartu batch disimpan sebagai ${jenisKartu === 'local' ? 'Local' : 'Import'}`)
 
-  updateRowsCardType(rows.map((row) => row.key), jenisKartu)
+  updateRowsCardType(rows.map((row) => getPrintRowKey(row)), jenisKartu)
 }
 
 async function printSelectedWarrantyCards() {
@@ -386,21 +391,50 @@ function toggleVisiblePrintRows(checked: boolean) {
 }
 
 function pruneSelection() {
-  const activeKeys = new Set(printQueue.value.map((row) => row.key))
+  const activeKeys = new Set(printQueue.value.map((row) => getPrintRowKey(row)))
   selectedPrintKeys.value = new Set(Array.from(selectedPrintKeys.value).filter((key) => activeKeys.has(key)))
 }
 
 function updateRowsCardType(keys: string[], jenisKartu: CardTypeKey) {
   const keySet = new Set(keys)
-  printQueue.value = printQueue.value.map((row) => {
-    if (!keySet.has(row.key)) return row
+  printQueue.value = normalizePrintRows(printQueue.value.map((row) => {
+    if (!keySet.has(getPrintRowKey(row))) return row
 
     return {
       ...row,
       jenisKartuKey: jenisKartu,
       jenisKartu: jenisKartu === 'local' ? 'Local' : 'Import'
     }
+  }))
+}
+
+function normalizePrintRows(rows: WarrantyPrintQueueRow[]) {
+  const rowMap = new Map<string, WarrantyPrintQueueRow>()
+
+  rows.forEach((row) => {
+    const key = getPrintRowKey(row)
+    const normalizedRow = { ...row, key }
+    const existing = rowMap.get(key)
+
+    if (!existing || shouldUsePrintRow(normalizedRow, existing)) {
+      rowMap.set(key, normalizedRow)
+    }
   })
+
+  return Array.from(rowMap.values())
+}
+
+function shouldUsePrintRow(row: WarrantyPrintQueueRow, existing: WarrantyPrintQueueRow) {
+  if (row.statusCetak === 'Printed' && existing.statusCetak !== 'Printed') return true
+  if (row.jenisKartuKey && !existing.jenisKartuKey) return true
+  return false
+}
+
+function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem' | 'key'>) {
+  const id = String(row.idPengajuan || '').trim()
+  const noItem = String(row.noItem ?? '').trim()
+
+  return id && noItem ? `${id}::${noItem}` : row.key
 }
 
 function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {
@@ -579,6 +613,7 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
               
 
               <UTable
+                :get-row-id="getPrintRowKey"
                 :data="visiblePrintRows"
                 :columns="warrantyColumns"
                 :loading="isQueueLoading"
