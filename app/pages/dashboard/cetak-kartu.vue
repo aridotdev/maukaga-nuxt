@@ -36,8 +36,6 @@ const activePrintLayouts = ref<Record<CardTypeKey, PrintLayout | null>>({
 const warrantyPrintRows = ref<WarrantyPrintQueueRow[]>([])
 const warrantyPrintRef = ref<{ print: () => Promise<void> } | null>(null)
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-
 const cardTypeFilterItems = [{
   label: 'Semua Jenis',
   value: 'all'
@@ -65,12 +63,25 @@ const cardTypeItems = [{
 
 const visiblePrintRows = computed(() => {
   const typeOrder: Record<string, number> = { local: 1, import: 2, '': 3 }
+  const keyword = search.value.trim().toLowerCase()
 
   return printQueue.value
     .filter((row) => {
       if (cardTypeFilter.value === 'unset') return !row.jenisKartuKey
       if (cardTypeFilter.value === 'all') return true
       return row.jenisKartuKey === cardTypeFilter.value
+    })
+    .filter((row) => {
+      if (!keyword) return true
+
+      return [
+        row.idPengajuan,
+        row.bagianCabang,
+        row.nama,
+        row.produk,
+        row.model,
+        row.nomorSeri
+      ].some((value) => String(value || '').toLowerCase().includes(keyword))
     })
     .toSorted((a, b) =>
       (typeOrder[a.jenisKartuKey || ''] || 3) - (typeOrder[b.jenisKartuKey || ''] || 3)
@@ -191,13 +202,6 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
   ])
 }]
 
-watch(search, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    loadWarrantyPrintQueue()
-  }, 300)
-})
-
 onMounted(async () => {
   adminName.value = sessionStorage.getItem('admin_nama') || 'Admin'
   if (!sessionStorage.getItem('admin_token')) {
@@ -238,9 +242,7 @@ async function loadWarrantyPrintQueue(showLoading = true) {
   }
 
   try {
-    const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', {
-      search: search.value.trim()
-    })
+    const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue')
     if (!result.success || !result.data) throw new Error(result.error || 'Gagal memuat antrean cetak')
 
     printQueue.value = result.data.rows || []
