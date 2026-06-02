@@ -474,6 +474,26 @@ async function handleApiError(error: unknown, fallback: string) {
             :loading="isQueueLoading"
           />
 
+          <UAlert
+            v-if="alertState"
+            :color="getAlertColor(alertState.type)"
+            :icon="getAlertIcon(alertState.type)"
+            :title="alertState.title"
+            :description="alertState.description"
+            variant="subtle"
+          >
+            <template v-if="alertState.batchId" #actions>
+              <UButton
+                label="Cetak Label Cabang"
+                icon="i-lucide-tags"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                :to="batchLabelRoute"
+              />
+            </template>
+          </UAlert>
+
           <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
             <div class="min-h-0 w-full overflow-x-auto">
               <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3.5">
@@ -545,26 +565,7 @@ async function handleApiError(error: unknown, fallback: string) {
                 </div>
               </div>
 
-              <UAlert
-                v-if="alertState"
-                :color="getAlertColor(alertState.type)"
-                :icon="getAlertIcon(alertState.type)"
-                :title="alertState.title"
-                :description="alertState.description"
-                variant="subtle"
-                class="m-4"
-              >
-                <template v-if="alertState.batchId" #actions>
-                  <UButton
-                    label="Cetak Label Cabang"
-                    icon="i-lucide-tags"
-                    color="neutral"
-                    variant="soft"
-                    size="sm"
-                    :to="batchLabelRoute"
-                  />
-                </template>
-              </UAlert>
+              
 
               <UTable
                 :data="visiblePrintRows"
