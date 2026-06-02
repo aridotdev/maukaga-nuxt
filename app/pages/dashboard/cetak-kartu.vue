@@ -26,7 +26,8 @@ const search = ref('')
 const cardTypeFilter = ref<CardTypeFilter>('all')
 const isQueueLoading = ref(false)
 const isActionLoading = ref(false)
-const alertState = ref<AlertState>(null)
+const pageAlert = ref<AlertState>(null)
+const queueLoadError = ref('')
 const confirmPrintedOpen = ref(false)
 const activePrintLayouts = ref<Record<CardTypeKey, PrintLayout | null>>({
   local: null,
@@ -90,11 +91,6 @@ const visibleSummary = computed(() => {
   )
 })
 
-const queueLoadError = computed(() => {
-  if (alertState.value?.type !== 'error') return ''
-  return alertState.value.description || alertState.value.title
-})
-
 const selectedRows = computed(() => {
   return Array.from(selectedPrintKeys.value)
     .map((key) => printQueue.value.find((row) => row.key === key))
@@ -118,7 +114,7 @@ const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && sel
 const checkboxAllState = computed(() => someVisibleSelected.value ? 'indeterminate' : allVisibleSelected.value)
 
 const batchLabelRoute = computed(() => {
-  const batchId = alertState.value?.batchId
+  const batchId = pageAlert.value?.batchId
 
   return batchId
     ? { path: '/dashboard/cetak-label-pengiriman', query: { batchId } }
@@ -231,13 +227,15 @@ async function loadPrintLayouts() {
 
 async function loadWarrantyPrintQueue(showLoading = true) {
   if (showLoading) isQueueLoading.value = true
-  alertState.value = showLoading
-    ? {
-        type: 'loading',
-        title: 'Memuat antrean cetak',
-        description: 'Mengambil item Disetujui dan verified dari Google Sheet.'
-      }
-    : null
+  queueLoadError.value = ''
+
+  if (showLoading) {
+    pageAlert.value = {
+      type: 'loading',
+      title: 'Memuat antrean cetak',
+      description: 'Mengambil item Disetujui dan verified dari Google Sheet.'
+    }
+  }
 
   try {
     const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', {
@@ -247,8 +245,9 @@ async function loadWarrantyPrintQueue(showLoading = true) {
 
     printQueue.value = result.data.rows || []
     pruneSelection()
-    alertState.value = null
+    if (showLoading && pageAlert.value?.type === 'loading') pageAlert.value = null
   } catch (error) {
+    queueLoadError.value = getErrorMessage(error, 'Antrean cetak belum bisa dimuat')
     await handleApiError(error, 'Antrean cetak belum bisa dimuat')
   } finally {
     isQueueLoading.value = false
@@ -257,24 +256,15 @@ async function loadWarrantyPrintQueue(showLoading = true) {
 
 async function saveWarrantyCardTypes(items: Array<{ idPengajuan: string, noItem: string | number, jenisKartu: string }>, successMessage: string) {
   isActionLoading.value = true
-  alertState.value = {
-    type: 'loading',
-    title: 'Menyimpan jenis kartu',
-    description: 'Perubahan akan ditulis ke sheet WarrantyCards.'
-  }
+  pageAlert.value = null
 
   try {
     const result = await callApi<{ count: number }>('saveWarrantyCardTypes', { items })
     if (!result.success) throw new Error(result.error || 'Gagal menyimpan jenis kartu')
 
-    alertState.value = {
-      type: 'success',
-      title: successMessage,
-      description: `${result.data?.count || items.length} item berhasil diperbarui.`
-    }
-    notify(successMessage, 'success')
+    notify(successMessage, 'success', `${result.data?.count || items.length} item berhasil diperbarui.`)
   } catch (error) {
-    await handleApiError(error, 'Jenis kartu gagal disimpan')
+    await handleApiError(error, 'Jenis kartu gagal disimpan', { inline: false })
     throw error
   } finally {
     isActionLoading.value = false
@@ -296,7 +286,7 @@ async function changeWarrantyCardType(row: WarrantyPrintQueueRow, value: string)
 async function setSelectedCardType(jenisKartu: CardTypeKey) {
   const rows = selectedRows.value
   if (!rows.length) {
-    showInlineError('Pilih item terlebih dahulu')
+    showActionError('Pilih item terlebih dahulu')
     return
   }
 
@@ -312,7 +302,7 @@ async function setSelectedCardType(jenisKartu: CardTypeKey) {
 async function printSelectedWarrantyCards() {
   const rows = selectedRowsSorted.value
   if (!rows.length) {
-    showInlineError('Pilih item yang ingin dicetak')
+    showActionError('Pilih item yang ingin dicetak')
     return
   }
 
@@ -320,8 +310,8 @@ async function printSelectedWarrantyCards() {
 
   await loadPrintLayouts()
   warrantyPrintRows.value = rows
-  alertState.value = {
-    type: 'success',
+  pageAlert.value = {
+    type: 'info',
     title: `${rows.length} kartu siap dicetak`,
     description: 'Dialog print browser akan terbuka. Status printed belum disimpan sampai Anda menandainya.'
   }
@@ -331,7 +321,7 @@ async function printSelectedWarrantyCards() {
 function openConfirmPrinted() {
   const rows = selectedRowsSorted.value
   if (!rows.length) {
-    showInlineError('Pilih item yang sudah dicetak')
+    showActionError('Pilih item yang sudah dicetak')
     return
   }
 
@@ -345,7 +335,7 @@ async function markSelectedWarrantyCardsPrinted() {
 
   confirmPrintedOpen.value = false
   isActionLoading.value = true
-  alertState.value = {
+  pageAlert.value = {
     type: 'loading',
     title: 'Menyimpan status cetak',
     description: 'Membuat batch dan menghapus item printed dari antrean normal.'
@@ -363,7 +353,7 @@ async function markSelectedWarrantyCardsPrinted() {
 
     selectedPrintKeys.value = new Set()
     await loadWarrantyPrintQueue(false)
-    alertState.value = {
+    pageAlert.value = {
       type: 'success',
       title: `Batch ${result.data.batchId} tersimpan`,
       description: `${result.data.count} kartu berhasil ditandai Printed.`,
@@ -414,37 +404,46 @@ function updateRowsCardType(keys: string[], jenisKartu: CardTypeKey) {
 function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {
   const missing = rows.filter((row) => !row.jenisKartuKey)
   if (missing.length) {
-    showInlineError(`${missing.length} item belum dipilih jenis kartunya`)
+    showActionError(`${missing.length} item belum dipilih jenis kartunya`)
     return false
   }
 
   return true
 }
 
-function showInlineError(message: string) {
-  alertState.value = {
-    type: 'error',
-    title: message
-  }
+function showActionError(message: string) {
+  pageAlert.value = null
   notify(message, 'error')
 }
 
-function notify(title: string, color: 'success' | 'error' | 'info') {
+function notify(title: string, color: 'success' | 'error' | 'info', description?: string) {
   toast.add({
     title,
+    description,
     color,
-    icon: color === 'success' ? 'i-lucide-circle-check' : color === 'error' ? 'i-lucide-circle-alert' : 'i-lucide-info'
+    icon: color === 'success' ? 'i-lucide-circle-check' : color === 'error' ? 'i-lucide-circle-alert' : 'i-lucide-info',
+    duration: color === 'error' ? 7000 : 4000
   })
 }
 
-async function handleApiError(error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message : String(error || fallback)
-  alertState.value = {
-    type: 'error',
-    title: fallback,
-    description: message
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : String(error || fallback)
+}
+
+async function handleApiError(error: unknown, fallback: string, options: { inline?: boolean } = {}) {
+  const message = getErrorMessage(error, fallback)
+  const inline = options.inline ?? true
+
+  if (inline) {
+    pageAlert.value = {
+      type: 'error',
+      title: fallback,
+      description: message
+    }
+  } else {
+    pageAlert.value = null
+    notify(fallback, 'error', message)
   }
-  notify(message, 'error')
 
   if (message.includes('Unauthorized')) {
     sessionStorage.removeItem('admin_token')
@@ -475,21 +474,31 @@ async function handleApiError(error: unknown, fallback: string) {
           />
 
           <UAlert
-            v-if="alertState"
-            :color="getAlertColor(alertState.type)"
-            :icon="getAlertIcon(alertState.type)"
-            :title="alertState.title"
-            :description="alertState.description"
+            v-if="pageAlert"
+            :color="getAlertColor(pageAlert.type)"
+            :icon="getAlertIcon(pageAlert.type)"
+            :title="pageAlert.title"
+            :description="pageAlert.description"
             variant="subtle"
           >
-            <template v-if="alertState.batchId" #actions>
+            <template v-if="pageAlert.batchId || pageAlert.type !== 'loading'" #actions>
               <UButton
+                v-if="pageAlert.batchId"
                 label="Cetak Label Cabang"
                 icon="i-lucide-tags"
                 color="neutral"
                 variant="soft"
                 size="sm"
                 :to="batchLabelRoute"
+              />
+              <UButton
+                v-if="pageAlert.type !== 'loading'"
+                icon="i-lucide-x"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="Tutup pesan"
+                @click="pageAlert = null"
               />
             </template>
           </UAlert>
