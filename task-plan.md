@@ -259,33 +259,79 @@ Catatan:
 
 ---
 
-## 11. Server-Side Requirement untuk User Management
+## 11. Static-Only Requirement untuk User Management
 
-Karena fitur user management membutuhkan operasi admin Supabase, maka fitur ini harus berjalan melalui server endpoint Nuxt/Nitro.
+Aplikasi Nuxt ditargetkan tetap **static-only**.
+
+- Node.js hanya diperlukan saat build / generate, bukan saat runtime production.
+- Hasil `pnpm generate` dapat di-host di static hosting selama route fallback SPA tersedia.
+- User management tidak memakai Nuxt/Nitro server endpoint jika target deployment tetap static-only.
+
+Karena fitur user management membutuhkan operasi admin Supabase, maka operasi privileged Supabase Auth Admin harus berjalan di backend eksternal:
+
+1. Rekomendasi utama: Supabase Edge Functions.
+2. Alternatif: Google Apps Script sebagai privileged backend.
 
 Service role key Supabase:
 
-- Hanya boleh berada di server runtime config private.
+- Tidak boleh berada di Nuxt runtime config.
+- Tidak boleh berada di `NUXT_PUBLIC_*`.
+- Tidak boleh berada di bundle frontend / static output.
 - Tidak boleh dikirim ke browser.
 - Tidak boleh digunakan di Vue component / client-side composable.
+- Hanya boleh disimpan di Supabase Edge Function secrets atau Google Apps Script Properties.
 
-Endpoint konseptual:
+Operasi user yang boleh dilakukan dari Nuxt / browser dengan Supabase anon key:
+
+- Login / logout via Supabase Auth.
+- Ambil current session / current user.
+- Ambil profile / role dari tabel `profiles` dengan RLS.
+- Admin mengubah row `profiles` jika RLS mengizinkan.
+
+Operasi user yang tidak boleh dilakukan langsung dari Nuxt / browser:
+
+- Invite user via Supabase Auth Admin API.
+- List semua Auth users via Admin API.
+- Delete / ban / unban Auth user.
+- Operasi apa pun yang membutuhkan service role key.
+
+Endpoint konseptual jika memakai Supabase Edge Functions:
 
 ```txt
-GET    /api/admin/members
-POST   /api/admin/members/invite
-PATCH  /api/admin/members/:id
-DELETE /api/admin/members/:id atau PATCH deactivate
+admin-users-list
+admin-users-invite
+admin-users-update
+admin-users-deactivate
+admin-users-reactivate
 ```
 
-Setiap endpoint admin wajib:
+Action konseptual jika memakai Google Apps Script:
 
 ```txt
-1. Validasi session current user.
+action: adminUsersList
+action: adminUsersInvite
+action: adminUsersUpdate
+action: adminUsersDeactivate
+action: adminUsersReactivate
+```
+
+Setiap endpoint / function admin wajib:
+
+```txt
+1. Validasi Supabase access token current user.
 2. Ambil profile / role current user.
-3. Pastikan current user adalah admin.
+3. Pastikan current user adalah admin dan is_active = true.
 4. Jika bukan admin, return 403.
-5. Baru jalankan operasi dengan Supabase service role client.
+5. Baru jalankan operasi dengan Supabase service role client di backend eksternal.
+```
+
+Integrasi Google Apps Script yang sudah ada perlu diarahkan ke Supabase session:
+
+```txt
+Nuxt mengirim Supabase access token ke Apps Script.
+Apps Script memvalidasi token tersebut ke Supabase.
+Apps Script cek profiles.role dan profiles.is_active.
+Baru Apps Script menjalankan action dashboard yang diminta.
 ```
 
 ---
@@ -415,4 +461,7 @@ I. Field member: email, full_name, role, is_active.
 J. Export/download pengajuan belum dibuat; authorization dibahas saat fitur dibuat.
 K. User inactive redirect ke /403.
 L. Admin boleh membuat admin lain, tapi tidak boleh menghapus/downgrade/deactivate admin terakhir.
+M. Deployment target static-only; Nuxt tidak membutuhkan Node.js runtime production.
+N. Supabase Auth Admin user CRUD dijalankan via Supabase Edge Functions atau Google Apps Script, bukan Nuxt/Nitro endpoint.
+O. Service role key hanya boleh berada di backend eksternal, tidak di Nuxt/browser.
 ```
