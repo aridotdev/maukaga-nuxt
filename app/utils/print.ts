@@ -5,20 +5,26 @@ export function buildShippingLabels(rows: WarrantyPrintQueueRow[]) {
 
   rows.forEach((row) => {
     const cabang = String(row.bagianCabang || '').trim() || 'Tanpa Cabang'
-    const key = cabang.toLowerCase()
+    const nama = String(row.nama || '').trim() || 'Tanpa Nama'
+    const key = `${cabang.toLowerCase()}|${nama.toLowerCase()}`
 
-    if (!groups.has(key)) groups.set(key, { cabang, qty: 0 })
+    if (!groups.has(key)) groups.set(key, { cabang, nama, qty: 0 })
     groups.get(key)!.qty += 1
   })
 
-  return Array.from(groups.values()).sort((a, b) => a.cabang.localeCompare(b.cabang, 'id-ID'))
+  return Array.from(groups.values()).sort((a, b) => {
+    const cabangSort = a.cabang.localeCompare(b.cabang, 'id-ID')
+    if (cabangSort !== 0) return cabangSort
+
+    return a.nama.localeCompare(b.nama, 'id-ID')
+  })
 }
 
 export function chunkShippingLabels(labels: ShippingLabel[]) {
   const pages: ShippingLabel[][] = []
 
-  for (let index = 0; index < labels.length; index += 15) {
-    pages.push(labels.slice(index, index + 15))
+  for (let index = 0; index < labels.length; index += 24) {
+    pages.push(labels.slice(index, index + 24))
   }
 
   return pages

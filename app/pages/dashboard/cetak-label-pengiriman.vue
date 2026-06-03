@@ -24,7 +24,7 @@ const shippingLabelSummary = computed(() => {
   return {
     branches: shippingLabels.value.length,
     totalQty,
-    size: '60 x 50 mm'
+    size: '60 x 30 mm'
   }
 })
 
@@ -110,7 +110,7 @@ async function printShippingLabels() {
   alertState.value = {
     type: 'success',
     title: `${shippingLabels.value.length} label siap dicetak`,
-    description: 'Layout label memakai ukuran 60 x 50 mm, maksimal 15 label per halaman A4.'
+    description: 'Layout label memakai ukuran 60 x 30 mm, maksimal 24 label per halaman A4.'
   }
   await labelPrintRef.value?.print()
 }
@@ -226,9 +226,9 @@ async function handleApiError(error: unknown, fallback: string) {
             <div v-if="shippingLabels.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <UPageCard
                 v-for="label in shippingLabels"
-                :key="label.cabang"
+                :key="`${label.cabang}-${label.nama}`"
                 :title="label.cabang"
-                :description="`${label.qty} item produk`"
+                :description="`${label.nama} - ${label.qty} item produk`"
                 icon="i-lucide-tag"
                 variant="subtle"
               />

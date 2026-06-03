@@ -60,6 +60,7 @@ export type PrintLayoutState = {
 
 export type ShippingLabel = {
   cabang: string
+  nama: string
   qty: number
 }
 
