@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const toast = useToast()
+const runTimeConfig = useRuntimeConfig()
 
 const open = ref(false)
 
@@ -127,7 +128,7 @@ onMounted(async () => {
           </div>
           <span
             v-if="!collapsed"
-            class="inline-flex h-10 items-center text-xl font-black leading-none tracking-tighter">RMA PORTAL</span>
+            class="inline-flex h-10 items-center text-xl font-black leading-none tracking-tighter">{{ runTimeConfig.public.appName }}</span>
         </div>
       </template>
 
