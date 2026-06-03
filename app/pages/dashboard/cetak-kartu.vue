@@ -50,17 +50,6 @@ const cardTypeFilterItems = [{
   value: 'unset'
 }]
 
-const cardTypeItems = [{
-  label: 'Pilih',
-  value: ''
-}, {
-  label: 'Local',
-  value: 'local'
-}, {
-  label: 'Import',
-  value: 'import'
-}]
-
 const printTableGlobalFilterOptions = {
   globalFilterFn: (row: { original: WarrantyPrintQueueRow }, _columnId: string, filterValue: unknown) =>
     matchesPrintRowSearch(row.original, String(filterValue || '').trim().toLowerCase())
@@ -286,18 +275,6 @@ async function saveWarrantyCardTypes(items: Array<{ idPengajuan: string, noItem:
   } finally {
     isActionLoading.value = false
   }
-}
-
-async function changeWarrantyCardType(row: WarrantyPrintQueueRow, value: string) {
-  if (!value || (value !== 'local' && value !== 'import')) return
-
-  await saveWarrantyCardTypes([{
-    idPengajuan: row.idPengajuan,
-    noItem: row.noItem,
-    jenisKartu: value
-  }], 'Jenis kartu disimpan')
-
-  updateRowsCardType([getPrintRowKey(row)], value)
 }
 
 async function setSelectedCardType(jenisKartu: CardTypeKey) {

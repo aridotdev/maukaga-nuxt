@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 
-const UBadge = resolveComponent('UBadge')
-
 const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
 
 type PengajuanStatus = typeof VALID_STATUSES[number]
@@ -21,14 +19,27 @@ type DetailItem = {
   modelNormalized?: string
   produkStatus?: string
   produkSumber?: string
+  statusItem?: PengajuanStatus
+  catatanAdminItem?: string
+  tanggalUpdateStatusItem?: string
+  userUpdateStatusItem?: string
 }
 
 type RiwayatStatus = {
   timestamp?: string
+  noItem?: number | string
   statusLama?: string
   statusBaru?: string
   catatanAdmin?: string
   user?: string
+}
+
+type ItemStatusForm = {
+  statusBaru: PengajuanStatus
+  catatanAdmin: string
+  isSubmitting: boolean
+  error: string
+  notice: string
 }
 
 type DetailPengajuan = {
@@ -72,14 +83,8 @@ const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptAp
 const idPengajuan = computed(() => normalizeRouteParam(route.params.idPengajuan))
 const detail = ref<DetailPengajuan | null>(null)
 const isLoading = ref(false)
-const isSubmitting = ref(false)
 const loadError = ref('')
-const statusError = ref('')
-const statusNotice = ref('')
-const formState = reactive({
-  statusBaru: 'Baru' as PengajuanStatus,
-  catatanAdmin: ''
-})
+const itemForms = ref<Record<string, ItemStatusForm>>({})
 
 const statusItems = VALID_STATUSES.map((status) => ({
   label: status,
@@ -88,32 +93,6 @@ const statusItems = VALID_STATUSES.map((status) => ({
 
 const hasUnverifiedItems = computed(() => {
   return (detail.value?.items || []).some((item) => !isProductVerified(item.produkStatus))
-})
-
-const transitionWarning = computed(() => {
-  if (!detail.value || !formState.statusBaru || formState.statusBaru === detail.value.status) return ''
-
-  if (detail.value.status === 'Baru' && formState.statusBaru === 'Disetujui' && hasUnverifiedItems.value) {
-    return 'Ada item dengan Nama Produk belum terverifikasi. Pengajuan tetap bisa disetujui, tetapi item tersebut belum masuk antrean cetak sampai diverifikasi.'
-  }
-
-  if (detail.value.status === 'Disetujui' && formState.statusBaru === 'Selesai') {
-    return 'Tandai pengajuan ini sebagai Selesai? Pastikan proses kartu garansi sudah selesai.'
-  }
-
-  if (detail.value.status === 'Disetujui' && formState.statusBaru === 'Ditolak') {
-    return 'Pengajuan ini sudah disetujui. Yakin ingin mengubahnya menjadi Ditolak?'
-  }
-
-  if (detail.value.status === 'Ditolak' && formState.statusBaru === 'Disetujui') {
-    return 'Pengajuan ini sebelumnya ditolak. Yakin ingin menyetujuinya?'
-  }
-
-  if (detail.value.status === 'Selesai') {
-    return 'Pengajuan ini sudah Selesai. Yakin ingin membuka ulang statusnya?'
-  }
-
-  return ''
 })
 
 const infoFields = computed<InfoField[]>(() => {
@@ -137,37 +116,14 @@ const infoFields = computed<InfoField[]>(() => {
   }]
 })
 
-const itemColumns: TableColumn<DetailItem>[] = [{
-  accessorKey: 'noItem',
-  header: 'No Item',
-  cell: ({ row }) => h('span', { class: 'font-medium text-muted' }, row.original.noItem || '-')
-}, {
-  accessorKey: 'produk',
-  header: 'Produk',
-  cell: ({ row }) => h('span', { class: 'font-semibold text-highlighted' }, row.original.produk || '-')
-}, {
-  accessorKey: 'model',
-  header: 'Model',
-  cell: ({ row }) => h('span', { class: 'text-toned' }, row.original.model || '-')
-}, {
-  accessorKey: 'nomorSeri',
-  header: 'Nomor Seri',
-  cell: ({ row }) => h('span', { class: 'font-mono text-sm text-toned' }, row.original.nomorSeri || '-')
-}, {
-  accessorKey: 'produkStatus',
-  header: 'Status Produk',
-  cell: ({ row }) => h(UBadge, {
-    color: isProductVerified(row.original.produkStatus) ? 'success' : 'warning',
-    variant: 'subtle',
-    label: isProductVerified(row.original.produkStatus) ? 'Verified' : 'Belum Verified',
-    class: 'font-semibold'
-  })
-}]
-
 const historyColumns: TableColumn<RiwayatStatus>[] = [{
   accessorKey: 'timestamp',
   header: 'Waktu',
   cell: ({ row }) => h('span', { class: 'text-muted' }, formatDateTime(row.original.timestamp))
+}, {
+  accessorKey: 'noItem',
+  header: 'No Item',
+  cell: ({ row }) => h('span', { class: 'font-medium text-muted' }, row.original.noItem ? `#${row.original.noItem}` : '-')
 }, {
   id: 'transition',
   header: 'Status Lama → Baru',
@@ -189,8 +145,6 @@ onMounted(() => {
 async function loadDetail() {
   isLoading.value = true
   loadError.value = ''
-  statusError.value = ''
-  statusNotice.value = ''
 
   try {
     if (!idPengajuan.value) throw new Error('ID Pengajuan tidak valid.')
@@ -202,8 +156,7 @@ async function loadDetail() {
     if (!result.data) throw new Error('Pengajuan tidak ditemukan')
 
     detail.value = result.data
-    formState.statusBaru = result.data.status || 'Baru'
-    formState.catatanAdmin = result.data.catatanAdmin || ''
+    initItemForms(result.data.items || [])
   } catch (error) {
     const message = getErrorMessage(error)
     detail.value = null
@@ -218,45 +171,73 @@ async function loadDetail() {
   }
 }
 
-async function submitStatus() {
-  statusError.value = ''
-  statusNotice.value = ''
+function initItemForms(items: DetailItem[]) {
+  const nextForms: Record<string, ItemStatusForm> = {}
 
+  items.forEach((item) => {
+    const key = getItemKey(item)
+    nextForms[key] = {
+      statusBaru: getItemStatus(item),
+      catatanAdmin: item.catatanAdminItem || '',
+      isSubmitting: false,
+      error: '',
+      notice: ''
+    }
+  })
+
+  itemForms.value = nextForms
+}
+
+async function submitItemStatus(item: DetailItem) {
   if (!detail.value) return
 
-  const statusBaru = formState.statusBaru
-  const catatanAdmin = formState.catatanAdmin.trim()
+  const key = getItemKey(item)
+  const form = itemForms.value[key]
+  if (!form) return
 
-  if (!isValidStatus(statusBaru)) {
-    statusError.value = 'Status tidak valid.'
+  form.error = ''
+  form.notice = ''
+
+  const statusBaru = form.statusBaru
+  const catatanAdmin = form.catatanAdmin.trim()
+  const statusLama = getItemStatus(item)
+
+  if (!item.noItem) {
+    form.error = 'No Item tidak valid.'
     return
   }
 
-  if (statusBaru === detail.value.status) {
-    statusNotice.value = 'Tidak ada perubahan status untuk disimpan.'
+  if (!isValidStatus(statusBaru)) {
+    form.error = 'Status tidak valid.'
+    return
+  }
+
+  if (statusBaru === statusLama) {
+    form.notice = 'Tidak ada perubahan status untuk disimpan.'
     return
   }
 
   if (statusBaru === 'Ditolak' && !catatanAdmin) {
-    statusError.value = 'Catatan Admin wajib diisi jika status Ditolak.'
+    form.error = 'Catatan Admin wajib diisi jika status Ditolak.'
     return
   }
 
-  const confirmMessage = getTransitionConfirmMessage(detail.value.status, statusBaru)
+  const confirmMessage = getTransitionConfirmMessage(statusLama, statusBaru, item.noItem)
   if (confirmMessage && !window.confirm(confirmMessage)) return
 
-  isSubmitting.value = true
+  form.isSubmitting = true
 
   try {
-    await callAdminApi<Record<string, never>>('updateStatus', {
+    await callAdminApi<Record<string, never>>('updateItemStatus', {
       idPengajuan: detail.value.idPengajuan,
+      noItem: item.noItem,
       statusBaru,
       catatanAdmin
     })
 
     toast.add({
-      title: 'Status berhasil disimpan',
-      description: `Pengajuan ${detail.value.idPengajuan} diperbarui menjadi ${statusBaru}.`,
+      title: 'Status item berhasil disimpan',
+      description: `Item #${item.noItem} diperbarui menjadi ${statusBaru}.`,
       color: 'success',
       icon: 'i-lucide-circle-check'
     })
@@ -264,10 +245,10 @@ async function submitStatus() {
     await loadDetail()
   } catch (error) {
     const message = getErrorMessage(error)
-    statusError.value = message
+    form.error = message
 
     toast.add({
-      title: 'Status gagal disimpan',
+      title: 'Status item gagal disimpan',
       description: message,
       color: 'error',
       icon: 'i-lucide-circle-alert'
@@ -278,7 +259,7 @@ async function submitStatus() {
       await router.push('/login')
     }
   } finally {
-    isSubmitting.value = false
+    form.isSubmitting = false
   }
 }
 
@@ -302,24 +283,48 @@ async function callAdminApi<T>(action: string, payload: Record<string, unknown> 
   return result
 }
 
-function getTransitionConfirmMessage(currentStatus: PengajuanStatus, nextStatus: PengajuanStatus) {
+function getTransitionConfirmMessage(currentStatus: PengajuanStatus, nextStatus: PengajuanStatus, noItem: number | string) {
   if (currentStatus === 'Disetujui' && nextStatus === 'Selesai') {
-    return 'Tandai pengajuan ini sebagai Selesai? Pastikan proses kartu garansi sudah selesai.'
+    return `Tandai item #${noItem} sebagai Selesai? Pastikan proses kartu garansi untuk item ini sudah selesai.`
   }
 
   if (currentStatus === 'Disetujui' && nextStatus === 'Ditolak') {
-    return 'Pengajuan ini sudah disetujui. Yakin ingin mengubahnya menjadi Ditolak?'
+    return `Item #${noItem} sudah disetujui. Yakin ingin mengubahnya menjadi Ditolak?`
   }
 
   if (currentStatus === 'Ditolak' && nextStatus === 'Disetujui') {
-    return 'Pengajuan ini sebelumnya ditolak. Yakin ingin menyetujuinya?'
+    return `Item #${noItem} sebelumnya ditolak. Yakin ingin menyetujuinya?`
   }
 
   if (currentStatus === 'Selesai') {
-    return 'Pengajuan ini sudah Selesai. Yakin ingin membuka ulang statusnya?'
+    return `Item #${noItem} sudah Selesai. Yakin ingin membuka ulang statusnya?`
   }
 
   return ''
+}
+
+function getItemKey(item: DetailItem) {
+  return String(item.noItem || '')
+}
+
+function getItemForm(item: DetailItem) {
+  const key = getItemKey(item)
+  if (!itemForms.value[key]) {
+    itemForms.value[key] = {
+      statusBaru: getItemStatus(item),
+      catatanAdmin: item.catatanAdminItem || '',
+      isSubmitting: false,
+      error: '',
+      notice: ''
+    }
+  }
+
+  return itemForms.value[key] as ItemStatusForm
+}
+
+function getItemStatus(item: DetailItem): PengajuanStatus {
+  const status = item.statusItem || detail.value?.status || 'Baru'
+  return isValidStatus(status) ? status : 'Baru'
 }
 
 function normalizeRouteParam(value: string | string[] | undefined) {
@@ -495,18 +500,103 @@ function getErrorMessage(error: unknown) {
                 />
               </div>
 
-              <UTable
-                :data="detail.items || []"
-                :columns="itemColumns"
-                class="w-full border-t border-muted/50"
-              >
-                <template #empty>
-                  <div class="flex flex-col items-center py-12 text-center">
-                    <UIcon name="i-lucide-box" class="mb-3 size-10 text-muted/50" />
-                    <p class="text-sm text-muted">Tidak ada data item.</p>
+              <div class="space-y-4 border-t border-muted/50 p-4">
+                <div v-if="!(detail.items || []).length" class="flex flex-col items-center py-12 text-center">
+                  <UIcon name="i-lucide-box" class="mb-3 size-10 text-muted/50" />
+                  <p class="text-sm text-muted">Tidak ada data item.</p>
+                </div>
+
+                <div
+                  v-for="item in detail.items || []"
+                  :key="getItemKey(item)"
+                  class="rounded-2xl border border-muted/60 bg-default p-4 shadow-sm"
+                >
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-mono text-sm font-semibold text-muted">Item #{{ item.noItem || '-' }}</span>
+                        <UBadge
+                          :color="getStatusColor(getItemStatus(item))"
+                          variant="soft"
+                          :label="getItemStatus(item)"
+                          class="font-semibold"
+                        />
+                        <UBadge
+                          :color="isProductVerified(item.produkStatus) ? 'success' : 'warning'"
+                          variant="subtle"
+                          :label="isProductVerified(item.produkStatus) ? 'Verified' : 'Belum Verified'"
+                          class="font-semibold"
+                        />
+                      </div>
+                      <p class="mt-2 text-sm font-semibold text-highlighted">{{ item.produk || '-' }}</p>
+                      <p class="text-sm text-toned">Model: {{ item.model || '-' }}</p>
+                      <p class="font-mono text-sm text-toned">Nomor Seri: {{ item.nomorSeri || '-' }}</p>
+                    </div>
+
+                    <div v-if="item.tanggalUpdateStatusItem" class="text-xs text-muted sm:text-right">
+                      <div>Update terakhir: {{ formatDateTime(item.tanggalUpdateStatusItem) }}</div>
+                      <div>oleh {{ item.userUpdateStatusItem || '-' }}</div>
+                    </div>
                   </div>
-                </template>
-              </UTable>
+
+                  <UAlert
+                    v-if="!isProductVerified(item.produkStatus)"
+                    color="warning"
+                    variant="soft"
+                    icon="i-lucide-triangle-alert"
+                    description="Item ini belum terverifikasi dan belum masuk antrean cetak."
+                    class="mt-4"
+                  />
+
+                  <UAlert
+                    v-if="getItemForm(item).notice"
+                    color="info"
+                    variant="subtle"
+                    :description="getItemForm(item).notice"
+                    class="mt-4 text-xs"
+                  />
+                  <UAlert
+                    v-if="getItemForm(item).error"
+                    color="error"
+                    variant="subtle"
+                    :description="getItemForm(item).error"
+                    class="mt-4 text-xs"
+                  />
+
+                  <form
+                    class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-end"
+                    @submit.prevent="submitItemStatus(item)"
+                  >
+                    <UFormField label="Ubah Status Ke" :name="`status-${getItemKey(item)}`" class="lg:col-span-3">
+                      <USelect
+                        v-model="getItemForm(item).statusBaru"
+                        :items="statusItems"
+                        class="w-full"
+                      />
+                    </UFormField>
+
+                    <UFormField label="Catatan Admin" :name="`catatan-${getItemKey(item)}`" class="lg:col-span-6">
+                      <UTextarea
+                        v-model="getItemForm(item).catatanAdmin"
+                        :rows="2"
+                        placeholder="Alasan penolakan / catatan item..."
+                        class="w-full"
+                      />
+                    </UFormField>
+
+                    <UButton
+                      type="submit"
+                      label="Simpan Item"
+                      icon="i-lucide-check"
+                      color="primary"
+                      class="lg:col-span-3"
+                      block
+                      :loading="getItemForm(item).isSubmitting"
+                      :disabled="getItemForm(item).isSubmitting"
+                    />
+                  </form>
+                </div>
+              </div>
             </UCard>
 
             <!-- Riwayat Status -->
@@ -536,58 +626,36 @@ function getErrorMessage(error: unknown) {
           <!-- KANAN: Form Aksi & Info Detail (Sidebar) -->
           <div class="space-y-6 lg:col-span-4 lg:sticky lg:top-4">
             
-            <!-- Update Status Panel -->
+            <!-- Ringkasan Status Panel -->
             <UCard class="rounded-2xl border-primary/20 bg-primary/5 shadow-sm ring-1 ring-primary/20">
               <template #header>
                 <h2 class="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
                   <UIcon name="i-lucide-zap" />
-                  Tindakan Admin
+                  Ringkasan Status
                 </h2>
               </template>
 
-              <div class="space-y-4">
-                <div class="text-sm border-b border-muted/40 pb-3 mb-3">
-                  <span class="text-muted block mb-1">Status Terakhir:</span>
+              <div class="space-y-4 text-sm">
+                <div>
+                  <span class="text-muted block mb-1">Status Pengajuan:</span>
+                  <UBadge
+                    :color="getStatusColor(detail.status)"
+                    variant="soft"
+                    :label="detail.status"
+                    class="font-semibold"
+                  />
+                  <p class="mt-2 text-xs text-muted">
+                    Status ini adalah ringkasan dari status tiap item. Ubah status dan catatan melalui daftar item pengajuan.
+                  </p>
+                </div>
+
+                <div class="border-t border-muted/40 pt-3">
+                  <span class="text-muted block mb-1">Update Terakhir:</span>
                   <div class="font-medium text-highlighted">
                     {{ formatDateTime(detail.tanggalUpdateStatusTerakhir) }}
                     <span class="text-muted font-normal block text-xs mt-0.5">oleh {{ detail.userUpdateStatus || '-' }}</span>
                   </div>
                 </div>
-
-                <UAlert v-if="transitionWarning" color="warning" variant="subtle" :description="transitionWarning" class="text-xs" />
-                <UAlert v-if="statusNotice" color="info" variant="subtle" :description="statusNotice" class="text-xs" />
-                <UAlert v-if="statusError" color="error" variant="subtle" :description="statusError" class="text-xs" />
-
-                <form class="space-y-4" @submit.prevent="submitStatus">
-                  <UFormField label="Ubah Status Ke" name="statusBaru">
-                    <USelect
-                      v-model="formState.statusBaru"
-                      :items="statusItems"
-                      class="w-full"
-                      size="lg"
-                    />
-                  </UFormField>
-
-                  <UFormField label="Catatan Admin" name="catatanAdmin">
-                    <UTextarea
-                      v-model="formState.catatanAdmin"
-                      :rows="3"
-                      placeholder="Alasan penolakan / catatan internal..."
-                      class="w-full"
-                    />
-                  </UFormField>
-
-                  <UButton
-                    type="submit"
-                    label="Simpan Perubahan"
-                    icon="i-lucide-check"
-                    color="primary"
-                    block
-                    size="lg"
-                    :loading="isSubmitting"
-                    :disabled="isSubmitting"
-                  />
-                </form>
               </div>
             </UCard>
 

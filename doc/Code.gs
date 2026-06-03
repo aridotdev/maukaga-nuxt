@@ -23,11 +23,11 @@ const SHEETS = {
 
 const HEADERS = {
   [SHEETS.PENGAJUAN]: ['ID Pengajuan', 'Timestamp Submit', 'Nama', 'Bagian/Cabang', 'Pemilik', 'Alasan Pengajuan', 'Tanggal Form', 'File Hard Copy URL', 'File Hard Copy ID', 'Catatan Tambahan', 'Jumlah Item', 'Status', 'Catatan Admin', 'Tanggal Update Status Terakhir', 'User Update Status', 'Riwayat Singkat', 'Resume Token', 'Draft Created At', 'Draft Updated At', 'Submitted At'],
-  [SHEETS.ITEMS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'model_normalized', 'produk_status', 'produk_sumber'],
+  [SHEETS.ITEMS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'model_normalized', 'produk_status', 'produk_sumber', 'Status Item', 'Catatan Admin Item', 'Tanggal Update Status Item', 'User Update Status Item'],
   [SHEETS.USERS]: ['Username', 'Password/PIN', 'Nama', 'Role', 'Aktif', 'Last Login'],
   [SHEETS.RECIPIENTS]: ['Nama', 'Email', 'Aktif', 'Keterangan'],
   [SHEETS.CONFIG]: ['Key', 'Value'],
-  [SHEETS.STATUS_LOG]: ['Timestamp', 'ID Pengajuan', 'Status Lama', 'Status Baru', 'Catatan Admin', 'User'],
+  [SHEETS.STATUS_LOG]: ['Timestamp', 'ID Pengajuan', 'Status Lama', 'Status Baru', 'Catatan Admin', 'User', 'No Item'],
   [SHEETS.EMAIL_LOG]: ['Timestamp', 'Subject', 'Recipients', 'Jumlah Pengajuan', 'Status'],
   [SHEETS.WARRANTY_CARDS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Jenis Kartu', 'Status Cetak', 'Print Batch ID', 'Printed At', 'Printed By', 'Reprint Count', 'Last Reprint At', 'Last Reprint By', 'Catatan'],
   [SHEETS.PRINT_BATCH]: ['Batch ID', 'Tipe Batch', 'Created At', 'Created By', 'Jumlah Item', 'Catatan'],
@@ -125,6 +125,8 @@ function doPost(e) {
         return jsonResponse_(handleGetDetail(data));
       case 'updateStatus':
         return jsonResponse_(handleUpdateStatus(data));
+      case 'updateItemStatus':
+        return jsonResponse_(handleUpdateItemStatus(data));
       case 'getProductReviewQueue':
       case 'getCategoryReviewQueue':
         return jsonResponse_(handleGetProductReviewQueue(data));
@@ -460,13 +462,14 @@ function handleGetDetail(data) {
   const pengajuan = readObjects_(SHEETS.PENGAJUAN).find(function (row) { return row['ID Pengajuan'] === id && VALID_STATUSES.indexOf(row['Status']) !== -1; });
   if (!pengajuan) throw new Error('Pengajuan tidak ditemukan');
 
-  const items = getItemsForPengajuan_(id);
+  const items = getItemsForPengajuan_(id, pengajuan['Status']);
   const riwayat = readObjects_(SHEETS.STATUS_LOG)
     .filter(function (row) { return row['ID Pengajuan'] === id; })
     .sort(function (a, b) { return new Date(b['Timestamp']).getTime() - new Date(a['Timestamp']).getTime(); })
     .map(function (row) {
       return {
         timestamp: toIso_(row['Timestamp']),
+        noItem: row['No Item'],
         statusLama: row['Status Lama'],
         statusBaru: row['Status Baru'],
         catatanAdmin: row['Catatan Admin'],
@@ -535,11 +538,91 @@ function handleUpdateStatus(data) {
     sheet.getRange(targetRow, col['User Update Status'] + 1).setValue(session.username);
     sheet.getRange(targetRow, col['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entry : entry);
 
-    getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, statusLama, statusBaru, catatanAdmin, session.username]);
+    getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, statusLama, statusBaru, catatanAdmin, session.username, '']);
     return { success: true, data: {} };
   } finally {
     lock.releaseLock();
   }
+}
+
+function handleUpdateItemStatus(data) {
+  const session = requireSession_(data.token);
+  const id = clean_(data.idPengajuan);
+  const noItem = clean_(data.noItem);
+  const statusBaru = clean_(data.statusBaru);
+  const catatanAdmin = clean_(data.catatanAdmin);
+  if (!id) throw new Error('ID Pengajuan wajib diisi');
+  if (!noItem) throw new Error('No Item wajib diisi');
+  if (VALID_STATUSES.indexOf(statusBaru) === -1) throw new Error('Status tidak valid');
+  if (statusBaru === 'Ditolak' && !catatanAdmin) throw new Error('Catatan Admin wajib diisi jika status Ditolak');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const pengajuanSheet = getSheet_(SHEETS.PENGAJUAN);
+    const pengajuanValues = pengajuanSheet.getDataRange().getValues();
+    const pengajuanCol = indexMap_(pengajuanValues[0]);
+    let pengajuanRow = -1;
+    let parentStatusLama = '';
+    let oldHistory = '';
+
+    for (let i = 1; i < pengajuanValues.length; i++) {
+      if (pengajuanValues[i][pengajuanCol['ID Pengajuan']] === id && VALID_STATUSES.indexOf(pengajuanValues[i][pengajuanCol['Status']]) !== -1) {
+        pengajuanRow = i + 1;
+        parentStatusLama = pengajuanValues[i][pengajuanCol['Status']] || '';
+        oldHistory = pengajuanValues[i][pengajuanCol['Riwayat Singkat']] || '';
+        break;
+      }
+    }
+    if (pengajuanRow === -1) throw new Error('Pengajuan tidak ditemukan');
+
+    const itemSheet = getSheet_(SHEETS.ITEMS);
+    const itemValues = itemSheet.getDataRange().getValues();
+    const itemCol = indexMap_(itemValues[0]);
+    let itemRow = -1;
+    let statusLama = '';
+
+    for (let i = 1; i < itemValues.length; i++) {
+      if (itemValues[i][itemCol['ID Pengajuan']] === id && String(itemValues[i][itemCol['No Item']]) === noItem) {
+        itemRow = i + 1;
+        statusLama = clean_(itemValues[i][itemCol['Status Item']]) || parentStatusLama || 'Baru';
+        break;
+      }
+    }
+    if (itemRow === -1) throw new Error('Item pengajuan tidak ditemukan');
+
+    const now = new Date();
+    itemSheet.getRange(itemRow, itemCol['Status Item'] + 1).setValue(statusBaru);
+    itemSheet.getRange(itemRow, itemCol['Catatan Admin Item'] + 1).setValue(catatanAdmin);
+    itemSheet.getRange(itemRow, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
+    itemSheet.getRange(itemRow, itemCol['User Update Status Item'] + 1).setValue(session.username);
+
+    const refreshedItems = itemSheet.getDataRange().getValues().slice(1)
+      .filter(function (row) { return row[itemCol['ID Pengajuan']] === id; })
+      .map(function (row) { return clean_(row[itemCol['Status Item']]) || parentStatusLama || 'Baru'; });
+    const parentStatusBaru = derivePengajuanStatusFromItemStatuses_(refreshedItems);
+    const entry = '[' + formatDateTime_(now) + '] Item #' + noItem + ': ' + statusLama + ' → ' + statusBaru + ' oleh ' + session.username;
+
+    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Status'] + 1).setValue(parentStatusBaru);
+    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Catatan Admin'] + 1).setValue(catatanAdmin);
+    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Tanggal Update Status Terakhir'] + 1).setValue(now);
+    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['User Update Status'] + 1).setValue(session.username);
+    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entry : entry);
+
+    getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, statusLama, statusBaru, catatanAdmin, session.username, noItem]);
+    return { success: true, data: { status: parentStatusBaru } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function derivePengajuanStatusFromItemStatuses_(statuses) {
+  const cleanStatuses = statuses.map(function (status) { return clean_(status) || 'Baru'; });
+  if (!cleanStatuses.length) return 'Baru';
+  if (cleanStatuses.indexOf('Baru') !== -1) return 'Baru';
+  if (cleanStatuses.indexOf('Disetujui') !== -1) return 'Disetujui';
+  if (cleanStatuses.every(function (status) { return status === 'Ditolak'; })) return 'Ditolak';
+  return 'Selesai';
 }
 
 function handleGetProductReviewQueue(data) {
@@ -1160,7 +1243,8 @@ function findPengajuanRecord_(id) {
   return null;
 }
 
-function getItemsForPengajuan_(id) {
+function getItemsForPengajuan_(id, fallbackStatus) {
+  const defaultStatus = clean_(fallbackStatus) || 'Baru';
   return readObjects_(SHEETS.ITEMS)
     .filter(function (row) { return row['ID Pengajuan'] === id; })
     .sort(function (a, b) { return Number(a['No Item']) - Number(b['No Item']); })
@@ -1173,6 +1257,10 @@ function getItemsForPengajuan_(id) {
         modelNormalized: clean_(row['model_normalized']) || normalizeModelKey_(row['Model']),
         produkStatus: clean_(row['produk_status']) || 'needs_review',
         produkSumber: clean_(row['produk_sumber']) || '',
+        statusItem: clean_(row['Status Item']) || defaultStatus,
+        catatanAdminItem: clean_(row['Catatan Admin Item']),
+        tanggalUpdateStatusItem: toIso_(row['Tanggal Update Status Item']),
+        userUpdateStatusItem: clean_(row['User Update Status Item']),
       };
     });
 }
@@ -1180,13 +1268,17 @@ function getItemsForPengajuan_(id) {
 function getApprovedWarrantyQueueItems_() {
   const pengajuanMap = {};
   readObjects_(SHEETS.PENGAJUAN).forEach(function (row) {
-    if (row['Status'] !== 'Disetujui') return;
+    if (VALID_STATUSES.indexOf(row['Status']) === -1) return;
     pengajuanMap[row['ID Pengajuan']] = row;
   });
 
   const cardState = getWarrantyCardSheetState_();
   return readObjects_(SHEETS.ITEMS)
-    .filter(function (row) { return pengajuanMap[row['ID Pengajuan']] && clean_(row['produk_status']) === 'verified'; })
+    .filter(function (row) {
+      const pengajuan = pengajuanMap[row['ID Pengajuan']];
+      const statusItem = clean_(row['Status Item']) || (pengajuan && clean_(pengajuan['Status']));
+      return pengajuan && statusItem === 'Disetujui' && clean_(row['produk_status']) === 'verified';
+    })
     .map(function (row) {
       const pengajuan = pengajuanMap[row['ID Pengajuan']];
       const key = warrantyCardKey_(row['ID Pengajuan'], row['No Item']);
@@ -1415,7 +1507,7 @@ function replaceItemRows_(id, items) {
   }
 
   const itemRows = items.map(function (item, index) {
-    return [id, index + 1, item.produk, item.model, item.nomorSeri, item.modelNormalized, item.produkStatus, item.produkSumber];
+    return [id, index + 1, item.produk, item.model, item.nomorSeri, item.modelNormalized, item.produkStatus, item.produkSumber, 'Baru', '', '', ''];
   });
   if (itemRows.length) sheet.getRange(sheet.getLastRow() + 1, 1, itemRows.length, itemRows[0].length).setValues(itemRows);
 }
