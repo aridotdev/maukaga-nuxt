@@ -1,236 +1,418 @@
-# Rencana Fitur: Perubahan Status dan Catatan Admin per Item
+# Keputusan Final Fitur Auth & Authorization Supabase
 
-## Context
+Tanggal keputusan: 2026-06-04
 
-Saat ini perubahan status dan catatan admin masih berlaku di level `ID Pengajuan`: satu status dan satu catatan untuk seluruh item dalam satu pengajuan. Ini membuat kasus campuran sulit ditangani, misalnya 1 item ditolak tetapi item lain sebetulnya bisa lanjut diproses.
+Dokumen ini merangkum keputusan final untuk fitur authentication dan authorization dashboard menggunakan Supabase dan Nuxt module `@nuxtjs/supabase`.
 
-Target fitur ini adalah membuat status workflow dan catatan admin berlaku per item pengajuan, sehingga item yang ditolak tidak memblokir item lain. File UI utama yang dituju adalah `app/pages/dashboard/pengajuan/[idPengajuan].vue`, tetapi agar fitur benar-benar tersimpan dan stabil, perubahan minimal juga perlu dilakukan di backend Google Apps Script `doc/Code.gs` karena data saat ini belum punya field status/catatan per item.
+> Catatan: dokumen ini adalah keputusan desain. Implementasi kode dilakukan hanya setelah ada konfirmasi eksplisit berikutnya.
 
-## Rekomendasi Pendekatan
+---
 
-Implementasikan status item dengan tetap mempertahankan status parent `Pengajuan.Status` sebagai ringkasan kompatibilitas untuk dashboard dan fitur lama. Jangan tambah status baru seperti `Parsial` pada fase ini agar perubahan tetap kecil.
+## 1. Scope MVP
 
-Rule ringkasan parent yang direkomendasikan:
+Fitur auth dan authorization hanya berlaku untuk area dashboard.
 
-1. Jika ada item berstatus `Baru`, parent tetap `Baru`.
-2. Jika tidak ada `Baru` dan ada item `Disetujui`, parent menjadi `Disetujui`.
-3. Jika semua item `Ditolak`, parent menjadi `Ditolak`.
-4. Jika tidak ada `Baru` / `Disetujui` dan tidak semua `Ditolak`, parent menjadi `Selesai`.
+- Public pages: tidak memakai auth dan tetap bisa diakses publik.
+- Dashboard pages: semua route `/dashboard/**` wajib login dan wajib lolos authorization berdasarkan role.
 
-Dengan rule ini, reminder admin tetap melihat pengajuan yang masih punya item `Baru`, tetapi item `Disetujui` tetap bisa lanjut karena antrean cetak akan dibuat berbasis status item.
+---
 
-## File Kritis
+## 2. Authentication
 
-- `app/pages/dashboard/pengajuan/[idPengajuan].vue`
-  - UI detail pengajuan dan form perubahan status.
-- `doc/Code.gs`
-  - API `getDetail`, `updateStatus`, data sheet, helper item, dan antrean cetak.
+### Login
 
-## Perubahan Backend di `doc/Code.gs`
+- Menggunakan Supabase Auth.
+- Login menggunakan email dan password.
+- Session dikelola melalui `@nuxtjs/supabase`.
 
-### 1. Tambah kolom item workflow
+### Register
 
-Tambahkan kolom baru di belakang header `PengajuanItems`, tanpa menghapus kolom lama:
+Keputusan final:
 
-- `Status Item`
-- `Catatan Admin Item`
-- `Tanggal Update Status Item`
-- `User Update Status Item`
+- Tidak ada public register.
+- User hanya dibuat atau di-invite oleh admin.
+- Halaman `/register` publik tidak diperlukan untuk MVP ini.
 
-Alasan: data lama tetap aman, dan item baru bisa punya status/catatan sendiri.
+### Email Confirmation
 
-### 2. Inisialisasi item baru
+Keputusan final:
 
-Update `replaceItemRows_(id, items)` agar saat pengajuan dibuat/final submit, tiap item mendapat default:
+- Email confirmation wajib.
+- User yang di-invite harus menerima email dari Supabase dan menyelesaikan proses aktivasi / set password sendiri.
 
-- `Status Item = Baru`
-- `Catatan Admin Item = ''`
-- `Tanggal Update Status Item = ''`
-- `User Update Status Item = ''`
+---
 
-Untuk data lama yang kolomnya masih kosong, saat dibaca gunakan fallback ke status parent pengajuan agar halaman tidak error.
+## 3. First Admin
 
-### 3. Kirim field item status ke detail page
+Keputusan final:
 
-Update `getItemsForPengajuan_(id)` dan/atau `handleGetDetail(data)` agar setiap item mengirim field:
+- Admin pertama dibuat manual melalui Supabase Dashboard / SQL.
+- Setelah first admin tersedia, admin tersebut dapat membuat / invite user lain dari halaman user management.
 
-- `statusItem`
-- `catatanAdminItem`
-- `tanggalUpdateStatusItem`
-- `userUpdateStatusItem`
+---
 
-Reuse helper yang sudah ada: `clean_()`, `readObjects_()`, `indexMap_()`, `formatDateTime_()`, dan `toIso_()`.
+## 4. Roles
 
-### 4. Tambah endpoint baru `updateItemStatus`
+Role MVP:
 
-Tambahkan action baru di `doPost` bernama `updateItemStatus` agar flow lama `updateStatus` tidak dirusak.
+1. `admin`
+2. `management`
+3. `qrcc`
 
-Payload minimal:
+Tidak memakai public registration, sehingga role `pending` tidak wajib untuk MVP.
 
-- `idPengajuan`
-- `noItem`
-- `statusBaru`
-- `catatanAdmin`
+Namun, jika ada user yang berhasil login tetapi tidak memiliki profile / role yang valid, sistem harus memperlakukannya sebagai unauthorized dan mengarahkannya ke `/403`.
 
-Validasi:
+---
 
-- `idPengajuan` wajib.
-- `noItem` wajib.
-- `statusBaru` harus salah satu dari `Baru`, `Disetujui`, `Ditolak`, `Selesai`.
-- Jika `statusBaru === 'Ditolak'`, `catatanAdmin` wajib.
-- Item harus ditemukan berdasarkan `ID Pengajuan + No Item`.
+## 5. Role Permissions
 
-Proses:
+### Admin
 
-1. Lock dengan `LockService.getScriptLock()` seperti `handleUpdateStatus`.
-2. Update kolom item terkait.
-3. Recalculate parent status menggunakan rule ringkasan di atas.
-4. Update kolom parent `Pengajuan.Status`, `Catatan Admin`, `Tanggal Update Status Terakhir`, `User Update Status`, dan `Riwayat Singkat` sebagai ringkasan perubahan terakhir.
-5. Append ke `StatusLog`.
+Admin memiliki akses penuh ke seluruh area dashboard.
 
-### 5. Tambah `No Item` di `StatusLog`
+Admin boleh:
 
-Tambahkan kolom `No Item` di belakang header `StatusLog` agar riwayat perubahan bisa dibedakan per item.
+- Mengakses semua route `/dashboard/**`.
+- Melihat, membuat, mengubah, dan menghapus / menonaktifkan user.
+- Mengubah role user.
+- Membuat admin lain.
+- Mengakses dan mengubah data pengajuan.
 
-Untuk log lama, field ini kosong. Untuk endpoint baru `updateItemStatus`, isi `No Item` sesuai item yang diubah.
+Guard penting:
 
-### 6. Ubah antrean cetak menjadi berbasis item
+- Admin tidak boleh menghapus admin terakhir.
+- Admin tidak boleh downgrade role admin terakhir.
+- Admin tidak boleh menonaktifkan admin terakhir.
 
-Update `getApprovedWarrantyQueueItems_()` agar item masuk antrean cetak jika:
+### Management
 
-- `Status Item === 'Disetujui'`
-- `produk_status === 'verified'`
+Management hanya boleh mengakses:
 
-Jangan lagi menjadikan parent `Pengajuan.Status === 'Disetujui'` sebagai syarat utama. Ini penting agar item yang disetujui tetap bisa diproses walaupun item lain dalam pengajuan yang sama ditolak atau masih baru.
+- `/dashboard`
+- `/dashboard/pengajuan`
+- detail pengajuan di bawah `/dashboard/pengajuan/**`, jika route detail tersedia.
 
-## Perubahan Frontend di `app/pages/dashboard/pengajuan/[idPengajuan].vue`
+Management boleh:
 
-### 1. Update type data
+- Melihat list pengajuan.
+- Melihat detail pengajuan.
 
-Tambahkan field ke `DetailItem`:
+Management tidak boleh:
 
-- `statusItem?: PengajuanStatus`
-- `catatanAdminItem?: string`
-- `tanggalUpdateStatusItem?: string`
-- `userUpdateStatusItem?: string`
+- Mengubah data pengajuan.
+- Mengubah status pengajuan.
+- Mengubah catatan admin / internal.
+- Menghapus data pengajuan.
+- Mengakses settings members.
+- Mengakses route dashboard lain di luar allowlist.
 
-Tambahkan `noItem?: number | string` sebagai key utama untuk submit item.
+Catatan export/download:
 
-Tambahkan `noItem?: number | string` ke `RiwayatStatus` supaya tabel riwayat bisa menampilkan item mana yang berubah.
+- Fitur export/download data pengajuan belum dibuat.
+- Keputusan authorization untuk export/download dapat dibahas saat fitur tersebut akan dibuat.
 
-### 2. Ganti fokus form status global menjadi status item
+### QRCC
 
-Panel kanan `Tindakan Admin` saat ini mengubah status parent. Untuk fitur baru:
+QRCC boleh mengakses seluruh area dashboard kecuali user management.
 
-- Jangan hapus status parent dari hero; tetap tampil sebagai ringkasan.
-- Jangan pakai form global untuk mengubah seluruh pengajuan.
-- Pindahkan aksi perubahan status ke level item.
+QRCC boleh:
 
-Desain UI minimal yang disarankan:
+- Mengakses `/dashboard/**` secara umum.
+- Melihat dan mengubah data pengajuan sesuai kebutuhan operasional.
+- Mengakses settings lain jika nanti tersedia, selama bukan user management.
 
-- Pada daftar item, tampilkan badge `Status Item` untuk setiap item.
-- Di setiap item, sediakan:
-  - select `Ubah Status Ke`
-  - textarea `Catatan Admin`
-  - tombol `Simpan Item`
-- Gunakan state form per item, misalnya berdasarkan key `String(noItem)`.
+QRCC tidak boleh:
 
-Ini lebih mudah dipahami admin dan menghindari ambiguitas catatan admin milik item mana.
+- Mengakses `/dashboard/settings/members`.
+- Mengakses route turunan `/dashboard/settings/members/**`.
+- Membuat user.
+- Mengubah role user.
+- Menghapus / menonaktifkan user.
 
-### 3. Tambah state dan submit per item
+---
 
-Tambahkan state lokal per item:
+## 6. Route Authorization Matrix
 
-- status baru per item
-- catatan admin per item
-- loading per item
-- error/notice per item
+| Route | Admin | Management | QRCC |
+|---|---:|---:|---:|
+| `/dashboard` | ✅ | ✅ | ✅ |
+| `/dashboard/pengajuan` | ✅ full | ✅ view-only | ✅ full |
+| `/dashboard/pengajuan/**` | ✅ full | ✅ view-only | ✅ full |
+| `/dashboard/settings/members` | ✅ | ❌ | ❌ |
+| `/dashboard/settings/members/**` | ✅ | ❌ | ❌ |
+| `/dashboard/**` lainnya | ✅ | ❌ | ✅ |
 
-Tambahkan fungsi baru:
+Aturan konseptual:
 
-- `initItemForms()` setelah `loadDetail()` sukses.
-- `submitItemStatus(item)` untuk call API `updateItemStatus`.
+```txt
+admin:
+  allow semua /dashboard/**
 
-Payload frontend:
+management:
+  allow hanya:
+    /dashboard
+    /dashboard/pengajuan
+    /dashboard/pengajuan/**
 
-- `idPengajuan: detail.idPengajuan`
-- `noItem: item.noItem`
-- `statusBaru`
-- `catatanAdmin`
+qrcc:
+  allow semua /dashboard/**
+  kecuali:
+    /dashboard/settings/members
+    /dashboard/settings/members/**
+```
 
-Setelah sukses:
+---
 
-- tampilkan toast sukses spesifik item.
-- panggil `loadDetail()` ulang agar parent summary, item, dan riwayat tersinkron.
+## 7. User Management MVP
 
-### 4. Validasi frontend
+Halaman user management:
 
-Pertahankan aturan lama, tapi berlaku per item:
+- Route: `/dashboard/settings/members`
+- Akses: admin only
 
-- status harus valid.
-- jika status tidak berubah, tampilkan notice.
-- jika status `Ditolak`, catatan admin wajib.
+Field user/member yang dikelola:
 
-Backend tetap harus melakukan validasi yang sama agar data stabil walaupun request manual dikirim.
+- `email`
+- `full_name`
+- `role`
+- `is_active`
 
-### 5. Riwayat status
+Fitur user management MVP:
 
-Tambahkan kolom `No Item` di tabel riwayat. Jika `No Item` kosong, tampilkan `-` agar log lama tetap aman.
+1. List user.
+2. Invite user via email.
+3. Edit `full_name`.
+4. Edit `role`.
+5. Deactivate / soft delete user.
+6. Reactivate user jika diperlukan.
 
-## Hal yang Sengaja Tidak Dikerjakan
+Keputusan delete user:
 
-- Tidak menambah status baru `Parsial`.
-- Tidak redesign dashboard besar-besaran.
-- Tidak mengubah alur submit pengajuan selain default status item.
-- Tidak menghapus endpoint lama `updateStatus`.
-- Tidak mengubah status produk `produk_status`; itu tetap khusus verifikasi master produk.
-- Tidak memindahkan logic backend dari Apps Script ke Nuxt.
+- Menggunakan deactivate / soft delete.
+- User tidak langsung dihapus permanen dari Supabase Auth sebagai default MVP.
+- Tujuannya menjaga histori data dan mencegah relasi data rusak.
 
-## Urutan Implementasi
+---
 
-1. Update header `PengajuanItems` dan `StatusLog` di `doc/Code.gs`.
-2. Update `replaceItemRows_()` untuk menulis default item status.
-3. Update pembacaan item di `getItemsForPengajuan_()` / `handleGetDetail()`.
-4. Tambah `updateItemStatus` di `doPost` dan handler backend-nya.
-5. Tambah helper derive parent status dari semua item.
-6. Update `getApprovedWarrantyQueueItems_()` agar queue cetak berbasis item `Disetujui` + produk `verified`.
-7. Update type, state, dan UI di `app/pages/dashboard/pengajuan/[idPengajuan].vue`.
-8. Update tabel riwayat agar menampilkan `No Item`.
-9. Jalankan verifikasi manual end-to-end.
+## 8. Invite User Flow
 
-## Verifikasi Manual
+Keputusan final:
 
-### Skenario utama
+- Admin invite user via email.
+- User menerima email invitation / confirmation dari Supabase.
+- User set password sendiri.
+- Admin menentukan role user saat invite atau saat mengedit member.
 
-1. Buat pengajuan dengan 2 item.
-2. Buka halaman detail admin.
-3. Ubah item 1 menjadi `Disetujui`.
-4. Ubah item 2 menjadi `Ditolak` dengan catatan admin.
-5. Pastikan item 1 tetap `Disetujui` dan item 2 `Ditolak`.
-6. Reload halaman, pastikan status dan catatan per item tetap tersimpan.
-7. Pastikan catatan admin item 2 tidak menimpa catatan item 1.
+Flow konseptual:
 
-### Validasi
+```txt
+Admin login
+  -> buka /dashboard/settings/members
+  -> invite user dengan email, full_name, role
+  -> Supabase kirim email invitation
+  -> user klik link email
+  -> user set password sendiri
+  -> user login
+  -> sistem cek role dan is_active
+  -> user masuk dashboard sesuai permission
+```
 
-1. Coba ubah item ke `Ditolak` tanpa catatan.
-2. Pastikan frontend menolak.
-3. Jika memungkinkan, pastikan backend juga menolak request yang sama.
+---
 
-### Parent status
+## 9. Inactive User Behavior
 
-1. Jika masih ada item `Baru`, parent tetap `Baru`.
-2. Jika ada item `Disetujui` dan tidak ada `Baru`, parent menjadi `Disetujui`.
-3. Jika semua item `Ditolak`, parent menjadi `Ditolak`.
-4. Jika item selesai semua atau campuran selesai/ditolak tanpa item baru/disetujui, parent menjadi `Selesai`.
+Keputusan final:
 
-### Antrean cetak
+- Jika user `is_active = false`, user tidak boleh mengakses dashboard.
+- Jika user inactive mencoba masuk dashboard, redirect ke `/403`.
 
-1. Pastikan item `Disetujui` + produk `verified` muncul di antrean cetak.
-2. Pastikan item `Ditolak` tidak muncul.
-3. Pastikan item ditolak tidak memblokir item lain dalam pengajuan yang sama.
+Catatan:
 
-### Backward compatibility
+- Supabase login bisa saja berhasil secara auth-level.
+- Guard aplikasi tetap harus menolak akses dashboard berdasarkan `is_active`.
 
-1. Buka pengajuan lama yang belum punya kolom item status.
-2. Pastikan halaman tidak error.
-3. Pastikan status item fallback dari parent status atau `Baru` sesuai data yang tersedia.
+---
+
+## 10. Data Model Konseptual
+
+Tabel profile/member aplikasi direkomendasikan menyimpan data role dan status user.
+
+Konsep minimal:
+
+```txt
+profiles / members
+  id uuid primary key references auth.users(id)
+  email text
+  full_name text nullable
+  role text / enum: admin | management | qrcc
+  is_active boolean
+  created_at timestamptz
+  updated_at timestamptz
+```
+
+Catatan:
+
+- Role menjadi source of truth authorization aplikasi.
+- User tanpa profile / role valid dianggap unauthorized.
+- User non-admin tidak boleh mengubah role sendiri.
+
+---
+
+## 11. Server-Side Requirement untuk User Management
+
+Karena fitur user management membutuhkan operasi admin Supabase, maka fitur ini harus berjalan melalui server endpoint Nuxt/Nitro.
+
+Service role key Supabase:
+
+- Hanya boleh berada di server runtime config private.
+- Tidak boleh dikirim ke browser.
+- Tidak boleh digunakan di Vue component / client-side composable.
+
+Endpoint konseptual:
+
+```txt
+GET    /api/admin/members
+POST   /api/admin/members/invite
+PATCH  /api/admin/members/:id
+DELETE /api/admin/members/:id atau PATCH deactivate
+```
+
+Setiap endpoint admin wajib:
+
+```txt
+1. Validasi session current user.
+2. Ambil profile / role current user.
+3. Pastikan current user adalah admin.
+4. Jika bukan admin, return 403.
+5. Baru jalankan operasi dengan Supabase service role client.
+```
+
+---
+
+## 12. Supabase RLS Requirement
+
+Authorization tidak boleh hanya mengandalkan UI atau route middleware.
+
+RLS tetap wajib untuk melindungi data dari akses langsung melalui Supabase client.
+
+Prinsip RLS:
+
+### Profiles / Members
+
+- User boleh membaca profile dirinya sendiri jika diperlukan.
+- Admin boleh membaca semua profiles.
+- Admin boleh mengubah role dan status user.
+- Non-admin tidak boleh mengubah role.
+- Non-admin tidak boleh mengubah `is_active`.
+
+### Pengajuan
+
+- Admin, management, dan QRCC boleh select data pengajuan.
+- Management hanya read-only.
+- Admin dan QRCC boleh melakukan mutation sesuai fitur yang tersedia.
+- Management tidak boleh update/delete/ubah status/catatan meskipun mencoba lewat client Supabase langsung.
+
+---
+
+## 13. Nuxt Middleware Requirement
+
+Middleware dashboard diperlukan untuk UX dan route protection.
+
+Middleware konseptual:
+
+### Dashboard Auth Guard
+
+Untuk semua `/dashboard/**`:
+
+```txt
+Jika belum login:
+  redirect ke /login
+```
+
+### Dashboard Role Guard
+
+```txt
+Ambil role user
+Cek route tujuan
+Jika role tidak punya akses:
+  redirect ke /403
+```
+
+### Active User Guard
+
+```txt
+Jika is_active = false:
+  redirect ke /403
+```
+
+### Guest Guard Login
+
+Untuk `/login`:
+
+```txt
+Jika sudah login dan user valid:
+  redirect ke /dashboard
+```
+
+---
+
+## 14. UI Authorization Requirement
+
+UI harus menyesuaikan role user, tetapi bukan menjadi satu-satunya lapisan keamanan.
+
+Contoh behavior:
+
+### Admin
+
+- Melihat semua menu dashboard.
+- Melihat menu Members.
+- Melihat semua tombol action.
+
+### Management
+
+- Hanya melihat menu Dashboard dan Pengajuan.
+- Pada Pengajuan hanya melihat list dan detail.
+- Tombol edit/update/delete/status/catatan tidak ditampilkan.
+
+### QRCC
+
+- Melihat menu dashboard secara umum.
+- Tidak melihat menu Members.
+- Jika memaksa akses URL members, diarahkan ke `/403`.
+
+---
+
+## 15. Security Guard Penting
+
+Guard yang wajib ada saat implementasi:
+
+1. Public register tidak tersedia.
+2. Semua `/dashboard/**` wajib login.
+3. Role dashboard dicek sebelum route diakses.
+4. `is_active = false` diarahkan ke `/403`.
+5. Management read-only secara UI dan database/RLS.
+6. QRCC tidak boleh akses members secara route maupun endpoint API.
+7. Endpoint admin members hanya boleh dipakai oleh admin.
+8. Service role key hanya boleh dipakai di server.
+9. User tidak boleh mengubah role sendiri.
+10. Tidak boleh menghapus, menonaktifkan, atau downgrade admin terakhir.
+
+---
+
+## 16. Keputusan Final Ringkas
+
+```txt
+A. Register tidak publik; user hanya dibuat/invite oleh admin.
+B. First admin manual lewat Supabase Dashboard/SQL.
+C. Management boleh lihat list + detail pengajuan, tidak boleh mutate.
+D. QRCC boleh semua dashboard kecuali /dashboard/settings/members.
+E. User management admin-only: full CRUD secara soft delete + ubah role.
+F. Email confirmation wajib.
+G. Delete user memakai deactivate / soft delete.
+H. Invite email; user set password sendiri.
+I. Field member: email, full_name, role, is_active.
+J. Export/download pengajuan belum dibuat; authorization dibahas saat fitur dibuat.
+K. User inactive redirect ke /403.
+L. Admin boleh membuat admin lain, tapi tidak boleh menghapus/downgrade/deactivate admin terakhir.
+```
