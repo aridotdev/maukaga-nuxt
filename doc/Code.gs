@@ -867,30 +867,31 @@ function handleMarkWarrantyCardsPrinted(data) {
 
 function sendEmailDigest() {
   const config = getConfig();
+  const appName = config.APP_NAME || APP.APP_NAME;
   const recipients = readObjects_(SHEETS.RECIPIENTS)
     .filter(function (row) { return clean_(row['Aktif']).toLowerCase() === 'yes' && clean_(row['Email']); })
     .map(function (row) { return clean_(row['Email']); });
+  const subject = '[' + appName + '] Reminder pengajuan baru';
+
   if (!recipients.length) {
-    getSheet_(SHEETS.EMAIL_LOG).appendRow([new Date(), 'Digest Pengajuan Kartu Garansi', '', 0, 'Tidak ada penerima aktif']);
+    getSheet_(SHEETS.EMAIL_LOG).appendRow([new Date(), subject, '', 0, 'Tidak ada penerima aktif']);
     return;
   }
 
   const rows = readObjects_(SHEETS.PENGAJUAN)
-    .filter(function (row) { return ['Baru', 'Disetujui'].indexOf(row['Status']) !== -1; })
-    .sort(function (a, b) { return new Date(b['Timestamp Submit']).getTime() - new Date(a['Timestamp Submit']).getTime(); })
-    .slice(0, 100);
+    .filter(function (row) { return clean_(row['Status']) === 'Baru'; });
+  const count = rows.length;
 
-  if (!rows.length) {
-    upsertConfig_(getSheet_(SHEETS.CONFIG), 'LAST_EMAIL_SENT_AT', new Date(), true);
-    getSheet_(SHEETS.EMAIL_LOG).appendRow([new Date(), 'Digest Pengajuan Kartu Garansi', recipients.join(', '), 0, 'Tidak ada pengajuan terbuka']);
+  if (!count) {
+    getSheet_(SHEETS.EMAIL_LOG).appendRow([new Date(), subject, recipients.join(', '), 0, 'Tidak ada pengajuan status Baru']);
     return;
   }
 
-  const subject = '[' + (config.APP_NAME || APP.APP_NAME) + '] Digest ' + rows.length + ' pengajuan terbuka';
-  const htmlBody = buildDigestHtml_(rows, config);
-  MailApp.sendEmail({ to: recipients.join(','), subject: subject, htmlBody: htmlBody });
+  const sendSubject = '[' + appName + '] ' + count + ' pengajuan baru perlu diproses';
+  const htmlBody = buildDigestHtml_(count, config);
+  MailApp.sendEmail({ to: recipients.join(','), subject: sendSubject, htmlBody: htmlBody });
   upsertConfig_(getSheet_(SHEETS.CONFIG), 'LAST_EMAIL_SENT_AT', new Date(), true);
-  getSheet_(SHEETS.EMAIL_LOG).appendRow([new Date(), subject, recipients.join(', '), rows.length, 'Terkirim']);
+  getSheet_(SHEETS.EMAIL_LOG).appendRow([new Date(), sendSubject, recipients.join(', '), count, 'Terkirim']);
 }
 
 function ensureRuntimeHeaders_() {
@@ -1502,22 +1503,22 @@ function formatDateTime_(value) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 }
 
-function buildDigestHtml_(rows, config) {
-  const trs = rows.map(function (row) {
-    return '<tr>' +
-      '<td>' + escapeHtml_(row['ID Pengajuan']) + '</td>' +
-      '<td>' + escapeHtml_(formatDateTime_(row['Timestamp Submit'])) + '</td>' +
-      '<td>' + escapeHtml_(row['Nama']) + '</td>' +
-      '<td>' + escapeHtml_(row['Bagian/Cabang']) + '</td>' +
-      '<td>' + escapeHtml_(row['Jumlah Item']) + '</td>' +
-      '<td>' + escapeHtml_(row['Status']) + '</td>' +
-      '</tr>';
-  }).join('');
-  return '<h2>' + escapeHtml_(config.APP_NAME || APP.APP_NAME) + '</h2>' +
-    '<p>Berikut ringkasan pengajuan berstatus Baru atau Disetujui.</p>' +
-    '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">' +
-    '<thead><tr><th>ID</th><th>Waktu Submit</th><th>Nama</th><th>Bagian/Cabang</th><th>Jml Item</th><th>Status</th></tr></thead>' +
-    '<tbody>' + trs + '</tbody></table>';
+function buildDigestHtml_(count, config) {
+  const appName = config.APP_NAME || APP.APP_NAME;
+  const safeAppName = escapeHtml_(appName);
+  const safeCount = escapeHtml_(count);
+  const sentAt = escapeHtml_(formatDateTime_(new Date()));
+
+  return '<div style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#111827;">' +
+    '<div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">' +
+    '<div style="font-size:14px;font-weight:700;color:#65a30d;margin-bottom:12px;">' + safeAppName + '</div>' +
+    '<h1 style="font-size:22px;line-height:1.3;margin:0 0 16px;color:#111827;">Pengajuan Baru Perlu Diproses</h1>' +
+    '<div style="font-size:48px;line-height:1;font-weight:700;color:#65a30d;margin:0 0 16px;">' + safeCount + '</div>' +
+    '<p style="font-size:16px;line-height:1.5;margin:0 0 8px;">Ada ' + safeCount + ' pengajuan status "Baru" yang harus diproses.</p>' +
+    '<p style="font-size:16px;line-height:1.5;margin:0 0 24px;">Silakan cek dashboard admin ' + safeAppName + '.</p>' +
+    '<p style="font-size:12px;line-height:1.5;margin:0;color:#6b7280;">Email ini dikirim otomatis oleh sistem ' + safeAppName + ' pada ' + sentAt + '.</p>' +
+    '</div>' +
+    '</div>';
 }
 
 function escapeHtml_(value) {
