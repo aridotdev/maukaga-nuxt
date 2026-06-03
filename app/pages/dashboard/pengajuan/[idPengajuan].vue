@@ -564,10 +564,10 @@ function getErrorMessage(error: unknown) {
                   />
 
                   <form
-                    class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-end"
+                    class="mt-4 flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:gap-6"
                     @submit.prevent="submitItemStatus(item)"
                   >
-                    <UFormField label="Ubah Status Ke" :name="`status-${getItemKey(item)}`" class="lg:col-span-3">
+                    <UFormField label="Ubah Status Ke" :name="`status-${getItemKey(item)}`" class="w-full lg:w-32">
                       <USelect
                         v-model="getItemForm(item).statusBaru"
                         :items="statusItems"
@@ -575,7 +575,7 @@ function getErrorMessage(error: unknown) {
                       />
                     </UFormField>
 
-                    <UFormField label="Catatan Admin" :name="`catatan-${getItemKey(item)}`" class="lg:col-span-6">
+                    <UFormField label="Catatan Admin" :name="`catatan-${getItemKey(item)}`" class="w-full flex-1">
                       <UTextarea
                         v-model="getItemForm(item).catatanAdmin"
                         :rows="2"
@@ -589,8 +589,7 @@ function getErrorMessage(error: unknown) {
                       label="Simpan Item"
                       icon="i-lucide-check"
                       color="primary"
-                      class="lg:col-span-3"
-                      block
+                      class="h-8 w-full flex-none self-start lg:mt-6 lg:w-auto"
                       :loading="getItemForm(item).isSubmitting"
                       :disabled="getItemForm(item).isSubmitting"
                     />
