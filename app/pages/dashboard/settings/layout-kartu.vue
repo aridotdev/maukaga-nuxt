@@ -366,5 +366,60 @@ async function handleApiError(error: unknown, fallback: string) {
         />
       </div>
     </UPageCard>
+
+    <UPageCard
+      title="Panduan Offset"
+      description="Gunakan nilai kecil seperti 0.5 mm atau 1 mm, lalu cek kembali preview atau hasil cetak."
+      variant="subtle"
+    >
+      <div class="grid gap-3 md:grid-cols-2">
+        <div class="rounded-md border border-default bg-default/50 p-4">
+          <div class="mb-3 flex items-center gap-2 text-sm font-semibold text-highlighted">
+            <UIcon name="i-lucide-move-horizontal" class="size-4 text-primary" />
+            <span>Offset X (kanan / kiri)</span>
+          </div>
+          <dl class="space-y-2 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-muted">Nilai positif (+)</dt>
+              <dd class="font-medium text-highlighted">geser ke kanan</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-muted">Nilai negatif (-)</dt>
+              <dd class="font-medium text-highlighted">geser ke kiri</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="rounded-md border border-default bg-default/50 p-4">
+          <div class="mb-3 flex items-center gap-2 text-sm font-semibold text-highlighted">
+            <UIcon name="i-lucide-move-vertical" class="size-4 text-primary" />
+            <span>Offset Y (atas / bawah)</span>
+          </div>
+          <dl class="space-y-2 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-muted">Nilai positif (+)</dt>
+              <dd class="font-medium text-highlighted">geser ke bawah</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-muted">Nilai negatif (-)</dt>
+              <dd class="font-medium text-highlighted">geser ke atas</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="rounded-md border border-default bg-default/50 p-4 md:col-span-2">
+          <div class="mb-3 flex items-center gap-2 text-sm font-semibold text-highlighted">
+            <UIcon name="i-lucide-ruler" class="size-4 text-primary" />
+            <span>Contoh cepat</span>
+          </div>
+          <div class="grid gap-2 text-sm text-muted sm:grid-cols-2">
+            <p><span class="font-medium text-highlighted">X = 2</span> berarti posisi bergeser 2 mm ke kanan.</p>
+            <p><span class="font-medium text-highlighted">X = -2</span> berarti posisi bergeser 2 mm ke kiri.</p>
+            <p><span class="font-medium text-highlighted">Y = 2</span> berarti posisi bergeser 2 mm ke bawah.</p>
+            <p><span class="font-medium text-highlighted">Y = -2</span> berarti posisi bergeser 2 mm ke atas.</p>
+          </div>
+        </div>
+      </div>
+    </UPageCard>
   </div>
 </template>
