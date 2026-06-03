@@ -89,11 +89,8 @@ async function savePrintLayoutForm() {
 
   isLayoutLoading.value = true
   try {
-    const result = await callApi<PrintLayoutState>('savePrintLayout', { layout })
-    if (!result.success || !result.data) throw new Error(result.error || 'Gagal menyimpan layout')
-
-    applyPrintLayoutState(result.data)
-    selectedLayoutId.value = result.data.savedLayoutId || layout.id
+    const savedLayoutId = await savePrintLayout(layout)
+    selectedLayoutId.value = savedLayoutId
     alertState.value = {
       type: 'success',
       title: 'Layout berhasil disimpan'
@@ -107,21 +104,20 @@ async function savePrintLayoutForm() {
 }
 
 async function setActivePrintLayoutFromForm() {
-  if (!editingLayout.value.id) {
-    showInlineError('Simpan layout terlebih dahulu sebelum dijadikan aktif')
-    return
-  }
+  const layout = normalizeEditingLayout()
+  if (!layout) return
 
   isLayoutLoading.value = true
   try {
+    const savedLayoutId = await savePrintLayout(layout)
     const result = await callApi<PrintLayoutState>('setActivePrintLayout', {
       type: selectedLayoutType.value,
-      id: editingLayout.value.id
+      id: savedLayoutId
     })
     if (!result.success || !result.data) throw new Error(result.error || 'Gagal mengubah layout aktif')
 
     applyPrintLayoutState(result.data)
-    selectedLayoutId.value = editingLayout.value.id
+    selectedLayoutId.value = savedLayoutId
     alertState.value = {
       type: 'success',
       title: 'Layout aktif berhasil diperbarui'
@@ -132,6 +128,14 @@ async function setActivePrintLayoutFromForm() {
   } finally {
     isLayoutLoading.value = false
   }
+}
+
+async function savePrintLayout(layout: PrintLayout) {
+  const result = await callApi<PrintLayoutState>('savePrintLayout', { layout })
+  if (!result.success || !result.data) throw new Error(result.error || 'Gagal menyimpan layout')
+
+  applyPrintLayoutState(result.data)
+  return result.data.savedLayoutId || layout.id
 }
 
 async function deletePrintLayoutFromForm() {
