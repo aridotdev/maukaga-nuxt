@@ -1342,8 +1342,8 @@ function getPrintLayoutRows_() {
       name: clean_(values[i][col.Name]),
       offsetX: normalizeNumber_(values[i][col['Offset X']], 0, true),
       offsetY: normalizeNumber_(values[i][col['Offset Y']], 0, true),
-      gapProductModel: normalizeNumber_(values[i][col['Gap Product Model']], 0, false),
-      gapModelSerial: normalizeNumber_(values[i][col['Gap Model Serial']], 0, false),
+      gapProductModel: normalizeNumber_(values[i][col['Gap Product Model']], 0, true),
+      gapModelSerial: normalizeNumber_(values[i][col['Gap Model Serial']], 0, true),
       isBuiltin: parseBoolean_(values[i][col['Is Builtin']]),
       createdAt: toIso_(values[i][col['Created At']]),
       updatedAt: toIso_(values[i][col['Updated At']]),
@@ -1368,8 +1368,8 @@ function normalizePrintLayoutInput_(input, requireName) {
     name: clean_(input.name),
     offsetX: normalizeNumber_(input.offsetX, 0, true),
     offsetY: normalizeNumber_(input.offsetY, 0, true),
-    gapProductModel: normalizeNumber_(input.gapProductModel, 0, false),
-    gapModelSerial: normalizeNumber_(input.gapModelSerial, 0, false),
+    gapProductModel: normalizeNumber_(input.gapProductModel, 0, true),
+    gapModelSerial: normalizeNumber_(input.gapModelSerial, 0, true),
   };
   if (requireName && !layout.name) throw new Error('Nama layout wajib diisi');
   return layout;
@@ -1390,7 +1390,7 @@ function normalizeNumber_(value, fallback, allowNegative) {
   if (value === '' || value == null) return fallback;
   const number = Number(value);
   if (!Number.isFinite(number)) throw new Error('Nilai angka tidak valid');
-  if (!allowNegative && number < 0) throw new Error('Nilai gap minimal 0');
+  if (!allowNegative && number < 0) throw new Error('Nilai tidak boleh negatif');
   return number;
 }
 

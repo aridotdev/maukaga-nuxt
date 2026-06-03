@@ -145,7 +145,7 @@ NUXT_PUBLIC_MAX_ITEMS=10
   - update status `Ditolak` wajib catatan admin
   - approve model wajib nama produk
   - cetak/tandai printed wajib minimal 1 item dan semua item punya jenis kartu
-  - layout wajib nama, type valid, angka valid, gap minimal 0
+  - layout wajib nama, type valid, angka valid, gap boleh negatif
 
 ## 3. Fase Layout, Navigasi, dan Shell
 

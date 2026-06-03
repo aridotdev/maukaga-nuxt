@@ -80,8 +80,8 @@ Elemen data/form:
 | Nama layout | Wajib diisi saat save |
 | Offset X (mm) | Boleh negatif, menggeser semua field horizontal |
 | Offset Y (mm) | Boleh negatif, menggeser semua field vertikal |
-| Gap Produk ke Model (mm) | Minimal 0 |
-| Gap Model ke Nomor Seri (mm) | Minimal 0 |
+| Gap Produk ke Model (mm) | Boleh negatif, mengatur jarak Produk ke Model |
+| Gap Model ke Nomor Seri (mm) | Boleh negatif, mengatur jarak Model ke Nomor Seri |
 | Simpan | Save layout baru atau update layout terpilih |
 | Jadikan Aktif | Set layout terpilih sebagai layout aktif untuk type tersebut |
 | Hapus | Hanya untuk layout custom, tidak untuk builtin |
@@ -554,7 +554,7 @@ Rules:
 - `type` wajib `local` atau `import`.
 - `name` wajib.
 - `offsetX` dan `offsetY` boleh negatif.
-- `gapProductModel` dan `gapModelSerial` minimal 0.
+- `gapProductModel` dan `gapModelSerial` boleh negatif. Nilai positif memperbesar jarak, nilai negatif mempersempit jarak.
 - Jika `id` kosong, backend generate ID baru: `{type}-{uuid8}`.
 - Layout builtin yang diedit tetap `Is Builtin = TRUE`.
 
@@ -854,7 +854,6 @@ Kartu label:
 | Cetak label tanpa label | `Tidak ada label untuk dicetak` | Alert error |
 | Nama layout kosong | `Nama layout wajib diisi` | Alert error |
 | Nilai posisi bukan angka | `Semua nilai posisi harus berupa angka` | Alert error |
-| Gap negatif | `Nilai gap minimal 0` | Alert error |
 
 ## Status dan Badge
 

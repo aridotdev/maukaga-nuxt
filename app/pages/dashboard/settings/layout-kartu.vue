@@ -178,11 +178,6 @@ function normalizeEditingLayout() {
     return null
   }
 
-  if (layout.gapProductModel < 0 || layout.gapModelSerial < 0) {
-    showInlineError('Nilai gap minimal 0')
-    return null
-  }
-
   return layout
 }
 
@@ -330,11 +325,11 @@ async function handleApiError(error: unknown, fallback: string) {
         </UFormField>
 
         <UFormField label="Gap Produk ke Model (mm)">
-          <UInput v-model.number="editingLayout.gapProductModel" type="number" min="0" step="0.1" class="w-full" />
+          <UInput v-model.number="editingLayout.gapProductModel" type="number" step="0.1" class="w-full" />
         </UFormField>
 
         <UFormField label="Gap Model ke Serial (mm)">
-          <UInput v-model.number="editingLayout.gapModelSerial" type="number" min="0" step="0.1" class="w-full" />
+          <UInput v-model.number="editingLayout.gapModelSerial" type="number" step="0.1" class="w-full" />
         </UFormField>
       </div>
 
@@ -368,7 +363,7 @@ async function handleApiError(error: unknown, fallback: string) {
     </UPageCard>
 
     <UPageCard
-      title="Panduan Offset"
+      title="Panduan Offset dan Gap"
       description="Gunakan nilai kecil seperti 0.5 mm atau 1 mm, lalu cek kembali preview atau hasil cetak."
       variant="subtle"
     >
@@ -410,6 +405,27 @@ async function handleApiError(error: unknown, fallback: string) {
         <div class="rounded-md border border-default bg-default/50 p-4 md:col-span-2">
           <div class="mb-3 flex items-center gap-2 text-sm font-semibold text-highlighted">
             <UIcon name="i-lucide-ruler" class="size-4 text-primary" />
+            <span>Gap antar field</span>
+          </div>
+          <dl class="grid gap-3 text-sm sm:grid-cols-2">
+            <div class="rounded-md bg-muted/50 p-3">
+              <dt class="font-medium text-highlighted">Gap Produk ke Model</dt>
+              <dd class="mt-1 text-muted">
+                Mengatur jarak dari Produk ke Model. Nilai positif memperbesar jarak, nilai negatif mempersempit jarak.
+              </dd>
+            </div>
+            <div class="rounded-md bg-muted/50 p-3">
+              <dt class="font-medium text-highlighted">Gap Model ke Serial</dt>
+              <dd class="mt-1 text-muted">
+                Mengatur jarak dari Model ke Serial. Nilai positif memperbesar jarak, nilai negatif mempersempit jarak.
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="rounded-md border border-default bg-default/50 p-4 md:col-span-2">
+          <div class="mb-3 flex items-center gap-2 text-sm font-semibold text-highlighted">
+            <UIcon name="i-lucide-list-checks" class="size-4 text-primary" />
             <span>Contoh cepat</span>
           </div>
           <div class="grid gap-2 text-sm text-muted sm:grid-cols-2">
@@ -417,6 +433,8 @@ async function handleApiError(error: unknown, fallback: string) {
             <p><span class="font-medium text-highlighted">X = -2</span> berarti posisi bergeser 2 mm ke kiri.</p>
             <p><span class="font-medium text-highlighted">Y = 2</span> berarti posisi bergeser 2 mm ke bawah.</p>
             <p><span class="font-medium text-highlighted">Y = -2</span> berarti posisi bergeser 2 mm ke atas.</p>
+            <p><span class="font-medium text-highlighted">Gap = 1</span> berarti jarak antar field makin renggang 1 mm.</p>
+            <p><span class="font-medium text-highlighted">Gap = -1</span> berarti jarak antar field makin rapat 1 mm.</p>
           </div>
         </div>
       </div>
