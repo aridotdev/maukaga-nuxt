@@ -119,6 +119,16 @@ function doPost(e) {
         return jsonResponse_(handleSubmitDraftPengajuan(data));
       case 'adminLogin':
         return jsonResponse_(handleAdminLogin(data));
+      case 'adminUsersList':
+        return jsonResponse_(handleAdminUsersList(data));
+      case 'adminUsersInvite':
+        return jsonResponse_(handleAdminUsersInvite(data));
+      case 'adminUsersUpdate':
+        return jsonResponse_(handleAdminUsersUpdate(data));
+      case 'adminUsersDeactivate':
+        return jsonResponse_(handleAdminUsersDeactivate(data));
+      case 'adminUsersReactivate':
+        return jsonResponse_(handleAdminUsersReactivate(data));
       case 'getDashboard':
         return jsonResponse_(handleGetDashboard(data));
       case 'getDetail':
@@ -179,15 +189,146 @@ function getConfig() {
 }
 
 function validateSession(token) {
-  token = String(token || '').trim();
+  token = clean_(token);
   if (!token) return null;
-  const raw = CacheService.getScriptCache().get(token);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch (err) {
-    return null;
+
+  const cacheKey = getSessionCacheKey_(token);
+  const raw = CacheService.getScriptCache().get(cacheKey);
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      return null;
+    }
   }
+
+  if (token.split('.').length !== 3) return null;
+
+  const session = validateSupabaseSession_(token);
+  CacheService.getScriptCache().put(cacheKey, JSON.stringify(session), 300);
+  return session;
+}
+
+function getSessionCacheKey_(token) {
+  if (token.length <= 200) return token;
+
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token);
+  return 'session:' + digest.map(function (byte) {
+    const value = byte < 0 ? byte + 256 : byte;
+    return ('0' + value.toString(16)).slice(-2);
+  }).join('');
+}
+
+function getSupabaseProps_() {
+  const props = PropertiesService.getScriptProperties();
+  const supabaseUrl = clean_(props.getProperty('SUPABASE_URL')).replace(/\/+$/, '');
+  const publishableKey = clean_(props.getProperty('SUPABASE_PUBLISHABLE_KEY'));
+  const secretKey = clean_(props.getProperty('SUPABASE_SECRET_KEY'));
+  const appUrl = clean_(props.getProperty('APP_URL')).replace(/\/+$/, '');
+
+  return {
+    supabaseUrl: supabaseUrl,
+    publishableKey: publishableKey,
+    secretKey: secretKey,
+    appUrl: appUrl,
+  };
+}
+
+function requireSupabaseProps_(requiredKeys) {
+  const config = getSupabaseProps_();
+  requiredKeys.forEach(function (key) {
+    if (!config[key]) throw new Error('Script Property ' + getSupabasePropertyName_(key) + ' belum dikonfigurasi.');
+  });
+  return config;
+}
+
+function getSupabasePropertyName_(key) {
+  const names = {
+    supabaseUrl: 'SUPABASE_URL',
+    publishableKey: 'SUPABASE_PUBLISHABLE_KEY',
+    secretKey: 'SUPABASE_SECRET_KEY',
+    appUrl: 'APP_URL',
+  };
+  return names[key] || key;
+}
+
+function supabaseUserHeaders_(token) {
+  const config = requireSupabaseProps_(['publishableKey']);
+  return {
+    apikey: config.publishableKey,
+    Authorization: 'Bearer ' + token,
+  };
+}
+
+function supabaseAdminHeaders_() {
+  const config = requireSupabaseProps_(['secretKey']);
+  const headers = {
+    apikey: config.secretKey,
+  };
+
+  if (config.secretKey.indexOf('sb_secret_') !== 0) {
+    headers.Authorization = 'Bearer ' + config.secretKey;
+  }
+
+  return headers;
+}
+
+function fetchSupabaseJson_(url, options) {
+  const response = UrlFetchApp.fetch(url, Object.assign({
+    muteHttpExceptions: true,
+  }, options || {}));
+  const status = response.getResponseCode();
+  const text = response.getContentText();
+  let json = null;
+
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      json = { message: text };
+    }
+  }
+
+  if (status < 200 || status >= 300) {
+    const message = json && (json.message || json.error_description || json.error || json.msg);
+    throw new Error(message || ('Supabase error ' + status));
+  }
+
+  return json;
+}
+
+function validateSupabaseSession_(token) {
+  const config = requireSupabaseProps_(['supabaseUrl', 'publishableKey']);
+  const userData = fetchSupabaseJson_(config.supabaseUrl + '/auth/v1/user', {
+    method: 'get',
+    headers: supabaseUserHeaders_(token),
+  });
+
+  if (!userData || !userData.id) throw new Error('Token Supabase tidak valid.');
+
+  const profiles = fetchSupabaseJson_(
+    config.supabaseUrl + '/rest/v1/profiles?id=eq.' + encodeURIComponent(userData.id) + '&select=role,is_active,full_name,email',
+    {
+      method: 'get',
+      headers: supabaseUserHeaders_(token),
+    }
+  );
+  const profile = profiles && profiles[0];
+
+  if (!profile) throw new Error('Profile Supabase tidak ditemukan.');
+  if (profile.is_active !== true) throw new Error('Unauthorized: akun tidak aktif.');
+
+  const role = normalizeRole_(profile.role);
+  if (!role) throw new Error('Unauthorized: role tidak valid.');
+
+  return {
+    userId: userData.id,
+    username: userData.email || profile.email || userData.id,
+    nama: profile.full_name || userData.email || 'User',
+    email: userData.email || profile.email || '',
+    role: role,
+    authProvider: 'supabase',
+  };
 }
 
 function handleSubmitPengajuan(data) {
@@ -403,8 +544,157 @@ function handleAdminLogin(data) {
 
 function handleAdminLogout(data) {
   const token = clean_(data.token);
-  if (token) CacheService.getScriptCache().remove(token);
+  if (token) CacheService.getScriptCache().remove(getSessionCacheKey_(token));
   return { success: true, data: {} };
+}
+
+function handleAdminUsersList(data) {
+  requireSession_(data.token, ['admin']);
+
+  const config = requireSupabaseProps_(['supabaseUrl', 'secretKey']);
+  const users = fetchSupabaseJson_(
+    config.supabaseUrl + '/rest/v1/profiles?select=id,email,full_name,role,is_active,created_at&order=created_at.desc',
+    {
+      method: 'get',
+      headers: supabaseAdminHeaders_(),
+    }
+  ) || [];
+
+  return { success: true, data: users };
+}
+
+function handleAdminUsersInvite(data) {
+  requireSession_(data.token, ['admin']);
+
+  const email = clean_(data.email).toLowerCase();
+  const fullName = clean_(data.full_name || data.fullName);
+  const role = normalizeRole_(data.role);
+
+  if (!email) throw new Error('Email wajib diisi.');
+  if (!role) throw new Error('Role tidak valid.');
+
+  const config = requireSupabaseProps_(['supabaseUrl', 'secretKey', 'appUrl']);
+  const redirectTo = config.appUrl + '/confirm';
+  const invitedUser = fetchSupabaseJson_(
+    config.supabaseUrl + '/auth/v1/invite?redirect_to=' + encodeURIComponent(redirectTo),
+    {
+      method: 'post',
+      contentType: 'application/json',
+      headers: supabaseAdminHeaders_(),
+      payload: JSON.stringify({
+        email: email,
+        data: {
+          full_name: fullName,
+          role: role,
+        },
+      }),
+    }
+  );
+
+  if (invitedUser && invitedUser.id) {
+    upsertSupabaseProfile_(invitedUser.id, {
+      email: invitedUser.email || email,
+      full_name: fullName,
+      role: role,
+      is_active: true,
+    });
+  }
+
+  return {
+    success: true,
+    data: {
+      id: invitedUser && invitedUser.id,
+      email: invitedUser && invitedUser.email ? invitedUser.email : email,
+    },
+  };
+}
+
+function handleAdminUsersUpdate(data) {
+  requireSession_(data.token, ['admin']);
+
+  const targetUserId = clean_(data.targetUserId || data.id);
+  const patch = {};
+
+  if (!targetUserId) throw new Error('targetUserId wajib diisi.');
+
+  if (data.full_name !== undefined || data.fullName !== undefined) {
+    patch.full_name = clean_(data.full_name || data.fullName);
+  }
+
+  if (data.role !== undefined) {
+    const role = normalizeRole_(data.role);
+    if (!role) throw new Error('Role tidak valid.');
+    if (role !== 'admin') assertNotLastActiveAdmin_(targetUserId, 'Tidak boleh downgrade admin terakhir.');
+    patch.role = role;
+  }
+
+  if (!Object.keys(patch).length) throw new Error('Tidak ada data user yang diubah.');
+
+  patchSupabaseProfile_(targetUserId, patch);
+  return { success: true, data: { id: targetUserId } };
+}
+
+function handleAdminUsersDeactivate(data) {
+  const caller = requireSession_(data.token, ['admin']);
+  const targetUserId = clean_(data.targetUserId || data.id);
+
+  if (!targetUserId) throw new Error('targetUserId wajib diisi.');
+  assertNotLastActiveAdmin_(targetUserId, 'Tidak boleh menonaktifkan admin terakhir.');
+
+  patchSupabaseProfile_(targetUserId, { is_active: false });
+  return { success: true, data: { id: targetUserId, deactivatedBy: caller.userId || caller.username } };
+}
+
+function handleAdminUsersReactivate(data) {
+  requireSession_(data.token, ['admin']);
+
+  const targetUserId = clean_(data.targetUserId || data.id);
+  if (!targetUserId) throw new Error('targetUserId wajib diisi.');
+
+  patchSupabaseProfile_(targetUserId, { is_active: true });
+  return { success: true, data: { id: targetUserId } };
+}
+
+function upsertSupabaseProfile_(id, values) {
+  const config = requireSupabaseProps_(['supabaseUrl', 'secretKey']);
+  const payload = Object.assign({ id: id }, values || {});
+  const headers = supabaseAdminHeaders_();
+  headers.Prefer = 'resolution=merge-duplicates,return=minimal';
+
+  fetchSupabaseJson_(config.supabaseUrl + '/rest/v1/profiles?on_conflict=id', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: headers,
+    payload: JSON.stringify(payload),
+  });
+}
+
+function patchSupabaseProfile_(id, patch) {
+  const config = requireSupabaseProps_(['supabaseUrl', 'secretKey']);
+  const headers = supabaseAdminHeaders_();
+  headers.Prefer = 'return=minimal';
+
+  fetchSupabaseJson_(config.supabaseUrl + '/rest/v1/profiles?id=eq.' + encodeURIComponent(id), {
+    method: 'patch',
+    contentType: 'application/json',
+    headers: headers,
+    payload: JSON.stringify(patch),
+  });
+}
+
+function assertNotLastActiveAdmin_(targetUserId, message) {
+  const config = requireSupabaseProps_(['supabaseUrl', 'secretKey']);
+  const admins = fetchSupabaseJson_(
+    config.supabaseUrl + '/rest/v1/profiles?role=eq.admin&is_active=eq.true&select=id',
+    {
+      method: 'get',
+      headers: supabaseAdminHeaders_(),
+    }
+  ) || [];
+
+  if (admins.length === 1 && admins[0].id === targetUserId) {
+    throw new Error(message);
+  }
 }
 
 function handleGetDashboard(data) {
@@ -503,7 +793,7 @@ function handleGetDetail(data) {
 }
 
 function handleUpdateStatus(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const id = clean_(data.idPengajuan);
   const statusBaru = clean_(data.statusBaru);
   const catatanAdmin = clean_(data.catatanAdmin);
@@ -546,7 +836,7 @@ function handleUpdateStatus(data) {
 }
 
 function handleUpdateItemStatus(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const id = clean_(data.idPengajuan);
   const noItem = clean_(data.noItem);
   const statusBaru = clean_(data.statusBaru);
@@ -684,7 +974,7 @@ function handleGetProductReviewQueue(data) {
 }
 
 function handleApproveModelProduk(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const modelNormalized = clean_(data.modelNormalized || data.model_normalized) || normalizeModelKey_(data.modelDisplay || data.model);
   const modelDisplay = clean_(data.modelDisplay || data.model) || modelNormalized;
   const produk = clean_(data.produk || data.kategori);
@@ -703,7 +993,7 @@ function handleApproveModelProduk(data) {
 }
 
 function handleGetWarrantyPrintQueue(data) {
-  requireSession_(data.token);
+  requireSession_(data.token, ['admin', 'qrcc']);
   const includePrinted = data.includePrinted === true || clean_(data.includePrinted).toLowerCase() === 'yes';
   const search = clean_(data.search).toLowerCase();
   const cardType = normalizeWarrantyCardType_(data.jenisKartu, false);
@@ -748,13 +1038,13 @@ function handleGetWarrantyPrintQueue(data) {
 }
 
 function handleGetPrintLayouts(data) {
-  requireSession_(data.token);
+  requireSession_(data.token, ['admin', 'qrcc']);
   ensurePrintLayoutDefaults_(getSheet_(SHEETS.CONFIG));
   return { success: true, data: getPrintLayoutState_() };
 }
 
 function handleSavePrintLayout(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const cleaned = normalizePrintLayoutInput_(data.layout || data, true);
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -803,7 +1093,7 @@ function handleSavePrintLayout(data) {
 }
 
 function handleDeletePrintLayout(data) {
-  requireSession_(data.token);
+  requireSession_(data.token, ['admin', 'qrcc']);
   const id = clean_(data.id || data.layoutId);
   if (!id) throw new Error('Layout wajib dipilih');
   const lock = LockService.getScriptLock();
@@ -832,7 +1122,7 @@ function handleDeletePrintLayout(data) {
 }
 
 function handleSetActivePrintLayout(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const type = normalizePrintLayoutType_(data.type, true);
   const id = clean_(data.id || data.layoutId);
   if (!id) throw new Error('Layout wajib dipilih');
@@ -851,7 +1141,7 @@ function handleSetActivePrintLayout(data) {
 }
 
 function handleSaveWarrantyCardTypes(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const items = Array.isArray(data.items) ? data.items : [];
   if (!items.length) throw new Error('Pilih item terlebih dahulu');
 
@@ -895,7 +1185,7 @@ function handleSaveWarrantyCardTypes(data) {
 }
 
 function handleMarkWarrantyCardsPrinted(data) {
-  const session = requireSession_(data.token);
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
   const inputs = Array.isArray(data.items) ? data.items : [];
   const catatan = clean_(data.catatan);
   if (!inputs.length) throw new Error('Pilih item yang sudah dicetak');
@@ -1552,10 +1842,26 @@ function readObjects_(sheetName) {
   });
 }
 
-function requireSession_(token) {
+function requireSession_(token, allowedRoles) {
   const session = validateSession(token);
   if (!session) throw new Error('Unauthorized');
+
+  session.role = normalizeRole_(session.role);
+  if (!session.role) throw new Error('Unauthorized');
+
+  if (allowedRoles && allowedRoles.length && allowedRoles.indexOf(session.role) === -1) {
+    throw new Error('Unauthorized');
+  }
+
   return session;
+}
+
+function normalizeRole_(value) {
+  const role = clean_(value).toLowerCase();
+  if (role === 'admin' || role === 'administrator') return 'admin';
+  if (role === 'management' || role === 'manajemen') return 'management';
+  if (role === 'qrcc') return 'qrcc';
+  return '';
 }
 
 function clean_(value) {
