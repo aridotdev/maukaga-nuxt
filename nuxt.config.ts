@@ -28,5 +28,12 @@ export default defineNuxtConfig({
     '/confirm': { ssr: false },
     '/403': { ssr: false },
     '/dashboard/**': { ssr: false }
+  },
+  vite: {
+    optimizeDeps: {
+      include: [
+        'zod'
+      ]
+    }
   }
 })

@@ -187,6 +187,14 @@ where id = '3fafaf50-e6c2-43f0-a3ca-9a64883f19e3';
 
 5. Admin pertama buka email invite, masuk ke `/confirm`, set password, lalu login.
 
+Untuk verifikasi profile admin pertama:
+
+```sql
+select id, email, full_name, role, is_active
+from public.profiles
+where id = 'USER_ID_ADMIN';
+```
+
 ---
 
 ## Fase 2 - Nuxt: Konfigurasi & Supabase Module

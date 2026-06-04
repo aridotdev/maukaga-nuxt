@@ -9,15 +9,21 @@ type UserProfile = {
 export function useUserProfile() {
   const supabase = useSupabaseClient()
   const { getSession } = useCurrentSession()
-  const user = useSupabaseUser()
 
   const profile = useState<UserProfile | null>('user-profile', () => null)
 
   async function fetchProfile() {
     const session = await getSession()
-    const userId = user.value?.id
 
-    if (!session || !userId) {
+    if (!session) {
+      profile.value = null
+      return null
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+
+    if (userError || !userId) {
       profile.value = null
       return null
     }
