@@ -198,6 +198,8 @@ onMounted(() => {
 })
 
 async function loadUsers() {
+  if (isLoading.value) return
+
   isLoading.value = true
   loadError.value = ''
 

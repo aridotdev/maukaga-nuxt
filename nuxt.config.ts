@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   modules: ['@nuxt/fonts', '@nuxt/ui', '@nuxt/eslint','@nuxtjs/supabase'],
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
+    appsScriptApiUrl: import.meta.env.NUXT_APPS_SCRIPT_API_URL || import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
     public: {
       appsScriptApiUrl: import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
       appName: import.meta.env.NUXT_PUBLIC_APP_NAME || 'Mau KaGa',
