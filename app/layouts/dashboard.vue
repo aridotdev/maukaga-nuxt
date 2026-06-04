@@ -4,6 +4,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 const route = useRoute()
 const toast = useToast()
 const runTimeConfig = useRuntimeConfig()
+const { isAdmin, isManagement, isQrcc } = useUserProfile()
 
 const open = ref(false)
 
@@ -65,10 +66,56 @@ const links = [[{
   }]
 }]] satisfies NavigationMenuItem[][]
 
+const visibleLinks = computed<NavigationMenuItem[][]>(() => {
+  const primary: NavigationMenuItem[] = []
+
+  for (const item of links[0] || []) {
+    const to = String(item.to || '')
+
+    if (isManagement.value && [
+      '/dashboard/cetak-kartu',
+      '/dashboard/cetak-label-pengiriman'
+    ].includes(to)) {
+      continue
+    }
+
+    if (to === '/dashboard/settings') {
+      if (!isAdmin.value && !isQrcc.value) continue
+
+      primary.push({
+        ...item,
+        children: item.children?.filter((child) => {
+          const childTo = String((child as { to?: unknown }).to || '')
+
+          if (childTo.startsWith('/dashboard/settings/members')) {
+            return isAdmin.value
+          }
+
+          return true
+        })
+      } as NavigationMenuItem)
+      continue
+    }
+
+    primary.push(item)
+  }
+
+  return [primary]
+})
+
+const searchLinks = computed(() => visibleLinks.value.flatMap(group =>
+  group.map(item => ({
+    id: String(item.to || item.label),
+    label: String(item.label || ''),
+    icon: typeof item.icon === 'string' ? item.icon : undefined,
+    to: typeof item.to === 'string' ? item.to : undefined
+  })).filter(item => item.label)
+))
+
 const groups = computed(() => [{
   id: 'links',
   label: 'Go to',
-  items: links.flat()
+  items: searchLinks.value
 }, {
   id: 'code',
   label: 'Code',
@@ -134,9 +181,9 @@ onMounted(async () => {
       </template>
 
       <template #default="{ collapsed }">
-        <UNavigationMenu :collapsed="collapsed" :items="links[0]" orientation="vertical" tooltip popover />
+        <UNavigationMenu :collapsed="collapsed" :items="visibleLinks[0]" orientation="vertical" tooltip popover />
 
-        <UNavigationMenu :collapsed="collapsed" :items="links[1]" orientation="vertical" tooltip class="mt-auto" />
+        <UNavigationMenu :collapsed="collapsed" :items="visibleLinks[1] || []" orientation="vertical" tooltip class="mt-auto" />
       </template>
 
       <template #footer="{ collapsed }">

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const links = [[{
   label: 'Product Name',
   icon: 'i-lucide-scan-search',

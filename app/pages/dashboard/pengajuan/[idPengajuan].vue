@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 
+definePageMeta({
+  layout: 'dashboard',
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
 
 type PengajuanStatus = typeof VALID_STATUSES[number]
@@ -69,10 +74,6 @@ type InfoField = {
   href?: string
   mono?: boolean
 }
-
-definePageMeta({
-  layout: 'dashboard'
-})
 
 const route = useRoute()
 const router = useRouter()

@@ -5,6 +5,10 @@ import type { Period, Range } from '~/types'
 
 const { isNotificationsSlideoverOpen } = useDashboard()
 
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const range = shallowRef<Range>({
   start: sub(new Date(), { days: 14 }),
   end: new Date()

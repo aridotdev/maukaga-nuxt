@@ -11,6 +11,10 @@ import type {
   WarrantyPrintQueueRow
 } from '~/types/print'
 
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
 const USelect = resolveComponent('USelect')

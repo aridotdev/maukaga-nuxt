@@ -3,64 +3,53 @@ import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 
 const toast = useToast()
-const runtimeConfig = useRuntimeConfig()
 const router = useRouter()
+const supabase = useSupabaseClient()
+const { fetchProfile, hasValidRole, isActive } = useUserProfile()
+const { clearLegacySession, syncLegacySession } = useAuthBridge()
 
 definePageMeta({
-  layout: 'cs'
+  layout: 'cs',
+  middleware: ['guest-guard']
 })
 
 const glassCardClass = 'group flex cursor-pointer flex-col items-start justify-between rounded-3xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl hover:border-white/80 hover:bg-white/65 hover:shadow-[0_24px_48px_rgba(15,23,42,0.08)]'
 
 const schema = z.object({
-  username: z.string('Username wajib diisi').min(1, 'Username wajib diisi'),
+  email: z.string('Email wajib diisi').email('Format email tidak valid'),
   password: z.string('Password wajib diisi').min(1, 'Password wajib diisi')
 })
 
 type Schema = z.output<typeof schema>
-type ApiResult<T> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
-type LoginResponse = {
-  token: string
-  nama: string
-  username: string
-}
 
 const state = reactive<Partial<Schema>>({
-  username: '',
+  email: '',
   password: ''
 })
 
 const show = ref(false)
 const isLoading = ref(false)
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
-
-onMounted(() => {
-  if (sessionStorage.getItem('admin_token')) {
-    router.replace('/dashboard')
-  }
-})
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   isLoading.value = true
 
   try {
-    const result = await callAPI<LoginResponse>('adminLogin', {
-      username: event.data.username,
+    const { error } = await supabase.auth.signInWithPassword({
+      email: event.data.email,
       password: event.data.password
     })
 
-    if (!result.success || !result.data?.token) {
-      throw new Error(result.error || 'Login gagal')
+    if (error) throw error
+
+    await fetchProfile()
+
+    if (!hasValidRole.value || !isActive.value) {
+      clearLegacySession()
+      await router.push('/403')
+      return
     }
 
-    sessionStorage.setItem('admin_token', result.data.token)
-    sessionStorage.setItem('admin_nama', result.data.nama || 'Admin')
-    sessionStorage.setItem('admin_username', result.data.username || event.data.username)
+    await syncLegacySession()
 
     toast.add({
       title: 'Login berhasil',
@@ -78,24 +67,6 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   } finally {
     isLoading.value = false
   }
-}
-
-async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) {
-    throw new Error('URL Google Apps Script belum dikonfigurasi.')
-  }
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload })
-  })
-
-  if (!response.ok) {
-    throw new Error(`Google Apps Script merespons ${response.status}.`)
-  }
-
-  return response.json() as Promise<ApiResult<T>>
 }
 
 function getErrorMessage(error: unknown) {
@@ -125,14 +96,15 @@ function getErrorMessage(error: unknown) {
           @submit="onSubmit"
         >
           <UFormField
-            label="Username"
-            name="username"
+            label="Email"
+            name="email"
             size="lg"
           >
             <UInput
-              v-model="state.username"
+              v-model="state.email"
               class="w-full"
-              autocomplete="username"
+              autocomplete="email"
+              type="email"
             />
           </UFormField>
 

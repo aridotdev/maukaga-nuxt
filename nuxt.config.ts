@@ -4,7 +4,7 @@ const defaultAppsScriptApiUrl = 'https://script.google.com/macros/s/AKfycbxAikXa
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['@nuxt/fonts', '@nuxt/ui', '@nuxt/eslint'],
+  modules: ['@nuxt/fonts', '@nuxt/ui', '@nuxt/eslint','@nuxtjs/supabase'],
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     public: {
@@ -13,5 +13,20 @@ export default defineNuxtConfig({
       maxUploadMb: Number(import.meta.env.NUXT_PUBLIC_MAX_UPLOAD_MB || 10),
       maxItems: Number(import.meta.env.NUXT_PUBLIC_MAX_ITEMS || 10)
     }
+  },
+  supabase: {
+    redirect: false,
+    redirectOptions: {
+      login: '/login',
+      callback: '/confirm',
+      exclude: ['/', '/login', '/confirm', '/403']
+    }
+  },
+
+  routeRules: {
+    '/login': { ssr: false },
+    '/confirm': { ssr: false },
+    '/403': { ssr: false },
+    '/dashboard/**': { ssr: false }
   }
 })

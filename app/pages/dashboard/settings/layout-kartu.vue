@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { AlertState, CardTypeKey, PrintLayout, PrintLayoutState } from '~/types/print'
 
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const toast = useToast()
 const router = useRouter()
 const { callApi } = useAppsScriptApi()

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const state = reactive<{ [key: string]: boolean }>({
   email: true,
   desktop: false,
@@ -6,6 +10,7 @@ const state = reactive<{ [key: string]: boolean }>({
   weekly_digest: false,
   important_updates: true
 })
+
 
 const sections = [{
   title: 'Notification channels',

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { AlertState, ShippingLabel, WarrantyPrintQueueResponse } from '~/types/print'
 
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
+
 const toast = useToast()
 const router = useRouter()
 const route = useRoute()

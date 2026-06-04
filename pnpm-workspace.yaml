@@ -4,3 +4,10 @@ allowBuilds:
   maplibre-gl: true
   unrs-resolver: true
   vue-demi: true
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - esbuild
+  - maplibre-gl
+  - unrs-resolver
+  - vue-demi

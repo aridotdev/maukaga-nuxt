@@ -2,6 +2,10 @@
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 
+definePageMeta({
+  middleware: ['auth-guard', 'role-guard']
+})
+
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 

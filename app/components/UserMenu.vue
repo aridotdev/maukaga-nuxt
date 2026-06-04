@@ -7,17 +7,31 @@ defineProps<{
 
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
+const supabase = useSupabaseClient()
+const supabaseUser = useSupabaseUser()
+const { profile, isManagement } = useUserProfile()
+const { clearLegacySession } = useAuthBridge()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
 
-const user = ref({
-  name: 'Benjamin Canac',
-  avatar: {
-    src: 'https://github.com/benjamincanac.png',
-    alt: 'Benjamin Canac'
+const user = computed(() => {
+  const name = profile.value?.full_name || supabaseUser.value?.email || 'User'
+
+  return {
+    name,
+    avatar: {
+      alt: name
+    }
   }
 })
+
+async function logout() {
+  await supabase.auth.signOut()
+  clearLegacySession()
+  useState('user-profile').value = null
+  await navigateTo('/login')
+}
 
 const items = computed<DropdownMenuItem[][]>(() => ([[{
   type: 'label',
@@ -27,7 +41,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   label: 'Settings',
   icon: 'i-lucide-settings',
   to: '/dashboard/settings'
-}], [{
+}].filter(() => !isManagement.value), [{
   label: 'Theme',
   icon: 'i-lucide-palette',
   children: [{
@@ -100,7 +114,8 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   }]
 }], [{
   label: 'Log out',
-  icon: 'i-lucide-log-out'
+  icon: 'i-lucide-log-out',
+  onSelect: logout
 }]]))
 </script>
 
