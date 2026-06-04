@@ -1,23 +1,17 @@
 export function useAdminApi() {
   const supabase = useSupabaseClient()
-  const runtimeConfig = useRuntimeConfig()
-  const gasUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 
   async function callAdminAction<T>(
     action: string,
     payload: Record<string, unknown> = {}
   ) {
-    if (!gasUrl.value) {
-      throw new Error('URL Google Apps Script belum dikonfigurasi.')
-    }
-
     const { data, error } = await supabase.auth.getSession()
     if (error) throw error
     if (!data.session) throw new Error('Tidak ada session aktif.')
 
-    const response = await fetch(gasUrl.value, {
+    const response = await fetch('/api/admin-action', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action,
         token: data.session.access_token,
@@ -26,7 +20,8 @@ export function useAdminApi() {
     })
 
     if (!response.ok) {
-      throw new Error(`Google Apps Script merespons ${response.status}.`)
+      const errorBody = await readErrorBody(response)
+      throw new Error(errorBody || `Request admin merespons ${response.status}.`)
     }
 
     const result = await response.json() as {
@@ -43,4 +38,18 @@ export function useAdminApi() {
   }
 
   return { callAdminAction }
+}
+
+async function readErrorBody(response: Response) {
+  try {
+    const body = await response.json() as {
+      message?: string
+      statusMessage?: string
+      error?: string
+    }
+
+    return body.message || body.statusMessage || body.error || ''
+  } catch {
+    return ''
+  }
 }

@@ -255,6 +255,7 @@ function getSupabasePropertyName_(key) {
 function supabaseUserHeaders_(token) {
   const config = requireSupabaseProps_(['publishableKey']);
   return {
+    'User-Agent': 'MauKaGa-Google-Apps-Script/1.0',
     apikey: config.publishableKey,
     Authorization: 'Bearer ' + token,
   };
@@ -263,6 +264,7 @@ function supabaseUserHeaders_(token) {
 function supabaseAdminHeaders_() {
   const config = requireSupabaseProps_(['secretKey']);
   const headers = {
+    'User-Agent': 'MauKaGa-Google-Apps-Script/1.0',
     apikey: config.secretKey,
   };
 

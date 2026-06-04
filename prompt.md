@@ -40,7 +40,7 @@ Karena signup publik dimatikan:
 ```sql
 update public.profiles
 set role = 'admin',
-    full_name = 'Nama Admin',
+    full_name = 'Admin',
     is_active = true
 where id = 'USER_ID_ADMIN';
 ```
