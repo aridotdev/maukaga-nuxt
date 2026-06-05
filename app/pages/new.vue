@@ -751,25 +751,19 @@ function getErrorMessage(error: unknown) {
     <section
       v-show="showPrintPreview"
       id="section-print"
-      class="mx-auto max-w-[210mm] bg-white p-6 text-sm text-slate-900"
+      class="mx-auto max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
     >
       <div class="no-print mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-900">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p class="text-xs font-bold uppercase tracking-wider text-blue-500">
-              Preview Draft
-            </p>
             <h2 class="text-lg font-bold">
-              Draft {{ printId }} siap dicetak
+              Preview Cetak Form {{ printId }}
             </h2>
-            <p class="mt-1 text-sm text-blue-700">
-              Setelah ditandatangani, lanjutkan upload dokumen melalui halaman Final Submit.
-            </p>
           </div>
           <div class="flex flex-col gap-2 sm:flex-row">
             <UButton
               type="button"
-              label="Kembali ke Form"
+              label="Kembali"
               icon="i-lucide-arrow-left"
               color="neutral"
               variant="subtle"
@@ -802,10 +796,10 @@ function getErrorMessage(error: unknown) {
       <table class="mt-5 w-full border-collapse text-sm">
         <tbody>
           <tr v-for="row in printMetadataRows" :key="row.label">
-            <th class="w-1/3 border border-slate-400 bg-slate-100 p-2 text-left">
+            <th class="w-1/3 border border-slate-400 bg-slate-100 p-1 text-left">
               {{ row.label }}
             </th>
-            <td class="border border-slate-400 p-2">
+            <td class="border border-slate-400 p-1">
               {{ row.value }}
             </td>
           </tr>
@@ -819,32 +813,32 @@ function getErrorMessage(error: unknown) {
         <table class="mt-2 w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th class="border border-slate-400 bg-slate-100 p-2">
+              <th class="border border-slate-400 bg-slate-100 p-1">
                 No
               </th>
-              <th class="border border-slate-400 bg-slate-100 p-2">
+              <th class="border border-slate-400 bg-slate-100 p-1">
                 Produk
               </th>
-              <th class="border border-slate-400 bg-slate-100 p-2">
+              <th class="border border-slate-400 bg-slate-100 p-1">
                 Model
               </th>
-              <th class="border border-slate-400 bg-slate-100 p-2">
+              <th class="border border-slate-400 bg-slate-100 p-1">
                 Nomor Seri
               </th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, index) in printPayload.items" :key="`${item.model}-${item.nomorSeri}-${index}`">
-              <td class="border border-slate-400 p-2 text-center">
+              <td class="border border-slate-400 p-1 text-center">
                 {{ index + 1 }}
               </td>
-              <td class="border border-slate-400 p-2">
+              <td class="border border-slate-400 p-1">
                 {{ item.produk }}
               </td>
-              <td class="border border-slate-400 p-2">
+              <td class="border border-slate-400 p-1">
                 {{ item.model }}
               </td>
-              <td class="border border-slate-400 p-2">
+              <td class="border border-slate-400 p-1">
                 {{ item.nomorSeri }}
               </td>
             </tr>
@@ -873,9 +867,9 @@ function getErrorMessage(error: unknown) {
             </thead>
             <tbody>
               <tr>
-                <td class="h-20 w-1/3 border border-black p-1" />
-                <td class="h-20 w-1/3 border border-black p-1" />
-                <td class="h-20 w-1/3 border border-black p-1" />
+                <td class="h-16 w-1/3 border border-black p-1" />
+                <td class="h-16 w-1/3 border border-black p-1" />
+                <td class="h-16 w-1/3 border border-black p-1" />
               </tr>
               <tr>
                 <td class="w-1/3 border border-black p-1 text-center font-bold" />
@@ -890,7 +884,7 @@ function getErrorMessage(error: unknown) {
           </table>
         </div>
 
-        <div class="mt-14 flex items-start gap-4">
+        <div class="mt-8 flex items-start gap-4">
           <p class="w-[30%] pt-1 text-[11px] font-semibold">
             Disetujui dan diberikan :
           </p>
@@ -907,8 +901,8 @@ function getErrorMessage(error: unknown) {
             </thead>
             <tbody>
               <tr>
-                <td class="h-20 w-1/2 border border-black p-1" />
-                <td class="h-20 w-1/2 border border-black p-1" />
+                <td class="h-16 w-1/2 border border-black p-1" />
+                <td class="h-16 w-1/2 border border-black p-1" />
               </tr>
               <tr>
                 <td class="w-1/2 border border-black p-1 text-center font-bold">
@@ -965,7 +959,7 @@ function getErrorMessage(error: unknown) {
 
   @page {
     size: A4;
-    margin: 14mm;
+    margin: 5mm;
   }
 
   body {

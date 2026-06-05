@@ -162,17 +162,6 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
   }
 }
 
-function handleLoadStoredDraft() {
-  const saved = getStoredDraftReference()
-  if (!saved.idPengajuan) {
-    showToast('Belum ada pengajuan terakhir di browser ini. Masukkan ID Pengajuan terlebih dahulu.', 'error')
-    return
-  }
-
-  searchId.value = saved.idPengajuan
-  void handleLoadDraft({ idPengajuan: saved.idPengajuan, source: 'stored' })
-}
-
 function handleReviewPrint() {
   if (!isDraftReady.value) {
     showToast('Data pengajuan belum dimuat. Cari ID Pengajuan terlebih dahulu.', 'error')
@@ -279,15 +268,6 @@ function getErrorMessage(error: unknown) {
               </p>
             </div>
             <!-- Lencana Status Aktif -->
-            <Transition name="fade">
-              <div v-if="isDraftReady" class="hidden items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 md:flex">
-                <span class="relative flex size-2.5">
-                  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                  <span class="relative inline-flex size-2.5 rounded-full bg-green-500" />
-                </span>
-                <span class="text-xs font-semibold text-green-700">Pengajuan Ditemukan</span>
-              </div>
-            </Transition>
           </div>
 
           <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:gap-4">
@@ -316,18 +296,6 @@ function getErrorMessage(error: unknown) {
               :loading="isLoadingDraft"
               :disabled="isLoadingDraft || isLoadingStoredDraft"
               @click="handleLoadDraft({ source: 'manual' })"
-            />
-            <UButton
-              type="button"
-              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold shadow-md shadow-blue-900/10 transition-all hover:-translate-y-0.5 hover:shadow-lg md:w-auto md:shrink-0"
-              color="neutral"
-              variant="solid"
-              size="xl"
-              icon="i-lucide-history"
-              :label="isLoadingStoredDraft ? 'Memuat...' : 'Pengajuan Terakhir'"
-              :loading="isLoadingStoredDraft"
-              :disabled="isLoadingDraft || isLoadingStoredDraft"
-              @click="handleLoadStoredDraft"
             />
           </div>
         </div>
@@ -395,16 +363,7 @@ function getErrorMessage(error: unknown) {
 
             <!-- ACTION REVIEW -->
             <div class="flex flex-col-reverse justify-end gap-3 border-t border-slate-200/60 pt-6 sm:flex-row">
-              <UButton
-                type="button"
-                class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold text-slate-600 hover:bg-slate-100 sm:w-auto"
-                color="neutral"
-                variant="ghost"
-                size="lg"
-                icon="i-lucide-arrow-left"
-                label="Cari ID Lain"
-                @click="backToForm"
-              />
+              
               <UButton
                 type="button"
                 class="w-full justify-center rounded-xl px-8 py-3.5 font-bold shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:w-auto"
@@ -425,20 +384,14 @@ function getErrorMessage(error: unknown) {
       <section
         v-else
         id="section-print"
-        class="mx-auto max-w-[210mm] bg-white p-6 text-sm text-slate-900"
+        class="mx-auto max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
       >
         <div class="no-print mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-900">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p class="text-xs font-bold uppercase tracking-wider text-blue-500">
-                Preview Cetak Ulang
-              </p>
               <h2 class="text-lg font-bold">
-                Cetak Ulang Form {{ printId }}
+                Preview Cetak Ulang Form {{ printId }}
               </h2>
-              <p class="mt-1 text-sm text-blue-700">
-                Periksa kembali data pada form di bawah ini sebelum dicetak.
-              </p>
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
               <UButton
@@ -460,7 +413,7 @@ function getErrorMessage(error: unknown) {
           </div>
         </div>
 
-        <div class="border-b border-slate-300 pb-4 text-center">
+        <div class="border-slate-300 text-center">
           <h1 class="text-xl font-bold">
             Form Permintaan Kartu Garansi
           </h1>
@@ -469,10 +422,10 @@ function getErrorMessage(error: unknown) {
         <table class="mt-5 w-full border-collapse text-sm">
           <tbody>
             <tr v-for="row in printMetadataRows" :key="row.label">
-              <th class="w-1/3 border border-slate-400 bg-slate-100 p-2 text-left">
+              <th class="w-1/3 border border-slate-400 bg-slate-100 p-1 text-left">
                 {{ row.label }}
               </th>
-              <td class="border border-slate-400 p-2">
+              <td class="border border-slate-400 p-1">
                 {{ row.value }}
               </td>
             </tr>
@@ -480,38 +433,38 @@ function getErrorMessage(error: unknown) {
         </table>
 
         <template v-if="printHasMultipleItems">
-          <h2 class="mt-6 font-bold">
+          <h2 class="mt-4 font-bold">
             Daftar Item
           </h2>
           <table class="mt-2 w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th class="border border-slate-400 bg-slate-100 p-2">
+                <th class="border border-slate-400 bg-slate-100 p-1">
                   No
                 </th>
-                <th class="border border-slate-400 bg-slate-100 p-2">
+                <th class="border border-slate-400 bg-slate-100 p-1">
                   Produk
                 </th>
-                <th class="border border-slate-400 bg-slate-100 p-2">
+                <th class="border border-slate-400 bg-slate-100 p-1">
                   Model
                 </th>
-                <th class="border border-slate-400 bg-slate-100 p-2">
+                <th class="border border-slate-400 bg-slate-100 p-1">
                   Nomor Seri
                 </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(item, index) in printPayload.items" :key="`${item.model}-${item.nomorSeri}-${index}`">
-                <td class="border border-slate-400 p-2 text-center">
+                <td class="border border-slate-400 p-1 text-center">
                   {{ index + 1 }}
                 </td>
-                <td class="border border-slate-400 p-2">
+                <td class="border border-slate-400 p-1">
                   {{ item.produk }}
                 </td>
-                <td class="border border-slate-400 p-2">
+                <td class="border border-slate-400 p-1">
                   {{ item.model }}
                 </td>
-                <td class="border border-slate-400 p-2">
+                <td class="border border-slate-400 p-1">
                   {{ item.nomorSeri }}
                 </td>
               </tr>
@@ -540,9 +493,9 @@ function getErrorMessage(error: unknown) {
               </thead>
               <tbody>
                 <tr>
-                  <td class="h-20 w-1/3 border border-black p-1" />
-                  <td class="h-20 w-1/3 border border-black p-1" />
-                  <td class="h-20 w-1/3 border border-black p-1" />
+                  <td class="h-16 w-1/3 border border-black p-1" />
+                  <td class="h-16 w-1/3 border border-black p-1" />
+                  <td class="h-16 w-1/3 border border-black p-1" />
                 </tr>
                 <tr>
                   <td class="w-1/3 border border-black p-1 text-center font-bold" />
@@ -557,7 +510,7 @@ function getErrorMessage(error: unknown) {
             </table>
           </div>
 
-          <div class="mt-14 flex items-start gap-4">
+          <div class="mt-8 flex items-start gap-4">
             <p class="w-[30%] pt-1 text-[11px] font-semibold">
               Disetujui dan diberikan :
             </p>
@@ -574,8 +527,8 @@ function getErrorMessage(error: unknown) {
               </thead>
               <tbody>
                 <tr>
-                  <td class="h-20 w-1/2 border border-black p-1" />
-                  <td class="h-20 w-1/2 border border-black p-1" />
+                  <td class="h-16 w-1/2 border border-black p-1" />
+                  <td class="h-16 w-1/2 border border-black p-1" />
                 </tr>
                 <tr>
                   <td class="w-1/2 border border-black p-1 text-center font-bold">
@@ -671,7 +624,7 @@ function getErrorMessage(error: unknown) {
 
   @page {
     size: A4;
-    margin: 14mm;
+    margin: 5mm;
   }
 
   body {
