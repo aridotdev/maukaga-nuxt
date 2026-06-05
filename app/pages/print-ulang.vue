@@ -31,18 +31,8 @@ type DraftData = {
   items?: DraftItem[]
 }
 
-type DraftStatusResponse = {
+type LoadDraftReference = {
   idPengajuan?: string
-  status?: string
-  resumeToken?: string
-}
-
-type StoredDraftReference = {
-  idPengajuan: string
-  resumeToken: string
-}
-
-type LoadDraftReference = Partial<StoredDraftReference> & {
   fromUrl?: boolean
   source?: 'manual' | 'stored' | 'url'
 }
@@ -62,14 +52,13 @@ const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptAp
 
 const searchId = ref('')
 const currentDraftId = ref('')
-const currentResumeToken = ref('')
 const loadedDraft = ref<DraftData | null>(null)
 const hasSearchInputError = ref(false)
 const isLoadingDraft = ref(false)
 const isLoadingStoredDraft = ref(false)
 const showPrintPreview = ref(false)
 
-const isDraftReady = computed(() => !!currentDraftId.value && !!currentResumeToken.value && !!loadedDraft.value)
+const isDraftReady = computed(() => !!currentDraftId.value && !!loadedDraft.value)
 const printPayload = computed(() => loadedDraft.value || {})
 const printId = computed(() => currentDraftId.value || '-')
 const printTanggalForm = computed(() => formatDate(printPayload.value.tanggalForm || ''))
@@ -128,22 +117,21 @@ function showToast(title: string, color: ToastColor = 'info', description?: stri
 
 function initializeDraftResume() {
   const fromUrl = getDraftReferenceFromUrl()
-  if (fromUrl.idPengajuan && fromUrl.resumeToken) {
+  if (fromUrl.idPengajuan) {
     searchId.value = fromUrl.idPengajuan
-    void handleLoadDraft({ ...fromUrl, fromUrl: true, source: 'url' })
+    void handleLoadDraft({ idPengajuan: fromUrl.idPengajuan, fromUrl: true, source: 'url' })
   }
 }
 
 async function handleLoadDraft(reference: LoadDraftReference = {}) {
   let idPengajuan = String(reference.idPengajuan || searchId.value || '').trim()
-  let resumeToken = String(reference.resumeToken || '').trim()
   const saved = getStoredDraftReference()
 
-  if (!resumeToken && saved.idPengajuan === idPengajuan) resumeToken = saved.resumeToken
+  if (!idPengajuan && saved.idPengajuan) idPengajuan = saved.idPengajuan
 
   if (!idPengajuan) {
     hasSearchInputError.value = true
-    showToast('Masukkan ID Pengajuan, klik Draft Terakhir, atau buka Link Pengajuan.', 'error')
+    showToast('Masukkan ID Pengajuan, klik Pengajuan Terakhir, atau buka Link Pengajuan.', 'error')
     return
   }
 
@@ -153,20 +141,14 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
   showPrintPreview.value = false
 
   try {
-    if (!resumeToken) {
-      const statusResult = await callAPI<DraftStatusResponse>('checkDraftPengajuanStatus', { idPengajuan })
-      if (!statusResult.success) throw new Error(statusResult.error || 'ID Pengajuan tidak bisa dimuat.')
-
-      resumeToken = String(statusResult.data?.resumeToken || '').trim()
-      if (!resumeToken) throw new Error('Pengajuan ditemukan, tetapi Resume Token tidak tersedia.')
-    }
-
-    const result = await callAPI<DraftData>('getDraftPengajuan', { idPengajuan, resumeToken })
+    // Print ulang berlaku untuk semua status (termasuk yang sudah final),
+    // pakai action khusus yang tidak butuh resumeToken & tidak filter status.
+    const result = await callAPI<DraftData>('getPengajuanForPrint', { idPengajuan })
     if (!result.success) throw new Error(result.error || 'Pengajuan gagal dimuat')
 
     idPengajuan = result.data?.idPengajuan || idPengajuan
     loadedDraft.value = normalizeDraftData(result.data || {}, idPengajuan)
-    setDraftReference(idPengajuan, resumeToken)
+    setDraftReference(idPengajuan)
 
     if (reference.fromUrl) clearResumeParamsFromUrl()
 
@@ -174,7 +156,6 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
   } catch (error) {
     loadedDraft.value = null
     currentDraftId.value = ''
-    currentResumeToken.value = ''
     showToast('Pengajuan gagal dimuat', 'error', getErrorMessage(error))
   } finally {
     loadingState.value = false
@@ -183,13 +164,13 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
 
 function handleLoadStoredDraft() {
   const saved = getStoredDraftReference()
-  if (!saved.idPengajuan || !saved.resumeToken) {
-    showToast('Belum ada pengajuan terakhir di browser ini. Buka Link Pengajuan jika memakai perangkat lain.', 'error')
+  if (!saved.idPengajuan) {
+    showToast('Belum ada pengajuan terakhir di browser ini. Masukkan ID Pengajuan terlebih dahulu.', 'error')
     return
   }
 
   searchId.value = saved.idPengajuan
-  void handleLoadDraft({ ...saved, source: 'stored' })
+  void handleLoadDraft({ idPengajuan: saved.idPengajuan, source: 'stored' })
 }
 
 function handleReviewPrint() {
@@ -208,9 +189,8 @@ function printDraft() {
   window.print()
 }
 
-function setDraftReference(idPengajuan: string, resumeToken: string) {
+function setDraftReference(idPengajuan: string) {
   currentDraftId.value = idPengajuan || ''
-  currentResumeToken.value = resumeToken || ''
   searchId.value = currentDraftId.value
 
   if (!import.meta.client || !currentDraftId.value) return
@@ -218,7 +198,6 @@ function setDraftReference(idPengajuan: string, resumeToken: string) {
   try {
     localStorage.setItem(draftStorageKey, JSON.stringify({
       idPengajuan: currentDraftId.value,
-      resumeToken: currentResumeToken.value,
       savedAt: new Date().toISOString()
     }))
   } catch {
@@ -226,21 +205,20 @@ function setDraftReference(idPengajuan: string, resumeToken: string) {
   }
 }
 
-function getStoredDraftReference(): StoredDraftReference {
-  if (!import.meta.client) return { idPengajuan: '', resumeToken: '' }
+function getStoredDraftReference(): { idPengajuan: string } {
+  if (!import.meta.client) return { idPengajuan: '' }
 
   try {
-    const saved = JSON.parse(localStorage.getItem(draftStorageKey) || '{}') as Partial<StoredDraftReference>
-    return { idPengajuan: saved.idPengajuan || '', resumeToken: saved.resumeToken || '' }
+    const saved = JSON.parse(localStorage.getItem(draftStorageKey) || '{}') as { idPengajuan?: string }
+    return { idPengajuan: saved.idPengajuan || '' }
   } catch {
-    return { idPengajuan: '', resumeToken: '' }
+    return { idPengajuan: '' }
   }
 }
 
-function getDraftReferenceFromUrl(): StoredDraftReference {
+function getDraftReferenceFromUrl(): { idPengajuan: string } {
   return {
-    idPengajuan: getQueryValue(route.query.id) || getQueryValue(route.query.idPengajuan),
-    resumeToken: getQueryValue(route.query.token) || getQueryValue(route.query.resumeToken)
+    idPengajuan: getQueryValue(route.query.id) || getQueryValue(route.query.idPengajuan)
   }
 }
 
@@ -248,8 +226,6 @@ function clearResumeParamsFromUrl() {
   const query = { ...route.query }
   delete query.id
   delete query.idPengajuan
-  delete query.token
-  delete query.resumeToken
   void router.replace({ path: route.path, query })
 }
 

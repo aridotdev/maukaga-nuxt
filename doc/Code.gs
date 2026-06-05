@@ -108,6 +108,8 @@ function doPost(e) {
         return jsonResponse_(handleSaveDraftPengajuan(data));
       case 'getDraftPengajuan':
         return jsonResponse_(handleGetDraftPengajuan(data));
+      case 'getPengajuanForPrint':
+        return jsonResponse_(handleGetPengajuanForPrint(data));
       case 'checkDraftPengajuanStatus':
         return jsonResponse_(handleCheckDraftPengajuanStatus(data));
       case 'checkPengajuanStatus':
@@ -418,6 +420,41 @@ function handleGetDraftPengajuan(data) {
       tanggalForm: formatDateOnly_(row[col['Tanggal Form']]),
       catatanTambahan: row[col['Catatan Tambahan']],
       items: getItemsForPengajuan_(id),
+    },
+  };
+}
+
+function handleGetPengajuanForPrint(data) {
+  // Untuk fitur "Print Ulang" — mengambil data pengajuan berdasarkan ID saja
+  // (tanpa Resume Token, tanpa filter status). Berlaku untuk semua status
+  // (Baru, Disetujui, Ditolak, Selesai, maupun Menunggu Upload) supaya
+  // user bisa mencetak ulang form meskipun pengajuan sudah final.
+  const id = clean_(data.idPengajuan);
+  if (!id) throw new Error('Masukkan ID Pengajuan terlebih dahulu.');
+
+  const record = findPengajuanRecord_(id);
+  if (!record) throw new Error('ID Pengajuan tidak ditemukan. Periksa kembali ID yang dimasukkan.');
+
+  const row = record.row;
+  const col = record.col;
+  const status = clean_(row[col['Status']]);
+  const allowed = VALID_STATUSES.concat([DRAFT_STATUS]);
+  if (allowed.indexOf(status) === -1) {
+    throw new Error('Status pengajuan tidak bisa ditampilkan.');
+  }
+
+  return {
+    success: true,
+    data: {
+      idPengajuan: id,
+      status: status,
+      nama: row[col['Nama']],
+      bagianCabang: row[col['Bagian/Cabang']],
+      pemilik: row[col['Pemilik']],
+      alasanPengajuan: row[col['Alasan Pengajuan']],
+      tanggalForm: formatDateOnly_(row[col['Tanggal Form']]),
+      catatanTambahan: row[col['Catatan Tambahan']],
+      items: getItemsForPengajuan_(id, status),
     },
   };
 }
