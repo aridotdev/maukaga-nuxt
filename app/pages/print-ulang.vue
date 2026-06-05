@@ -84,6 +84,7 @@ const printMetadataRows = computed<PrintRow[]>(() => {
   return rows
 })
 const printHasMultipleItems = computed(() => (printPayload.value.items?.length || 0) > 1)
+const printDraft = usePrintWithFilename('Pengajuan', () => printId.value)
 
 onMounted(() => {
   initializeDraftResume()
@@ -172,10 +173,6 @@ function handleReviewPrint() {
 
 function backToForm() {
   showPrintPreview.value = false
-}
-
-function printDraft() {
-  window.print()
 }
 
 function setDraftReference(idPengajuan: string) {

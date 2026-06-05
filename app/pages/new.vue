@@ -125,6 +125,7 @@ const printMetadataRows = computed<PrintRow[]>(() => {
   return rows
 })
 const printHasMultipleItems = computed(() => printPayload.value.items.length > 1)
+const printDraft = usePrintWithFilename('Pengajuan', () => printId.value)
 
 onMounted(() => {
   loadModelProduk()
@@ -412,10 +413,6 @@ function buildFinalSubmitUrl(idPengajuan: string, resumeToken: string) {
 
 function backToForm() {
   showPrintPreview.value = false
-}
-
-function printDraft() {
-  window.print()
 }
 
 function clonePayload(payload: SubmissionPayload): SubmissionPayload {

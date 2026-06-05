@@ -250,6 +250,6 @@ async function handleApiError(error: unknown, fallback: string) {
       </template>
     </UDashboardPanel>
 
-    <PrintLabelPengiriman ref="labelPrintRef" :labels="labelPrintRows" />
+    <PrintLabelPengiriman ref="labelPrintRef" :labels="labelPrintRows" :batch-id="batchId" />
   </div>
 </template>

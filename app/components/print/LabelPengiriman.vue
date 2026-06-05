@@ -3,8 +3,9 @@ import type { ShippingLabel } from '~/types/print'
 
 const PRINT_CLASS = 'is-shipping-label-printing'
 
-defineProps<{
+const props = defineProps<{
   labels: ShippingLabel[]
+  batchId?: string
 }>()
 
 function getBranchClasses(cabang: string) {
@@ -20,12 +21,16 @@ function stopPrinting() {
   document.body.classList.remove(PRINT_CLASS)
 }
 
+const printBase = usePrintWithFilename('LabelCabang', () => {
+  return props.batchId || props.labels[0]?.cabang || 'preview'
+})
+
 async function print() {
   await nextTick()
 
   window.setTimeout(() => {
     document.body.classList.add(PRINT_CLASS)
-    window.print()
+    printBase()
   }, 100)
 }
 

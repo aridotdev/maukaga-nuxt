@@ -41,12 +41,17 @@ function stopPrinting() {
   document.body.classList.remove(PRINT_CLASS)
 }
 
+const printBase = usePrintWithFilename('KartuGaransi', () => {
+  const first = props.rows[0]
+  return first?.printBatchId || first?.key || 'batch'
+})
+
 async function print() {
   await nextTick()
 
   window.setTimeout(() => {
     document.body.classList.add(PRINT_CLASS)
-    window.print()
+    printBase()
   }, 100)
 }
 
