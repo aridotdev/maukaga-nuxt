@@ -274,7 +274,8 @@ function getStatusColor(status: DashboardStatus) {
 async function showDetail(row: DashboardPengajuanRow) {
   if (!row.idPengajuan) return
 
-  await router.push(`/dashboard/pengajuan/${encodeURIComponent(row.idPengajuan)}`)
+  const url = router.resolve(`/dashboard/pengajuan/${encodeURIComponent(row.idPengajuan)}`).href
+  window.open(url, '_blank')
 }
 
 function getErrorMessage(error: unknown) {
