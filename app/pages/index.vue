@@ -10,7 +10,7 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
 
 <template>
   <!-- LAUNCHER CENTRAL PORTAL -->
-  <section class="mx-auto my-auto flex w-full max-w-6xl flex-col items-center justify-center py-10 md:py-0">
+  <section class="mx-auto my-auto flex w-full flex-col items-center justify-center py-10 md:py-0">
     <!-- Title & Greeting Section -->
     <div class="mb-8 max-w-2xl px-4 text-center md:mb-12">
       <h2 class="mb-3 text-3xl font-bold tracking-tight text-[#0F172A] md:mb-4 md:text-5xl">
@@ -22,7 +22,7 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
     </div>
 
     <!-- CARDS GRID -->
-    <div class="grid w-full grid-cols-1 gap-6 px-2 md:grid-cols-3 md:gap-8 md:px-4">
+    <div class="grid w-full grid-cols-1 gap-6 px-2 md:grid-cols-2 md:gap-6 md:px-4 lg:grid-cols-4 lg:gap-8">
       <!-- CARD 1: BUAT PERMINTAAN BARU -->
       <NuxtLink to="/new" :class="glassCardClass">
         <span>
@@ -134,6 +134,47 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
         </span>
         <span :class="actionButtonClass">
           <span>Upload Berkas</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4 transition-transform group-hover:translate-x-1"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </span>
+      </NuxtLink>
+
+      <!-- CARD 4: PRINT ULANG PENGAJUAN -->
+      <NuxtLink to="/print-ulang" :class="glassCardClass">
+        <span>
+          <span :class="iconContainerClass">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 md:h-7 md:w-7"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M9 14l-1.5 1.5L4 12m16 4l-1.5 1.5L20 16M6 8h12M6 8V6a2 2 0 012-2h8a2 2 0 012 2v2m-12 0h12M6 8v8a2 2 0 002 2h8a2 2 0 002-2V8M10 12h4"
+              />
+            </svg>
+          </span>
+          <span class="mb-2 block text-left text-lg font-bold tracking-tight text-[#0F172A] md:mb-3 md:text-xl">
+            Print Ulang Pengajuan
+          </span>
+          <span class="mb-6 block text-left text-xs leading-relaxed text-[#64748B] md:text-sm">
+            Cetak ulang form pengajuan yang sudah pernah dibuat berdasarkan ID Pengajuan. Cocok untuk kebutuhan arsip atau dokumen fisik tambahan.
+          </span>
+        </span>
+        <span :class="actionButtonClass">
+          <span>Cetak Ulang</span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             class="h-4 w-4 transition-transform group-hover:translate-x-1"
