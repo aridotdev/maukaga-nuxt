@@ -33,7 +33,11 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: [
-        'zod'
+        'zod',
+        '@unovis/vue',
+        '@vueuse/core',
+        'date-fns',
+        
       ]
     }
   }
