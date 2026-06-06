@@ -37,6 +37,10 @@ function getWarrantyPageStyle(row: WarrantyPrintQueueRow) {
   }
 }
 
+function startPrinting() {
+  document.body.classList.add(PRINT_CLASS)
+}
+
 function stopPrinting() {
   document.body.classList.remove(PRINT_CLASS)
 }
@@ -47,12 +51,29 @@ const printBase = usePrintWithFilename('KartuGaransi', () => {
 })
 
 async function print() {
+  // 1. Tunggu sampai DOM merefleksikan prop `rows` terbaru.
   await nextTick()
 
-  window.setTimeout(() => {
-    document.body.classList.add(PRINT_CLASS)
-    printBase()
-  }, 100)
+  // 2. Tunggu satu frame agar layout hasil render stabil.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+  // 3. Aktifkan class di body untuk men-trigger mode cetak.
+  startPrinting()
+
+  // 4. Tunggu 2x requestAnimationFrame. Pola resmi Vue untuk
+  //    menunggu browser me-render ulang setelah class ditambahkan
+  //    (display:block pada print root via Teleport, dan
+  //    visibility:hidden di seluruh UI lain). Tanpa jeda ini,
+  //    Chromium bisa membuka dialog hanya dengan halaman
+  //    pertama yang sudah terhitung.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+
+  // 5. Buka dialog print browser.
+  printBase()
 }
 
 onMounted(() => {
@@ -61,35 +82,47 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('afterprint', stopPrinting)
-  document.body.classList.remove(PRINT_CLASS)
+  stopPrinting()
 })
 
 defineExpose({ print })
 </script>
 
 <template>
-  <div class="warranty-card-print-root">
-    <section
-      v-for="row in rows"
-      :key="row.key"
-      class="warranty-print-page"
-      :class="row.jenisKartuKey === 'import' ? 'import' : 'local'"
-      :style="getWarrantyPageStyle(row)"
-    >
-      <div class="warranty-field warranty-detail-field warranty-product">
-        {{ row.produk }}
-      </div>
-      <div class="warranty-field warranty-detail-field warranty-model">
-        {{ row.model }}
-      </div>
-      <div class="warranty-field warranty-detail-field warranty-serial">
-        {{ row.nomorSeri }}
-      </div>
-    </section>
-  </div>
+  <!-- Teleport memindahkan print root ke <body> langsung supaya
+       saat mode cetak, CSS `body.is-warranty-card-printing > *`
+       bisa menyembunyikan semua UI Nuxt (sidebar, panel, dll.)
+       tanpa ikut menyembunyikan ancestor dari print root itu
+       sendiri (yang akan membuat browser tidak bisa mem-paginate
+       multi-halaman). Pola ini mengikuti referensi dashboard.html
+       yang juga meletakkan #section-warranty-print di level body. -->
+  <Teleport to="body">
+    <div class="warranty-card-print-root">
+      <section
+        v-for="row in rows"
+        :key="row.key"
+        class="warranty-print-page"
+        :class="row.jenisKartuKey === 'import' ? 'import' : 'local'"
+        :style="getWarrantyPageStyle(row)"
+      >
+        <div class="warranty-field warranty-detail-field warranty-product">
+          {{ row.produk }}
+        </div>
+        <div class="warranty-field warranty-detail-field warranty-model">
+          {{ row.model }}
+        </div>
+        <div class="warranty-field warranty-detail-field warranty-serial">
+          {{ row.nomorSeri }}
+        </div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
+/* Wadah disembunyikan di layar, hanya muncul saat mode cetak
+   aktif. Saat muncul, biarkan mengalir se-tinggi konten (jangan
+   dipaksa 297mm) supaya semua halaman A4 bisa tercetak berurutan. */
 .warranty-card-print-root {
   display: none;
 }
@@ -104,6 +137,8 @@ defineExpose({ print })
   --warranty-adjust-y: 0mm;
   --warranty-gap-product-model: 0mm;
   --warranty-gap-model-serial: 0mm;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .warranty-print-page.local {
@@ -177,26 +212,23 @@ defineExpose({ print })
     margin: 0;
   }
 
-  :global(body.is-warranty-card-printing) {
+  :global(html),
+  :global(body) {
     background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
-  :global(body.is-warranty-card-printing *) {
-    visibility: hidden !important;
+  /* Saat mode cetak aktif: sembunyikan semua direct child of body
+     KECUALI print root. Print root di-Teleport ke body, jadi
+     aman dipakai selector `body > *`. */
+  :global(body.is-warranty-card-printing > *:not(.warranty-card-print-root)) {
+    display: none !important;
   }
 
-  :global(body.is-warranty-card-printing .warranty-card-print-root),
-  :global(body.is-warranty-card-printing .warranty-card-print-root *) {
-    visibility: visible !important;
-  }
-
+  /* Tampilkan kembali khusus pohon kartu garansi. */
   :global(body.is-warranty-card-printing .warranty-card-print-root) {
     display: block !important;
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
-    background: #fff !important;
   }
 
   .warranty-print-page {
