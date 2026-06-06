@@ -39,6 +39,11 @@ const activePrintLayouts = ref<Record<CardTypeKey, PrintLayout | null>>({
 })
 const warrantyPrintRows = ref<WarrantyPrintQueueRow[]>([])
 const warrantyPrintRef = ref<{ print: () => Promise<void> } | null>(null)
+const isPrinting = ref(false)
+
+function endPrinting() {
+  isPrinting.value = false
+}
 
 const cardTypeFilterItems = [{
   label: 'Semua Jenis',
@@ -298,6 +303,8 @@ async function setSelectedCardType(jenisKartu: CardTypeKey) {
 }
 
 async function printSelectedWarrantyCards() {
+  if (isPrinting.value) return
+
   const rows = selectedRowsSorted.value
   if (!rows.length) {
     showActionError('Pilih item yang ingin dicetak')
@@ -306,6 +313,11 @@ async function printSelectedWarrantyCards() {
 
   if (!ensureRowsHaveCardType(rows)) return
 
+  // Set guard sebelum await apa pun agar klik beruntun yang
+  // jatuh sebelum `print()` siap tetap ditolak. Reset dilakukan
+  // oleh prop `onAfterPrint` saat dialog print ditutup.
+  isPrinting.value = true
+
   await loadPrintLayouts()
   warrantyPrintRows.value = rows
   pageAlert.value = {
@@ -313,7 +325,8 @@ async function printSelectedWarrantyCards() {
     title: `${rows.length} kartu siap dicetak`,
     description: 'Dialog print browser akan terbuka. Status printed belum disimpan sampai Anda menandainya.'
   }
-  await warrantyPrintRef.value?.print()
+  // Fire-and-forget: tombol tetap loading sampai dialog ditutup.
+  warrantyPrintRef.value?.print().catch(() => endPrinting())
 }
 
 function openConfirmPrinted() {
@@ -597,7 +610,8 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
                     icon="i-lucide-printer"
                     color="primary"
                     size="sm"
-                    :disabled="!selectedRows.length || isActionLoading"
+                    :loading="isPrinting"
+                    :disabled="!selectedRows.length || isPrinting"
                     @click="printSelectedWarrantyCards"
                   />
                   <UButton
@@ -673,6 +687,7 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
       ref="warrantyPrintRef"
       :rows="warrantyPrintRows"
       :active-layouts="activePrintLayouts"
+      :on-after-print="endPrinting"
     />
   </div>
 </template>

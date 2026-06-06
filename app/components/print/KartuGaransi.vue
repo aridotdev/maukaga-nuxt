@@ -6,6 +6,7 @@ const PRINT_CLASS = 'is-warranty-card-printing'
 const props = defineProps<{
   rows: WarrantyPrintQueueRow[]
   activeLayouts: Record<CardTypeKey, PrintLayout | null>
+  onAfterPrint?: () => void
 }>()
 
 function createEmptyPrintLayout(type: CardTypeKey): PrintLayout {
@@ -72,16 +73,31 @@ async function print() {
     })
   })
 
-  // 5. Buka dialog print browser.
+  // 5. Buka dialog print browser, lalu tunggu sampai dialog
+  //    ditutup. `afterprint` fires saat user menutup dialog
+  //    (baik Save maupun Cancel), sehingga promise resolve di
+  //    saat yang tepat untuk men-reset state UI parent.
   printBase()
+  await new Promise<void>((resolve) => {
+    const onAfter = () => {
+      window.removeEventListener('afterprint', onAfter)
+      resolve()
+    }
+    window.addEventListener('afterprint', onAfter)
+  })
+}
+
+function handleAfterPrint() {
+  stopPrinting()
+  props.onAfterPrint?.()
 }
 
 onMounted(() => {
-  window.addEventListener('afterprint', stopPrinting)
+  window.addEventListener('afterprint', handleAfterPrint)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('afterprint', stopPrinting)
+  window.removeEventListener('afterprint', handleAfterPrint)
   stopPrinting()
 })
 
