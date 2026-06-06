@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { getLocalTimeZone, today, type DateValue as CalendarDateValue } from '@internationalized/date'
+import * as z from 'zod'
+import type { FormErrorEvent, FormSubmitEvent } from '@nuxt/ui'
 
 definePageMeta({
   layout: 'cs'
@@ -13,14 +14,39 @@ type ProductItem = {
   nomorSeri: string
 }
 
-type FormState = {
-  namaPemohon: string
-  bagianCabang: string
-  namaPemilikBarang: string
-  alasanPengajuan: string
-  catatanTambahan: string
-  products: ProductItem[]
-}
+const pengajuanSchema = z.object({
+  namaPemohon: z.string().trim().min(1, 'Nama Pemohon wajib diisi'),
+  bagianCabang: z.string().trim().min(1, 'Bagian/Cabang wajib diisi'),
+  namaPemilikBarang: z.string().trim().min(1, 'Nama Pemilik Barang wajib diisi'),
+  alasanPengajuan: z.string().trim().min(1, 'Alasan Pengajuan wajib diisi'),
+  catatanTambahan: z.string().optional().default(''),
+  tanggalForm: z
+    .string()
+    .min(1, 'Tanggal Form wajib diisi')
+    .refine(
+      (iso) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false
+        const [y = 0, m = 0, d = 0] = iso.split('-').map(Number)
+        const selected = new Date(y, m - 1, d)
+        const max = new Date()
+        max.setHours(23, 59, 59, 999)
+        max.setDate(max.getDate() + 7)
+        return selected <= max
+      },
+      { message: 'Tanggal Form tidak boleh lebih dari 7 hari ke depan' }
+    ),
+  products: z
+    .array(
+      z.object({
+        model: z.string().trim().min(1, 'Model wajib diisi'),
+        namaProduk: z.string().trim().min(1, 'Nama produk wajib diisi'),
+        nomorSeri: z.string().trim().min(1, 'Nomor seri wajib diisi')
+      })
+    )
+    .min(1, 'Minimal 1 item produk wajib diisi')
+})
+
+type FormState = z.infer<typeof pengajuanSchema>
 
 type ApiResult<T = Record<string, unknown>> = {
   success: boolean
@@ -66,10 +92,10 @@ type PrintRow = {
 
 const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
-const inputDate = useTemplateRef('inputDate')
 const draftStorageKey = 'pengajuan_kartu_garansi_draft'
 const maxItems = computed(() => Number(runtimeConfig.public.maxItems || 10))
 const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
+const maxTanggalForm = computed(() => getDateInputValue(addDays(new Date(), 7)))
 
 const formState = reactive<FormState>({
   namaPemohon: '',
@@ -77,11 +103,10 @@ const formState = reactive<FormState>({
   namaPemilikBarang: '',
   alasanPengajuan: '',
   catatanTambahan: '',
+  tanggalForm: createTodayDateValue(),
   products: [createProductItem()]
 })
 
-const tanggalForm = shallowRef<CalendarDateValue | undefined>(createTodayDateValue())
-const fieldErrors = reactive<Record<string, string>>({})
 const modelProdukMap = ref<Record<string, string>>({})
 const currentDraftId = ref('')
 const currentResumeToken = ref('')
@@ -194,7 +219,6 @@ function applyModelProdukToItem(index: number) {
   if (!produk) return false
 
   item.namaProduk = produk
-  clearFieldError(`products.${index}.namaProduk`)
   return true
 }
 
@@ -204,12 +228,10 @@ function updateProductModel(index: number, value: string | number | undefined) {
 
   const wasLocked = isProdukLocked(item)
   item.model = String(value || '')
-  clearFieldError(`products.${index}.model`)
 
   const produk = getProdukForModel(item.model)
   if (produk) {
     item.namaProduk = produk
-    clearFieldError(`products.${index}.namaProduk`)
   } else if (wasLocked) {
     item.namaProduk = ''
   }
@@ -219,14 +241,12 @@ function updateProductName(index: number, value: string | number | undefined) {
   const item = formState.products[index]
   if (!item || isProdukLocked(item)) return
   item.namaProduk = String(value || '')
-  clearFieldError(`products.${index}.namaProduk`)
 }
 
 function updateProductSerial(index: number, value: string | number | undefined) {
   const item = formState.products[index]
   if (!item) return
   item.nomorSeri = String(value || '')
-  clearFieldError(`products.${index}.nomorSeri`)
 }
 
 function addItem() {
@@ -245,96 +265,23 @@ function removeItem(index: number) {
   }
 
   formState.products.splice(index, 1)
-  clearValidationErrors()
-}
-
-function setFieldError(name: string, message: string) {
-  fieldErrors[name] = message
-}
-
-function clearFieldError(name: string) {
-  fieldErrors[name] = ''
-}
-
-function clearValidationErrors() {
-  for (const key of Object.keys(fieldErrors)) fieldErrors[key] = ''
-}
-
-function validateForm() {
-  clearValidationErrors()
-  const errors: string[] = []
-
-  const requiredFields: Array<[keyof FormState, string, string]> = [
-    ['namaPemohon', 'Nama Pemohon wajib diisi', 'namaPemohon'],
-    ['bagianCabang', 'Bagian/Cabang wajib diisi', 'bagianCabang'],
-    ['namaPemilikBarang', 'Nama Pemilik Barang wajib diisi', 'namaPemilikBarang'],
-    ['alasanPengajuan', 'Alasan Pengajuan wajib diisi', 'alasanPengajuan']
-  ]
-
-  for (const [field, message, errorKey] of requiredFields) {
-    if (!String(formState[field] || '').trim()) {
-      errors.push(message)
-      setFieldError(errorKey, message)
-    }
-  }
-
-  if (!tanggalForm.value) {
-    errors.push('Tanggal Form wajib diisi')
-    setFieldError('tanggalForm', 'Tanggal Form wajib diisi')
-  } else if (isDateMoreThanSevenDaysAhead(tanggalForm.value)) {
-    errors.push('Tanggal Form tidak boleh lebih dari 7 hari ke depan')
-    setFieldError('tanggalForm', 'Tanggal Form tidak boleh lebih dari 7 hari ke depan')
-  }
-
-  if (!formState.products.length) {
-    errors.push('Minimal 1 item produk wajib diisi')
-  }
-
-  formState.products.forEach((product, index) => {
-    if (!product.model.trim()) {
-      const message = `Item #${index + 1}: Model wajib diisi`
-      errors.push(message)
-      setFieldError(`products.${index}.model`, message)
-    }
-    if (!product.namaProduk.trim()) {
-      const message = `Item #${index + 1}: Nama produk wajib diisi`
-      errors.push(message)
-      setFieldError(`products.${index}.namaProduk`, message)
-    }
-    if (!product.nomorSeri.trim()) {
-      const message = `Item #${index + 1}: Nomor seri wajib diisi`
-      errors.push(message)
-      setFieldError(`products.${index}.nomorSeri`, message)
-    }
-  })
-
-  if (errors.length) {
-    showToast('Form belum lengkap', 'error', [...new Set(errors)].slice(0, 4).join(' • '))
-    return false
-  }
-
-  return true
-}
-
-function isDateMoreThanSevenDaysAhead(value: CalendarDateValue) {
-  const selected = new Date(value.year, value.month - 1, value.day)
-  const max = new Date()
-  max.setHours(23, 59, 59, 999)
-  max.setDate(max.getDate() + 7)
-  return selected > max
-}
-
-function dateToPayload(value: CalendarDateValue | undefined) {
-  return value ? value.toString() : ''
 }
 
 function createTodayDateValue() {
-  return today(getLocalTimeZone())
+  return getDateInputValue(new Date())
 }
 
-function updateTanggalForm(value: unknown) {
-  tanggalForm.value = value as CalendarDateValue | undefined
-  clearFieldError('tanggalForm')
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + days)
+  return nextDate
+}
+
+function getDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function collectPayload(): SubmissionPayload {
@@ -342,7 +289,7 @@ function collectPayload(): SubmissionPayload {
     nama: formState.namaPemohon.trim(),
     bagianCabang: formState.bagianCabang.trim(),
     pemilik: formState.namaPemilikBarang.trim(),
-    tanggalForm: dateToPayload(tanggalForm.value),
+    tanggalForm: formState.tanggalForm,
     alasanPengajuan: formState.alasanPengajuan.trim(),
     catatanTambahan: formState.catatanTambahan.trim(),
     items: formState.products.map(item => ({
@@ -353,13 +300,16 @@ function collectPayload(): SubmissionPayload {
   }
 }
 
-async function onDraftSubmit() {
+function onFormError(event: FormErrorEvent) {
+  const firstFew = [...new Set(event.errors.map(e => e.message))].slice(0, 4).join(' - ')
+  showToast('Form belum lengkap', 'error', firstFew)
+}
+
+async function onDraftSubmit(_event: FormSubmitEvent<FormState>) {
   await handleSaveDraftAndPrint()
 }
 
 async function handleSaveDraftAndPrint() {
-  if (!validateForm()) return
-
   isSavingDraft.value = true
   try {
     const payload = collectPayload()
@@ -447,9 +397,11 @@ function getErrorMessage(error: unknown) {
       <div class="flex flex-col gap-6 lg:flex-row">
         <!-- Left Column: Form Areas -->
         <UForm
+          :schema="pengajuanSchema"
           :state="formState"
           class="flex flex-1 flex-col gap-6"
           @submit="onDraftSubmit"
+          @error="onFormError"
         >
           <!-- Section 1: Informasi Pemohon -->
           <section class="relative rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl lg:p-8">
@@ -470,71 +422,50 @@ function getErrorMessage(error: unknown) {
             </div>
 
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <UFormField name="namaPemohon" label="Nama Pemohon" size="lg" :error="fieldErrors.namaPemohon">
+              <UFormField name="namaPemohon" label="Nama Pemohon" size="lg" required>
                 <UInput
                   v-model="formState.namaPemohon"
                   placeholder="Masukkan nama Anda"
                   class="w-full"
                   size="lg"
-                  @update:model-value="clearFieldError('namaPemohon')"
                 />
               </UFormField>
 
-              <UFormField name="bagianCabang" label="Bagian/Cabang" size="lg" :error="fieldErrors.bagianCabang">
+              <UFormField name="bagianCabang" label="Bagian/Cabang" size="lg" required>
                 <UInput
                   v-model="formState.bagianCabang"
                   placeholder="Contoh: Cabang Jakarta Pusat"
                   class="w-full"
                   size="lg"
-                  @update:model-value="clearFieldError('bagianCabang')"
                 />
               </UFormField>
 
-              <UFormField name="namaPemilikBarang" label="Nama Pemilik Barang" size="lg" :error="fieldErrors.namaPemilikBarang">
+              <UFormField name="namaPemilikBarang" label="Nama Pemilik Barang" size="lg" required>
                 <UInput
                   v-model="formState.namaPemilikBarang"
                   placeholder="Masukkan nama pemilik barang"
                   class="w-full"
                   size="lg"
-                  @update:model-value="clearFieldError('namaPemilikBarang')"
                 />
               </UFormField>
 
-              <UFormField name="tanggalForm" label="Tanggal Form" size="lg" :error="fieldErrors.tanggalForm">
-                <UInputDate
-                  ref="inputDate"
-                  :model-value="tanggalForm as never"
+              <UFormField name="tanggalForm" label="Tanggal Form" size="lg" required>
+                <UInput
+                  v-model="formState.tanggalForm"
+                  type="date"
                   class="w-full"
                   size="lg"
-                  @update:model-value="updateTanggalForm"
-                >
-                  <template #trailing>
-                    <UPopover :reference="inputDate?.inputsRef[3]?.$el">
-                      <UButton
-                        color="neutral"
-                        variant="link"
-                        size="sm"
-                        icon="i-lucide-calendar"
-                        aria-label="Pilih tanggal"
-                        class="px-0"
-                      />
-
-                      <template #content>
-                        <UCalendar v-model="tanggalForm" class="p-2" />
-                      </template>
-                    </UPopover>
-                  </template>
-                </UInputDate>
+                  :max="maxTanggalForm"
+                />
               </UFormField>
 
-              <UFormField name="alasanPengajuan" label="Alasan Pengajuan" size="lg" :error="fieldErrors.alasanPengajuan">
+              <UFormField name="alasanPengajuan" label="Alasan Pengajuan" size="lg" required>
                 <UTextarea
                   v-model="formState.alasanPengajuan"
                   placeholder="Jelaskan alasan pengajuan kartu garansi baru"
                   class="w-full"
                   size="lg"
                   :rows="5"
-                  @update:model-value="clearFieldError('alasanPengajuan')"
                 />
               </UFormField>
 
@@ -602,7 +533,7 @@ function getErrorMessage(error: unknown) {
                     </span>
                   </div>
 
-                  <UFormField :name="`products.${index}.model`" size="sm" :error="fieldErrors[`products.${index}.model`]">
+                  <UFormField :name="`products.${index}.model`" size="sm">
                     <UInput
                       :model-value="product.model"
                       aria-label="Tipe atau model produk"
@@ -615,7 +546,7 @@ function getErrorMessage(error: unknown) {
                     />
                   </UFormField>
 
-                  <UFormField :name="`products.${index}.namaProduk`" size="sm" :error="fieldErrors[`products.${index}.namaProduk`]">
+                  <UFormField :name="`products.${index}.namaProduk`" size="sm">
                     <UInput
                       :model-value="product.namaProduk"
                       :disabled="isProdukLocked(product)"
@@ -629,7 +560,7 @@ function getErrorMessage(error: unknown) {
                     />
                   </UFormField>
 
-                  <UFormField :name="`products.${index}.nomorSeri`" size="sm" :error="fieldErrors[`products.${index}.nomorSeri`]">
+                  <UFormField :name="`products.${index}.nomorSeri`" size="sm">
                     <UInput
                       :model-value="product.nomorSeri"
                       aria-label="Nomor seri produk"
