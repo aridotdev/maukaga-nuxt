@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
+import type { DetailItem } from '~/composables/usePengajuanDetail'
 
 definePageMeta({
   layout: 'dashboard',
@@ -9,26 +10,6 @@ definePageMeta({
 const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
 
 type PengajuanStatus = typeof VALID_STATUSES[number]
-
-type ApiResult<T> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
-type DetailItem = {
-  noItem?: number | string
-  produk?: string
-  model?: string
-  nomorSeri?: string
-  modelNormalized?: string
-  produkStatus?: string
-  produkSumber?: string
-  statusItem?: PengajuanStatus
-  catatanAdminItem?: string
-  tanggalUpdateStatusItem?: string
-  userUpdateStatusItem?: string
-}
 
 type RiwayatStatus = {
   timestamp?: string
@@ -47,27 +28,6 @@ type ItemStatusForm = {
   notice: string
 }
 
-type DetailPengajuan = {
-  idPengajuan: string
-  timestampSubmit?: string
-  nama?: string
-  bagianCabang?: string
-  pemilik?: string
-  alasanPengajuan?: string
-  tanggalForm?: string
-  fileHardCopyUrl?: string
-  fileHardCopyId?: string
-  catatanTambahan?: string
-  jumlahItem?: number | string
-  status: PengajuanStatus
-  catatanAdmin?: string
-  tanggalUpdateStatusTerakhir?: string
-  userUpdateStatus?: string
-  riwayatSingkat?: string
-  items?: DetailItem[]
-  riwayat?: RiwayatStatus[]
-}
-
 type InfoField = {
   label: string
   value: string
@@ -77,14 +37,21 @@ type InfoField = {
 
 const route = useRoute()
 const router = useRouter()
-const runtimeConfig = useRuntimeConfig()
 const toast = useToast()
 
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 const idPengajuan = computed(() => normalizeRouteParam(route.params.idPengajuan))
-const detail = ref<DetailPengajuan | null>(null)
-const isLoading = ref(false)
-const loadError = ref('')
+
+// Detail data + cache via composable. Reaktif terhadap perubahan route param.
+const {
+  detail,
+  error: queryError,
+  isLoading,
+  load,
+  setItemStatus
+} = usePengajuanDetail(() => idPengajuan.value)
+
+const loadError = computed(() => queryError.value || '')
+
 const itemForms = ref<Record<string, ItemStatusForm>>({})
 
 const statusItems = VALID_STATUSES.map((status) => ({
@@ -139,38 +106,24 @@ const historyColumns: TableColumn<RiwayatStatus>[] = [{
   cell: ({ row }) => h('span', { class: 'text-toned' }, row.original.user || '-')
 }]
 
+// Inisialisasi form per-item ketika detail pertama kali dimuat (atau berubah).
+watch(detail, (next) => {
+  if (next?.items) initItemForms(next.items)
+}, { immediate: true })
+
 onMounted(() => {
-  loadDetail()
+  load()
 })
 
-async function loadDetail() {
-  isLoading.value = true
-  loadError.value = ''
-
-  try {
-    if (!idPengajuan.value) throw new Error('ID Pengajuan tidak valid.')
-
-    const result = await callAdminApi<DetailPengajuan>('getDetail', {
-      idPengajuan: idPengajuan.value
-    })
-
-    if (!result.data) throw new Error('Pengajuan tidak ditemukan')
-
-    detail.value = result.data
-    initItemForms(result.data.items || [])
-  } catch (error) {
-    const message = getErrorMessage(error)
-    detail.value = null
-    loadError.value = message
-
-    if (isUnauthorizedMessage(message)) {
-      clearAdminSession()
-      await router.push('/login')
-    }
-  } finally {
-    isLoading.value = false
+// Pantau error dari composable untuk handle 401.
+watch(queryError, async (msg) => {
+  if (msg && (msg.includes('Unauthorized') || msg.includes('Token admin'))) {
+    sessionStorage.removeItem('admin_token')
+    sessionStorage.removeItem('admin_nama')
+    sessionStorage.removeItem('admin_username')
+    await router.push('/login')
   }
-}
+})
 
 function initItemForms(items: DetailItem[]) {
   const nextForms: Record<string, ItemStatusForm> = {}
@@ -229,12 +182,7 @@ async function submitItemStatus(item: DetailItem) {
   form.isSubmitting = true
 
   try {
-    await callAdminApi<Record<string, never>>('updateItemStatus', {
-      idPengajuan: detail.value.idPengajuan,
-      noItem: item.noItem,
-      statusBaru,
-      catatanAdmin
-    })
+    await setItemStatus(item.noItem, statusBaru, catatanAdmin)
 
     toast.add({
       title: 'Status item berhasil disimpan',
@@ -243,45 +191,12 @@ async function submitItemStatus(item: DetailItem) {
       icon: 'i-lucide-circle-check'
     })
 
-    await loadDetail()
-  } catch (error) {
-    const message = getErrorMessage(error)
-    form.error = message
-
-    toast.add({
-      title: 'Status item gagal disimpan',
-      description: message,
-      color: 'error',
-      icon: 'i-lucide-circle-alert'
-    })
-
-    if (isUnauthorizedMessage(message)) {
-      clearAdminSession()
-      await router.push('/login')
-    }
+    form.notice = 'Tersimpan.'
+  } catch (err) {
+    form.error = err instanceof Error ? err.message : String(err)
   } finally {
     form.isSubmitting = false
   }
-}
-
-async function callAdminApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) throw new Error('URL Google Apps Script belum dikonfigurasi.')
-
-  const token = sessionStorage.getItem('admin_token')
-  if (!token) throw new Error('Token admin tidak ditemukan. Login dashboard terlebih dahulu.')
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, token, ...payload })
-  })
-
-  if (!response.ok) throw new Error(`Google Apps Script merespons ${response.status}.`)
-
-  const result = await response.json() as ApiResult<T>
-  if (!result.success) throw new Error(result.error || 'Request Google Apps Script gagal.')
-
-  return result
 }
 
 function getTransitionConfirmMessage(currentStatus: PengajuanStatus, nextStatus: PengajuanStatus, noItem: number | string) {
@@ -366,19 +281,6 @@ function formatDateTime(value: string | undefined) {
   }).format(date)
 }
 
-function clearAdminSession() {
-  sessionStorage.removeItem('admin_token')
-  sessionStorage.removeItem('admin_nama')
-  sessionStorage.removeItem('admin_username')
-}
-
-function isUnauthorizedMessage(message: string) {
-  return message.includes('Unauthorized') || message.includes('Token admin')
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
 </script>
 
 <template>

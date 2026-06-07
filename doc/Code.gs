@@ -926,7 +926,8 @@ function handleUpdateItemStatus(data) {
     itemSheet.getRange(itemRow, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
     itemSheet.getRange(itemRow, itemCol['User Update Status Item'] + 1).setValue(session.username);
 
-    const refreshedItems = itemSheet.getDataRange().getValues().slice(1)
+    // Reuse itemValues yang sudah dibaca di awal (baris 909-910) untuk hindari getDataRange kedua.
+    const refreshedItems = itemValues.slice(1)
       .filter(function (row) { return row[itemCol['ID Pengajuan']] === id; })
       .map(function (row) { return clean_(row[itemCol['Status Item']]) || parentStatusLama || 'Baru'; });
     const parentStatusBaru = derivePengajuanStatusFromItemStatuses_(refreshedItems);
@@ -1025,6 +1026,7 @@ function handleApproveModelProduk(data) {
   try {
     upsertModelProduk_(modelNormalized, modelDisplay, produk, session.username);
     const count = verifyPendingItemsByModel_(modelNormalized, produk);
+    CacheService.getScriptCache().remove('model_produk_map');
     return { success: true, data: { modelNormalized: modelNormalized, produk: produk, count: count } };
   } finally {
     lock.releaseLock();
@@ -1217,6 +1219,7 @@ function handleSaveWarrantyCardTypes(data) {
       state.rows[key] = findWarrantyCardStateRow_(state.sheet, key);
     });
 
+    CacheService.getScriptCache().remove('warranty_card_state');
     return { success: true, data: { count: items.length } };
   } finally {
     lock.releaseLock();
@@ -1271,6 +1274,7 @@ function handleMarkWarrantyCardsPrinted(data) {
     });
 
     getSheet_(SHEETS.PRINT_BATCH).appendRow([batchId, 'warranty_card', now, session.username, inputs.length, catatan]);
+    CacheService.getScriptCache().remove('warranty_card_state');
     return { success: true, data: { batchId: batchId, count: inputs.length } };
   } finally {
     lock.releaseLock();
@@ -1372,7 +1376,10 @@ function ensureEmailDigestTrigger_() {
 }
 
 function parseRequest_(e) {
-  if (e && e.postData && e.postData.contents) return JSON.parse(e.postData.contents);
+  if (e && e.postData && e.postData.contents) {
+    try { return JSON.parse(e.postData.contents); }
+    catch (err) { throw new Error('Body request tidak valid (bukan JSON).'); }
+  }
   const data = {};
   if (e && e.parameter) Object.keys(e.parameter).forEach(function (key) { data[key] = e.parameter[key]; });
   return data;
@@ -1401,10 +1408,16 @@ function getModelProdukRows_() {
 }
 
 function getModelProdukMap_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('model_produk_map');
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
   const map = {};
   getModelProdukRows_().forEach(function (row) {
     map[row.modelNormalized] = row;
   });
+  cache.put('model_produk_map', JSON.stringify(map), 60);
   return map;
 }
 
@@ -1635,6 +1648,15 @@ function getApprovedWarrantyQueueItems_() {
 }
 
 function getWarrantyCardSheetState_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('warranty_card_state');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      // sheet reference tidak bisa di-JSON-kan; rekonstruksi.
+      return { sheet: getSheet_(SHEETS.WARRANTY_CARDS), rows: parsed.rows };
+    } catch (e) {}
+  }
   const sheet = getSheet_(SHEETS.WARRANTY_CARDS);
   const values = sheet.getDataRange().getValues();
   const headers = values[0] || HEADERS[SHEETS.WARRANTY_CARDS];
@@ -1645,6 +1667,7 @@ function getWarrantyCardSheetState_() {
     headers.forEach(function (header, index) { data[header] = values[i][index]; });
     rows[warrantyCardKey_(data['ID Pengajuan'], data['No Item'])] = { rowNumber: i + 1, data: data };
   }
+  cache.put('warranty_card_state', JSON.stringify({ rows: rows }), 30);
   return { sheet: sheet, rows: rows };
 }
 

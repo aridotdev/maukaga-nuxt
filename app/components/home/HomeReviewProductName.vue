@@ -1,10 +1,4 @@
 <script setup lang="ts">
-type ApiResult<T> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
 type ReviewQueueItem = {
   idPengajuan?: string
   noItem?: number | string
@@ -29,62 +23,50 @@ type ReviewQueueGroup = {
   produkOptions?: ProductOption[]
 }
 
-type ReviewQueueResponse = {
-  rows: ReviewQueueGroup[]
-}
-
-type ApproveResponse = {
-  modelNormalized: string
-  produk: string
-  count: number
-}
-
-const runtimeConfig = useRuntimeConfig()
 const router = useRouter()
 const toast = useToast()
+const { callApi } = useAppsScriptApi()
+const { invalidate } = useAppSheetInvalidate()
 
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
-const rows = ref<ReviewQueueGroup[]>([])
+const {
+  rows,
+  isLoading,
+  error: queryError,
+  ensureLoaded,
+  refresh
+} = useReviewProductQueue()
+
+const loadError = computed(() => queryError.value || '')
+
 const productInputs = ref<Record<string, string>>({})
 const approvingModels = ref<Record<string, boolean>>({})
-const isLoading = ref(false)
-const loadError = ref('')
 const showAll = ref(false)
+
+// Inisialisasi input untuk group baru saja (preserve nilai user yang sudah diketik).
+watch(rows, (nextRows) => {
+  nextRows.forEach((group) => {
+    const key = getGroupKey(group)
+    if (!(key in productInputs.value)) {
+      productInputs.value[key] = group.produk ?? getTopProductOption(group) ?? ''
+    }
+  })
+}, { immediate: true })
 
 const pendingCount = computed(() => rows.value.reduce((total, group) => total + Number(group.count || 0), 0))
 const visibleRows = computed(() => showAll.value ? rows.value : rows.value.slice(0, 3))
 
 onMounted(() => {
-  loadReviewQueue()
+  ensureLoaded()
 })
 
-async function loadReviewQueue() {
-  isLoading.value = true
-  loadError.value = ''
-
-  try {
-    const result = await callAdminApi<ReviewQueueResponse>('getProductReviewQueue')
-    const nextRows = result.data?.rows || []
-
-    rows.value = nextRows
-    productInputs.value = nextRows.reduce<Record<string, string>>((inputs, group) => {
-      const key = getGroupKey(group)
-      inputs[key] = productInputs.value[key] ?? group.produk ?? getTopProductOption(group) ?? ''
-      return inputs
-    }, {})
-  } catch (error) {
-    const message = getErrorMessage(error)
-    rows.value = []
-    loadError.value = message
-
-    if (message.includes('Unauthorized') || message.includes('Token admin')) {
-      clearAdminSession()
-      await router.push('/login')
-    }
-  } finally {
-    isLoading.value = false
+watch(queryError, async (msg) => {
+  if (msg && (msg.includes('Unauthorized') || msg.includes('Token admin'))) {
+    sessionStorage.removeItem('admin_token')
+    sessionStorage.removeItem('admin_nama')
+    sessionStorage.removeItem('admin_username')
+    await router.push('/login')
   }
-}
+})
 
 async function approveGroup(group: ReviewQueueGroup) {
   const key = getGroupKey(group)
@@ -103,7 +85,7 @@ async function approveGroup(group: ReviewQueueGroup) {
   approvingModels.value[key] = true
 
   try {
-    const result = await callAdminApi<ApproveResponse>('approveModelProduk', {
+    const result = await callApi<{ modelNormalized: string; produk: string; count: number }>('approveModelProduk', {
       modelNormalized: group.modelNormalized,
       modelDisplay: group.modelDisplay || group.modelNormalized,
       produk
@@ -116,9 +98,12 @@ async function approveGroup(group: ReviewQueueGroup) {
       icon: 'i-lucide-circle-check'
     })
 
-    await loadReviewQueue()
-  } catch (error) {
-    const message = getErrorMessage(error)
+    // Invalidate cache agar list & dashboard ikut segar.
+    invalidate('getProductReviewQueue')
+    invalidate('getDashboard')
+    await refresh()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
 
     toast.add({
       title: 'Approval gagal',
@@ -128,32 +113,14 @@ async function approveGroup(group: ReviewQueueGroup) {
     })
 
     if (message.includes('Unauthorized')) {
-      clearAdminSession()
+      sessionStorage.removeItem('admin_token')
+      sessionStorage.removeItem('admin_nama')
+      sessionStorage.removeItem('admin_username')
       await router.push('/login')
     }
   } finally {
     approvingModels.value[key] = false
   }
-}
-
-async function callAdminApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) throw new Error('URL Google Apps Script belum dikonfigurasi.')
-
-  const token = sessionStorage.getItem('admin_token')
-  if (!token) throw new Error('Token admin tidak ditemukan. Login dashboard terlebih dahulu.')
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, token, ...payload })
-  })
-
-  if (!response.ok) throw new Error(`Google Apps Script merespons ${response.status}.`)
-
-  const result = await response.json() as ApiResult<T>
-  if (!result.success) throw new Error(result.error || 'Request Google Apps Script gagal.')
-
-  return result
 }
 
 function getGroupKey(group: ReviewQueueGroup) {
@@ -162,16 +129,6 @@ function getGroupKey(group: ReviewQueueGroup) {
 
 function getTopProductOption(group: ReviewQueueGroup) {
   return group.produkOptions?.[0]?.produk || ''
-}
-
-function clearAdminSession() {
-  sessionStorage.removeItem('admin_token')
-  sessionStorage.removeItem('admin_nama')
-  sessionStorage.removeItem('admin_username')
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
 }
 </script>
 
@@ -213,7 +170,7 @@ function getErrorMessage(error: unknown) {
               square
               :loading="isLoading"
               :disabled="isLoading"
-              @click="loadReviewQueue"
+              @click="refresh"
             />
           </UTooltip>
         </div>
