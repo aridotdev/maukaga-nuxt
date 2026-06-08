@@ -19,6 +19,7 @@ const SHEETS = {
   PRINT_BATCH: 'PrintBatch',
   PRINT_LAYOUTS: 'PrintLayouts',
   MODEL_PRODUK: 'ModelProduk',
+  SHIPPING_LABELS: 'ShippingLabels',
 };
 
 const HEADERS = {
@@ -29,10 +30,11 @@ const HEADERS = {
   [SHEETS.CONFIG]: ['Key', 'Value'],
   [SHEETS.STATUS_LOG]: ['Timestamp', 'ID Pengajuan', 'Status Lama', 'Status Baru', 'Catatan Admin', 'User', 'No Item'],
   [SHEETS.EMAIL_LOG]: ['Timestamp', 'Subject', 'Recipients', 'Jumlah Pengajuan', 'Status'],
-  [SHEETS.WARRANTY_CARDS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Jenis Kartu', 'Status Cetak', 'Print Batch ID', 'Printed At', 'Printed By', 'Reprint Count', 'Last Reprint At', 'Last Reprint By', 'Catatan'],
+  [SHEETS.WARRANTY_CARDS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Jenis Kartu', 'Status Cetak', 'Print Batch ID', 'Printed At', 'Printed By', 'Reprint Count', 'Last Reprint At', 'Last Reprint By', 'Catatan', 'Status Kirim', 'Shipped At', 'Shipped By', 'Ship Batch ID'],
   [SHEETS.PRINT_BATCH]: ['Batch ID', 'Tipe Batch', 'Created At', 'Created By', 'Jumlah Item', 'Catatan'],
   [SHEETS.PRINT_LAYOUTS]: ['ID', 'Type', 'Name', 'Offset X', 'Offset Y', 'Gap Product Model', 'Gap Model Serial', 'Is Builtin', 'Created At', 'Updated At', 'Updated By'],
   [SHEETS.MODEL_PRODUK]: ['model_normalized', 'model_display', 'produk', 'status', 'updated_at', 'updated_by'],
+  [SHEETS.SHIPPING_LABELS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Bagian/Cabang', 'Nama', 'Print Batch ID', 'Printed At', 'Status Kirim', 'Ship Batch ID', 'Shipped At', 'Shipped By', 'Created At', 'Updated At'],
 };
 
 const DEFAULT_PRINT_LAYOUTS = [
@@ -159,6 +161,10 @@ function doPost(e) {
         return jsonResponse_(handleSaveWarrantyCardTypes(data));
       case 'markWarrantyCardsPrinted':
         return jsonResponse_(handleMarkWarrantyCardsPrinted(data));
+      case 'markShippingLabelsShipped':
+        return jsonResponse_(handleMarkShippingLabelsShipped(data));
+      case 'getShippingLabelQueue':
+        return jsonResponse_(handleGetShippingLabelQueue(data));
       case 'adminLogout':
         return jsonResponse_(handleAdminLogout(data));
       default:
@@ -1038,10 +1044,12 @@ function handleApproveModelProduk(data) {
 function handleGetWarrantyPrintQueue(data) {
   requireSession_(data.token, ['admin', 'qrcc']);
   const includePrinted = data.includePrinted === true || clean_(data.includePrinted).toLowerCase() === 'yes';
+  const onlyUnsent = data.onlyUnsent === true || clean_(data.onlyUnsent).toLowerCase() === 'yes';
   const search = clean_(data.search).toLowerCase();
   const cardType = normalizeWarrantyCardType_(data.jenisKartu, false);
   const rows = getApprovedWarrantyQueueItems_().filter(function (item) {
     if (!includePrinted && item.statusCetak === 'Printed') return false;
+    if (onlyUnsent && item.statusKirim !== 'Belum Dikirim') return false;
     if (cardType && item.jenisKartu !== cardType) return false;
     if (search) {
       const haystack = [
@@ -1276,11 +1284,256 @@ function handleMarkWarrantyCardsPrinted(data) {
     });
 
     getSheet_(SHEETS.PRINT_BATCH).appendRow([batchId, 'warranty_card', now, session.username, inputs.length, catatan]);
+    syncShippingLabelQueue_(inputs.map(function (i) {
+      return { idPengajuan: i.idPengajuan, noItem: i.noItem };
+    }), 'insert', { batchId: batchId, printedAt: now, printedBy: session.username });
     CacheService.getScriptCache().remove('warranty_card_state');
+    CacheService.getScriptCache().remove('shipping_label_state');
     return { success: true, data: { batchId: batchId, count: inputs.length } };
   } finally {
     lock.releaseLock();
   }
+}
+
+function handleMarkShippingLabelsShipped(data) {
+  const session = requireSession_(data.token, ['admin', 'qrcc']);
+  const inputs = Array.isArray(data.items) ? data.items : [];
+  if (!inputs.length) throw new Error('Pilih item yang akan ditandai dikirim');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const state = getWarrantyCardSheetState_();
+    const now = new Date();
+    const batchId = generatePrintBatchId_('KIRIM');
+
+    inputs.forEach(function (input) {
+      const id = clean_(input.idPengajuan);
+      const noItem = clean_(input.noItem);
+      const key = warrantyCardKey_(id, noItem);
+      const existing = state.rows[key] ? state.rows[key].data : null;
+      if (!existing) throw new Error('Item tidak ditemukan: ' + id + ' #' + noItem);
+      if (clean_(existing['Status Cetak']) !== 'Printed') throw new Error('Item belum berstatus Printed: ' + id + ' #' + noItem);
+
+      writeWarrantyCardRow_(state.sheet, state.rows[key], {
+        idPengajuan: id,
+        noItem: noItem,
+        produk: existing['Produk'],
+        model: existing['Model'],
+        nomorSeri: existing['Nomor Seri'],
+        jenisKartu: existing['Jenis Kartu'],
+        statusCetak: existing['Status Cetak'],
+        printBatchId: existing['Print Batch ID'],
+        printedAt: existing['Printed At'],
+        printedBy: existing['Printed By'],
+        reprintCount: existing['Reprint Count'],
+        lastReprintAt: existing['Last Reprint At'],
+        lastReprintBy: existing['Last Reprint By'],
+        catatan: existing['Catatan'],
+        statusKirim: 'Dikirim',
+        shippedAt: now,
+        shippedBy: session.username,
+        shipBatchId: batchId,
+      });
+      state.rows[key] = findWarrantyCardStateRow_(state.sheet, key);
+    });
+
+    getSheet_(SHEETS.PRINT_BATCH).appendRow([batchId, 'shipping_label', now, session.username, inputs.length, '']);
+    syncShippingLabelQueue_(inputs, 'update', {
+      statusKirim: 'Dikirim',
+      shipBatchId: batchId,
+      shippedAt: now,
+      shippedBy: session.username
+    });
+    CacheService.getScriptCache().remove('warranty_card_state');
+    CacheService.getScriptCache().remove('shipping_label_state');
+    return { success: true, data: { batchId: batchId, count: inputs.length } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncShippingLabelQueue_(items, mode, payload) {
+  payload = payload || {};
+  if (!Array.isArray(items) || !items.length) return;
+
+  const state = getShippingLabelSheetState_();
+  const now = payload.updatedAt || new Date();
+
+  items.forEach(function (input) {
+    const id = clean_(input.idPengajuan);
+    const noItem = clean_(input.noItem);
+    if (!id || !noItem) return;
+    const key = warrantyCardKey_(id, noItem);
+
+    // Untuk insert, ambil snapshot lengkap dari WarrantyCards agar tidak sinkron parsial.
+    const cardRow = state.warrantyRows[key];
+    if (mode === 'insert') {
+      if (!cardRow) return; // item belum ada di WarrantyCards (skip defensif)
+      const existing = state.rows[key];
+      if (existing) return; // idempotent: jangan duplikasi row
+      const row = [
+        id,
+        noItem,
+        cardRow.produk || '',
+        cardRow.model || '',
+        cardRow.nomorSeri || '',
+        cardRow.bagianCabang || '',
+        cardRow.nama || '',
+        payload.batchId || cardRow.printBatchId || '',
+        payload.printedAt || cardRow.printedAt || now,
+        'Belum Dikirim',
+        '',
+        '',
+        '',
+        now,
+        now
+      ];
+      state.sheet.appendRow(row);
+      state.rows[key] = { rowNumber: state.sheet.getLastRow(), data: listToObject_(HEADERS[SHEETS.SHIPPING_LABELS], row) };
+      return;
+    }
+
+    if (mode === 'update') {
+      const existing = state.rows[key];
+      if (!existing) {
+        // Row belum ada (mis. Printed di-call sebelum sync insert) — insert dulu.
+        if (state.warrantyRows[key]) {
+          const cardRow = state.warrantyRows[key];
+          const row = [
+            id,
+            noItem,
+            cardRow.produk || '',
+            cardRow.model || '',
+            cardRow.nomorSeri || '',
+            cardRow.bagianCabang || '',
+            cardRow.nama || '',
+            cardRow.printBatchId || '',
+            cardRow.printedAt || '',
+            payload.statusKirim || 'Dikirim',
+            payload.shipBatchId || '',
+            payload.shippedAt || now,
+            payload.shippedBy || '',
+            now,
+            now
+          ];
+          state.sheet.appendRow(row);
+          state.rows[key] = { rowNumber: state.sheet.getLastRow(), data: listToObject_(HEADERS[SHEETS.SHIPPING_LABELS], row) };
+        }
+        return;
+      }
+      const range = state.sheet.getRange(existing.rowNumber, 1, 1, HEADERS[SHEETS.SHIPPING_LABELS].length);
+      const current = range.getValues()[0];
+      const headers = HEADERS[SHEETS.SHIPPING_LABELS];
+      const next = current.slice();
+      headers.forEach(function (header, index) {
+        if (header === 'Status Kirim' && payload.statusKirim) next[index] = payload.statusKirim;
+        else if (header === 'Ship Batch ID' && payload.shipBatchId) next[index] = payload.shipBatchId;
+        else if (header === 'Shipped At' && payload.shippedAt) next[index] = payload.shippedAt;
+        else if (header === 'Shipped By' && payload.shippedBy) next[index] = payload.shippedBy;
+        else if (header === 'Updated At') next[index] = now;
+      });
+      range.setValues([next]);
+      existing.data = listToObject_(headers, next);
+    }
+  });
+}
+
+function getShippingLabelSheetState_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('shipping_label_state');
+  const sheet = getSheet_(SHEETS.SHIPPING_LABELS);
+  let cachedRows = null;
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      cachedRows = parsed.rows || null;
+    } catch (e) {}
+  }
+
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0] || HEADERS[SHEETS.SHIPPING_LABELS];
+  const rows = {};
+  for (let i = 1; i < values.length; i++) {
+    if (!values[i].some(function (cell) { return cell !== ''; })) continue;
+    const data = listToObject_(headers, values[i]);
+    const key = warrantyCardKey_(data['ID Pengajuan'], data['No Item']);
+    if (key.indexOf('::') !== -1) {
+      rows[key] = { rowNumber: i + 1, data: data };
+    }
+  }
+
+  // Bangun snapshot WarrantyCards untuk fallback insert (dipakai hanya saat mode insert).
+  const warrantyRows = {};
+  const approvedMap = mapByWarrantyKey_(getApprovedWarrantyQueueItems_());
+  Object.keys(approvedMap).forEach(function (key) {
+    const item = approvedMap[key];
+    warrantyRows[key] = {
+      produk: item.produk,
+      model: item.model,
+      nomorSeri: item.nomorSeri,
+      bagianCabang: item.bagianCabang,
+      nama: item.nama,
+      printBatchId: item.printBatchId,
+      printedAt: item.printedAt
+    };
+  });
+
+  // Sinkronkan rows dengan cache (yang valid) — kalau cache lebih baru & ada row di sheet
+  // yang belum tercatat, fallback ke rows hasil scan.
+  if (cachedRows) {
+    Object.keys(rows).forEach(function (key) {
+      cachedRows[key] = rows[key];
+    });
+  }
+
+  cache.put('shipping_label_state', JSON.stringify({ rows: cachedRows || rows }), 30);
+  return { sheet: sheet, rows: cachedRows || rows, warrantyRows: warrantyRows };
+}
+
+function listToObject_(headers, row) {
+  const obj = {};
+  headers.forEach(function (header, index) { obj[header] = row[index]; });
+  return obj;
+}
+
+function handleGetShippingLabelQueue(data) {
+  requireSession_(data.token, ['admin', 'qrcc']);
+  const state = getShippingLabelSheetState_();
+  const statusKirim = clean_(data.statusKirim);
+  const shipBatchId = clean_(data.shipBatchId);
+
+  const rows = Object.keys(state.rows).map(function (key) {
+    const data = state.rows[key].data;
+    return {
+      key: key,
+      idPengajuan: clean_(data['ID Pengajuan']),
+      noItem: clean_(data['No Item']),
+      produk: clean_(data['Produk']),
+      model: clean_(data['Model']),
+      nomorSeri: clean_(data['Nomor Seri']),
+      bagianCabang: clean_(data['Bagian/Cabang']),
+      nama: clean_(data['Nama']),
+      printBatchId: clean_(data['Print Batch ID']),
+      printedAt: toIso_(data['Printed At']),
+      statusKirim: clean_(data['Status Kirim']) || 'Belum Dikirim',
+      shipBatchId: clean_(data['Ship Batch ID']),
+      shippedAt: toIso_(data['Shipped At']),
+      shippedBy: clean_(data['Shipped By']),
+      createdAt: toIso_(data['Created At']),
+      updatedAt: toIso_(data['Updated At'])
+    };
+  }).filter(function (row) {
+    if (statusKirim && row.statusKirim !== statusKirim) return false;
+    if (shipBatchId && row.shipBatchId !== shipBatchId) return false;
+    return true;
+  }).sort(function (a, b) {
+    const at = new Date(a.createdAt || 0).getTime();
+    const bt = new Date(b.createdAt || 0).getTime();
+    return bt - at;
+  });
+
+  return { success: true, data: { rows: rows, total: rows.length } };
 }
 
 function sendEmailDigest() {
@@ -1642,6 +1895,10 @@ function getApprovedWarrantyQueueItems_() {
         printedAt: toIso_(state['Printed At']),
         printedBy: clean_(state['Printed By']),
         reprintCount: Number(state['Reprint Count'] || 0),
+        statusKirim: clean_(state['Status Kirim']) || 'Belum Dikirim',
+        shippedAt: toIso_(state['Shipped At']),
+        shippedBy: clean_(state['Shipped By']),
+        shipBatchId: clean_(state['Ship Batch ID']),
         nama: pengajuan['Nama'],
         bagianCabang: pengajuan['Bagian/Cabang'],
         timestampSubmit: toIso_(pengajuan['Timestamp Submit']),
@@ -1700,6 +1957,10 @@ function writeWarrantyCardRow_(sheet, existingRow, data) {
     data.lastReprintAt,
     data.lastReprintBy,
     data.catatan,
+    data.statusKirim || '',
+    data.shippedAt || '',
+    data.shippedBy || '',
+    data.shipBatchId || '',
   ];
   if (existingRow && existingRow.rowNumber) {
     sheet.getRange(existingRow.rowNumber, 1, 1, row.length).setValues([row]);

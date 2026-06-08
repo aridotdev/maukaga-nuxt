@@ -30,6 +30,27 @@ export function chunkShippingLabels(labels: ShippingLabel[]) {
   return pages
 }
 
+export function getPrintGroupKey(row: Pick<WarrantyPrintQueueRow, 'bagianCabang' | 'nama'>) {
+  const cabang = String(row.bagianCabang || '').trim().toLowerCase() || 'tanpa cabang'
+  const nama = String(row.nama || '').trim().toLowerCase() || 'tanpa nama'
+
+  return `${cabang}|${nama}`
+}
+
+export function matchesPrintRowSearch(row: WarrantyPrintQueueRow, keyword: string) {
+  const needle = String(keyword || '').trim().toLowerCase()
+  if (!needle) return true
+
+  return [
+    row.idPengajuan,
+    row.bagianCabang,
+    row.nama,
+    row.produk,
+    row.model,
+    row.nomorSeri
+  ].some((value) => String(value || '').toLowerCase().includes(needle))
+}
+
 export function getAlertColor(type: 'success' | 'error' | 'info' | 'loading') {
   const colors = {
     success: 'success',

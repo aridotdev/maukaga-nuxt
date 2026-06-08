@@ -21,6 +21,10 @@ export type WarrantyPrintQueueRow = {
   printedAt: string
   printedBy: string
   reprintCount: number
+  statusKirim: 'Belum Dikirim' | 'Dikirim' | string
+  shippedAt: string
+  shippedBy: string
+  shipBatchId: string
   nama: string
   bagianCabang: string
   timestampSubmit: string

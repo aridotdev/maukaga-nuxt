@@ -10,6 +10,7 @@ import type {
   WarrantyPrintQueueResponse,
   WarrantyPrintQueueRow
 } from '~/types/print'
+import { matchesPrintRowSearch } from '~/utils/print'
 
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
@@ -439,17 +440,6 @@ function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem
   const noItem = String(row.noItem ?? '').trim()
 
   return id && noItem ? `${id}::${noItem}` : row.key
-}
-
-function matchesPrintRowSearch(row: WarrantyPrintQueueRow, keyword: string) {
-  return [
-    row.idPengajuan,
-    row.bagianCabang,
-    row.nama,
-    row.produk,
-    row.model,
-    row.nomorSeri
-  ].some((value) => String(value || '').toLowerCase().includes(keyword))
 }
 
 function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {

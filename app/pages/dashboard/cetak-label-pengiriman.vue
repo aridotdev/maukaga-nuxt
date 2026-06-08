@@ -1,10 +1,28 @@
 <script setup lang="ts">
-import type { AlertState, ShippingLabel, WarrantyPrintQueueResponse } from '~/types/print'
+import { h } from 'vue'
+import type { TableColumn } from '@nuxt/ui'
+import type {
+  AlertState,
+  ShippingLabel,
+  WarrantyPrintQueueResponse,
+  WarrantyPrintQueueRow
+} from '~/types/print'
+import {
+  buildShippingLabels,
+  chunkShippingLabels,
+  getPrintGroupKey,
+  getAlertColor,
+  getAlertIcon,
+  matchesPrintRowSearch
+} from '~/utils/print'
 
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
 })
 
+const UBadge = resolveComponent('UBadge')
+const UCheckbox = resolveComponent('UCheckbox')
+const USelect = resolveComponent('USelect')
 
 const toast = useToast()
 const router = useRouter()
@@ -12,41 +30,182 @@ const route = useRoute()
 const { callApi } = useAppsScriptApi()
 
 const adminName = ref('Admin')
+const printQueue = ref<WarrantyPrintQueueRow[]>([])
+const selectedPrintKeys = ref<Set<string>>(new Set())
 const search = ref('')
+type ShipStatusFilter = 'all' | 'unsent' | 'sent'
+const shipStatusFilter = ref<ShipStatusFilter>('all')
 const batchId = ref('')
-const shippingLabels = ref<ShippingLabel[]>([])
+const isQueueLoading = ref(false)
+const isActionLoading = ref(false)
+const pageAlert = ref<AlertState>(null)
+const queueLoadError = ref('')
+const confirmShipOpen = ref(false)
 const labelPrintRows = ref<ShippingLabel[]>([])
-const totalPrintedItems = ref(0)
-const isLoading = ref(false)
-const alertState = ref<AlertState>(null)
 const labelPrintRef = ref<{ print: () => Promise<void> } | null>(null)
+const isPrinting = ref(false)
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
+const shipStatusFilterItems = [{
+  label: 'Semua Status',
+  value: 'all'
+}, {
+  label: 'Belum Dikirim',
+  value: 'unsent'
+}, {
+  label: 'Dikirim',
+  value: 'sent'
+}]
 
-const shippingLabelSummary = computed(() => {
-  const totalQty = shippingLabels.value.reduce((sum, label) => sum + Number(label.qty || 0), 0)
+const printTableGlobalFilterOptions = {
+  globalFilterFn: (row: { original: WarrantyPrintQueueRow }, _columnId: string, filterValue: unknown) =>
+    matchesPrintRowSearch(row.original, String(filterValue || '').trim().toLowerCase())
+}
+
+const visiblePrintRows = computed(() => {
+  const keyword = search.value.trim().toLowerCase()
+
+  return printQueue.value
+    .filter((row) => {
+      if (shipStatusFilter.value === 'unsent') return row.statusKirim === 'Belum Dikirim'
+      if (shipStatusFilter.value === 'sent') return row.statusKirim === 'Dikirim'
+      return true
+    })
+    .filter((row) => {
+      if (!keyword) return true
+      return matchesPrintRowSearch(row, keyword)
+    })
+    .toSorted((a, b) =>
+      String(a.bagianCabang || '').localeCompare(String(b.bagianCabang || ''), 'id-ID')
+      || String(a.nama || '').localeCompare(String(b.nama || ''), 'id-ID')
+      || String(a.idPengajuan).localeCompare(String(b.idPengajuan))
+      || Number(a.noItem) - Number(b.noItem)
+      || String(a.nomorSeri || '').localeCompare(String(b.nomorSeri || ''))
+    )
+})
+
+const visibleSummary = computed(() => {
+  const groups = new Set<string>()
+  let belumDikirim = 0
+  let dikirim = 0
+
+  visiblePrintRows.value.forEach((row) => {
+    groups.add(getPrintGroupKey(row))
+    if (row.statusKirim === 'Belum Dikirim') belumDikirim += 1
+    else if (row.statusKirim === 'Dikirim') dikirim += 1
+  })
 
   return {
-    branches: shippingLabels.value.length,
-    totalQty,
-    size: '60 x 30 mm'
+    totalItems: visiblePrintRows.value.length,
+    totalGroups: groups.size,
+    belumDikirim,
+    dikirim
   }
 })
 
-const previewDescription = computed(() => {
-  if (batchId.value) return `Batch ${batchId.value}`
-  if (search.value.trim()) return `Hasil pencarian "${search.value.trim()}"`
-  return 'Semua item Printed'
+// Selection: per row, tapi aksi "Tandai Dikirim" / "Cetak Label" meluas ke seluruh group
+// (cabang+nama) yang visible & punya minimal satu row tercentang.
+const visibleKeys = computed(() => visiblePrintRows.value.map((row) => getPrintRowKey(row)))
+const selectedVisibleCount = computed(() => visibleKeys.value.filter((key) => selectedPrintKeys.value.has(key)).length)
+const allVisibleSelected = computed(() => visibleKeys.value.length > 0 && selectedVisibleCount.value === visibleKeys.value.length)
+const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && selectedVisibleCount.value < visibleKeys.value.length)
+const checkboxAllState = computed(() => someVisibleSelected.value ? 'indeterminate' : allVisibleSelected.value)
+
+const selectedRows = computed(() => {
+  return Array.from(selectedPrintKeys.value)
+    .map((key) => printQueue.value.find((row) => getPrintRowKey(row) === key))
+    .filter(Boolean) as WarrantyPrintQueueRow[]
 })
 
-watch(search, () => {
-  if (batchId.value) return
-  if (searchTimer) clearTimeout(searchTimer)
-
-  searchTimer = setTimeout(() => {
-    loadShippingLabels()
-  }, 300)
+// Group resolution: dari selected rows, ambil semua row visible di group yang sama
+const bulkGroups = computed(() => {
+  const groups = new Set<string>()
+  selectedRows.value.forEach((row) => groups.add(getPrintGroupKey(row)))
+  return groups
 })
+
+const itemsForBulkAction = computed(() => {
+  if (!bulkGroups.value.size) return []
+  return visiblePrintRows.value.filter((row) => bulkGroups.value.has(getPrintGroupKey(row)))
+})
+
+const selectedGroupCount = computed(() => bulkGroups.value.size)
+
+const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
+  id: 'select',
+  header: () => h(UCheckbox, {
+    modelValue: checkboxAllState.value,
+    'aria-label': 'Pilih semua item tampil',
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => toggleVisiblePrintRows(!!value)
+  }),
+  cell: ({ row }) => h(UCheckbox, {
+    modelValue: selectedPrintKeys.value.has(getPrintRowKey(row.original)),
+    'aria-label': `Pilih ${row.original.idPengajuan} item ${row.original.noItem}`,
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => handlePrintRowCheck(getPrintRowKey(row.original), !!value)
+  }),
+  meta: {
+    class: {
+      th: 'w-12',
+      td: 'w-12'
+    }
+  }
+}, {
+  accessorKey: 'idPengajuan',
+  header: 'ID',
+  cell: ({ row }) => h('div', { class: 'min-w-0' }, [
+    h('p', { class: 'font-mono text-sm font-bold text-highlighted' }, row.original.idPengajuan)
+  ]),
+  meta: {
+    class: {
+      th: 'w-36',
+      td: 'w-36'
+    }
+  }
+}, {
+  accessorKey: 'noItem',
+  header: 'Item',
+  cell: ({ row }) => h('p', { class: 'mt-1 text-xs text-muted' }, `Item #${row.original.noItem}`),
+  meta: {
+    class: {
+      th: 'w-24',
+      td: 'w-24'
+    }
+  }
+}, {
+  accessorKey: 'bagianCabang',
+  header: 'Cabang',
+  cell: ({ row }) => h('p', { class: 'text-sm' }, row.original.bagianCabang || '-'),
+  meta: {
+    class: {
+      th: 'w-32',
+      td: 'w-32'
+    }
+  }
+}, {
+  accessorKey: 'produk',
+  header: 'Produk',
+  cell: ({ row }) => h('p', { class: 'text-sm' }, row.original.produk || '-')
+}, {
+  accessorKey: 'nomorSeri',
+  header: 'Nomor Seri',
+  cell: ({ row }) => h('p', { class: 'text-sm' }, row.original.nomorSeri || '-')
+}, {
+  accessorKey: 'model',
+  header: 'Model',
+  cell: ({ row }) => h('p', { class: 'text-sm' }, row.original.model || '-')
+}, {
+  accessorKey: 'nama',
+  header: 'Nama',
+  cell: ({ row }) => h('p', { class: 'text-sm' }, row.original.nama || '-')
+}, {
+  accessorKey: 'statusKirim',
+  header: 'Status Kirim',
+  cell: ({ row }) => h(UBadge, {
+    color: row.original.statusKirim === 'Dikirim' ? 'success' : 'warning',
+    variant: 'subtle',
+    label: row.original.statusKirim === 'Dikirim' ? 'Dikirim' : 'Belum Dikirim',
+    class: 'w-fit text-xs text-muted'
+  })
+}]
 
 onMounted(async () => {
   adminName.value = sessionStorage.getItem('admin_nama') || 'Admin'
@@ -56,18 +215,25 @@ onMounted(async () => {
   }
 
   batchId.value = String(route.query.batchId || '')
-  await loadShippingLabels(false)
+  window.addEventListener('afterprint', onAfterPrint)
+  await loadPrintQueue(false)
 })
 
-async function loadShippingLabels(showLoading = true) {
-  if (showLoading) isLoading.value = true
-  alertState.value = showLoading
-    ? {
-        type: 'loading',
-        title: 'Memuat data label',
-        description: batchId.value ? `Mengambil item Printed untuk batch ${batchId.value}.` : 'Mengambil semua item Printed sesuai pencarian aktif.'
-      }
-    : null
+onBeforeUnmount(() => {
+  window.removeEventListener('afterprint', onAfterPrint)
+})
+
+async function loadPrintQueue(showLoading = true) {
+  if (showLoading) isQueueLoading.value = true
+  queueLoadError.value = ''
+
+  if (showLoading) {
+    pageAlert.value = {
+      type: 'loading',
+      title: 'Memuat data label',
+      description: batchId.value ? `Mengambil item Printed untuk batch ${batchId.value}.` : 'Mengambil semua item Printed sesuai pencarian aktif.'
+    }
+  }
 
   try {
     const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', {
@@ -76,52 +242,145 @@ async function loadShippingLabels(showLoading = true) {
     })
     if (!result.success || !result.data) throw new Error(result.error || 'Gagal memuat data label')
 
-    const printedRows = (result.data.rows || []).filter((row) =>
-      row.statusCetak === 'Printed' && (!batchId.value || row.printBatchId === batchId.value)
-    )
+    const printedRows = (result.data.rows || [])
+      .filter((row) => row.statusCetak === 'Printed')
+      .filter((row) => !batchId.value || row.printBatchId === batchId.value)
+      .map((row) => ({ ...row, key: getPrintRowKey(row) }))
 
-    shippingLabels.value = buildShippingLabels(printedRows)
-    totalPrintedItems.value = printedRows.length
+    printQueue.value = printedRows
+    pruneSelection()
 
-    if (!shippingLabels.value.length) {
-      alertState.value = {
-        type: 'error',
-        title: 'Tidak ada item Printed untuk label pengiriman',
-        description: 'Coba pilih batch lain atau kosongkan pencarian aktif.'
+    if (showLoading && pageAlert.value?.type === 'loading') pageAlert.value = null
+
+    if (!printQueue.value.length && showLoading) {
+      pageAlert.value = {
+        type: 'info',
+        title: 'Belum ada item Printed untuk label',
+        description: batchId.value
+          ? `Batch ${batchId.value} tidak memiliki item Printed.`
+          : 'Belum ada kartu yang ditandai Printed.'
       }
-    } else {
-      alertState.value = null
+    } else if (printQueue.value.length && pageAlert.value?.type === 'info') {
+      pageAlert.value = null
     }
   } catch (error) {
+    queueLoadError.value = getErrorMessage(error, 'Label pengiriman belum bisa dimuat')
     await handleApiError(error, 'Label pengiriman belum bisa dimuat')
   } finally {
-    isLoading.value = false
+    isQueueLoading.value = false
   }
+}
+
+function handlePrintRowCheck(key: string, checked: boolean) {
+  const next = new Set(selectedPrintKeys.value)
+  if (checked) next.add(key)
+  else next.delete(key)
+  selectedPrintKeys.value = next
+}
+
+function toggleVisiblePrintRows(checked: boolean) {
+  const next = new Set(selectedPrintKeys.value)
+  visibleKeys.value.forEach((key) => {
+    if (checked) next.add(key)
+    else next.delete(key)
+  })
+  selectedPrintKeys.value = next
+}
+
+function pruneSelection() {
+  const activeKeys = new Set(printQueue.value.map((row) => getPrintRowKey(row)))
+  selectedPrintKeys.value = new Set(Array.from(selectedPrintKeys.value).filter((key) => activeKeys.has(key)))
+}
+
+function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem' | 'key'>) {
+  const id = String(row.idPengajuan || '').trim()
+  const noItem = String(row.noItem ?? '').trim()
+
+  return id && noItem ? `${id}::${noItem}` : row.key
+}
+
+function openConfirmShip() {
+  if (!itemsForBulkAction.value.length) {
+    showInlineError('Pilih item yang akan ditandai Dikirim')
+    return
+  }
+  confirmShipOpen.value = true
+}
+
+async function markSelectedShippingLabelsShipped() {
+  const items = itemsForBulkAction.value
+  if (!items.length) {
+    confirmShipOpen.value = false
+    return
+  }
+
+  confirmShipOpen.value = false
+  isActionLoading.value = true
+  pageAlert.value = {
+    type: 'loading',
+    title: 'Menyimpan status kirim',
+    description: `Menandai ${items.length} item (${selectedGroupCount.value} group) sebagai Dikirim.`
+  }
+
+  try {
+    const result = await callApi<{ batchId: string, count: number }>('markShippingLabelsShipped', {
+      items: items.map((row) => ({
+        idPengajuan: row.idPengajuan,
+        noItem: row.noItem
+      }))
+    })
+    if (!result.success || !result.data) throw new Error(result.error || 'Gagal menandai label terkirim')
+
+    selectedPrintKeys.value = new Set()
+    await loadPrintQueue(false)
+    pageAlert.value = {
+      type: 'success',
+      title: `Batch ${result.data.batchId} tersimpan`,
+      description: `${result.data.count} item ditandai Dikirim.`
+    }
+    notify('Status kirim tersimpan', 'success')
+  } catch (error) {
+    await handleApiError(error, 'Status kirim gagal disimpan')
+  } finally {
+    isActionLoading.value = false
+  }
+}
+
+async function printSelectedShippingLabels() {
+  if (isPrinting.value) return
+  const items = itemsForBulkAction.value
+  if (!items.length) {
+    showInlineError('Pilih item yang ingin dicetak labelnya')
+    return
+  }
+
+  isPrinting.value = true
+  const labels = buildShippingLabels(items)
+  labelPrintRows.value = labels
+  pageAlert.value = {
+    type: 'info',
+    title: `${labels.length} label siap dicetak`,
+    description: `Mencakup ${items.length} item (${selectedGroupCount.value} group). Dialog print browser akan terbuka.`
+  }
+  await labelPrintRef.value?.print().catch(() => { isPrinting.value = false })
+}
+
+function endPrinting() {
+  isPrinting.value = false
+}
+
+function onAfterPrint() {
+  endPrinting()
 }
 
 async function clearBatchFilter() {
   batchId.value = ''
   await router.replace('/dashboard/cetak-label-pengiriman')
-  await loadShippingLabels()
-}
-
-async function printShippingLabels() {
-  if (!shippingLabels.value.length) {
-    showInlineError('Tidak ada label untuk dicetak')
-    return
-  }
-
-  labelPrintRows.value = [...shippingLabels.value]
-  alertState.value = {
-    type: 'success',
-    title: `${shippingLabels.value.length} label siap dicetak`,
-    description: 'Layout label memakai ukuran 60 x 30 mm, maksimal 24 label per halaman A4.'
-  }
-  await labelPrintRef.value?.print()
+  await loadPrintQueue()
 }
 
 function showInlineError(message: string) {
-  alertState.value = {
+  pageAlert.value = {
     type: 'error',
     title: message
   }
@@ -136,9 +395,13 @@ function notify(title: string, color: 'success' | 'error' | 'info') {
   })
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : String(error || fallback)
+}
+
 async function handleApiError(error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message : String(error || fallback)
-  alertState.value = {
+  const message = getErrorMessage(error, fallback)
+  pageAlert.value = {
     type: 'error',
     title: fallback,
     description: message
@@ -152,6 +415,11 @@ async function handleApiError(error: unknown, fallback: string) {
     await router.push('/login')
   }
 }
+
+// Hitung halaman label di-cache agar tidak rebuild tiap render template.
+const labelPagesForVisible = computed(() => chunkShippingLabels(buildShippingLabels(visiblePrintRows.value)))
+const totalPages = computed(() => labelPagesForVisible.value.length)
+const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().length)
 </script>
 
 <template>
@@ -167,83 +435,143 @@ async function handleApiError(error: unknown, fallback: string) {
 
       <template #body>
         <div class="space-y-6">
-          <div class="grid gap-4 md:grid-cols-3">
-            <UPageCard title="Cabang" :description="`${shippingLabelSummary.branches} label`" icon="i-lucide-building-2" variant="subtle" />
-            <UPageCard title="Qty Item Produk" :description="`${shippingLabelSummary.totalQty} item printed`" icon="i-lucide-package-check" variant="subtle" />
-            <UPageCard title="Ukuran Label" :description="shippingLabelSummary.size" icon="i-lucide-ruler" variant="subtle" />
-          </div>
+          <PrintLabelPengirimanStats
+            :summary="visibleSummary"
+            :selected-count="itemsForBulkAction.length"
+            :loading="isQueueLoading"
+          />
 
-          <section class="rounded-lg border border-muted bg-default/45 p-4 shadow-sm backdrop-blur-xl">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-lg font-semibold text-highlighted">
-                  Preview Label Pengiriman
-                </h2>
-                <p class="text-sm text-muted">
-                  {{ previewDescription }} - {{ totalPrintedItems }} item
-                </p>
-              </div>
+          <UAlert
+            v-if="pageAlert"
+            :color="getAlertColor(pageAlert.type)"
+            :icon="getAlertIcon(pageAlert.type)"
+            :title="pageAlert.title"
+            :description="pageAlert.description"
+            variant="subtle"
+          >
+            <template v-if="pageAlert.type !== 'loading'" #actions>
+              <UButton
+                icon="i-lucide-x"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="Tutup pesan"
+                @click="pageAlert = null"
+              />
+            </template>
+          </UAlert>
 
-              <div class="flex flex-wrap items-center gap-2">
+          <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
+            <div class="min-h-0 w-full overflow-x-auto">
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3.5">
                 <UInput
                   v-model="search"
-                  class="w-full sm:w-72"
+                  class="w-full max-w-sm"
                   icon="i-lucide-search"
-                  placeholder="Cari batch, cabang, nama, produk..."
+                  placeholder="Cari ID, cabang, nama, produk, model, atau serial..."
                   :disabled="!!batchId"
                 />
-                <UButton
-                  v-if="batchId"
-                  label="Semua Printed"
-                  icon="i-lucide-list-restart"
-                  color="neutral"
-                  variant="soft"
-                  @click="clearBatchFilter"
-                />
-                <UButton
-                  label="Refresh"
-                  icon="i-lucide-refresh-cw"
-                  color="neutral"
-                  variant="soft"
-                  :loading="isLoading"
-                  @click="loadShippingLabels()"
-                />
-                <UButton
-                  label="Cetak Label"
-                  icon="i-lucide-printer"
-                  color="primary"
-                  :disabled="!shippingLabels.length"
-                  @click="printShippingLabels"
-                />
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <UButton
+                    v-if="batchId"
+                    label="Semua Printed"
+                    icon="i-lucide-list-restart"
+                    color="neutral"
+                    variant="soft"
+                    size="sm"
+                    @click="clearBatchFilter"
+                  />
+                  <USelect
+                    v-model="shipStatusFilter"
+                    :items="shipStatusFilterItems"
+                    class="w-full sm:w-44"
+                    :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+                  />
+                  <UButton
+                    label="Refresh"
+                    icon="i-lucide-refresh-cw"
+                    color="neutral"
+                    variant="soft"
+                    :loading="isQueueLoading"
+                    @click="loadPrintQueue()"
+                  />
+                </div>
               </div>
-            </div>
 
-            <UAlert
-              v-if="alertState"
-              :color="getAlertColor(alertState.type)"
-              :icon="getAlertIcon(alertState.type)"
-              :title="alertState.title"
-              :description="alertState.description"
-              variant="subtle"
-              class="mb-4"
-            />
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3">
+                <p class="text-sm text-muted">
+                  <template v-if="selectedPrintKeys.size">
+                    {{ itemsForBulkAction.length }} item (dalam {{ selectedGroupCount }} group) akan diproses dari {{ visiblePrintRows.length }} item tampil.
+                  </template>
+                  <template v-else>
+                    {{ visiblePrintRows.length }} item tampil.
+                  </template>
+                </p>
 
-            <div v-if="shippingLabels.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <UPageCard
-                v-for="label in shippingLabels"
-                :key="`${label.cabang}-${label.nama}`"
-                :title="label.cabang"
-                :description="`${label.nama} - ${label.qty} item produk`"
-                icon="i-lucide-tag"
-                variant="subtle"
-              />
-            </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <UButton
+                    label="Tandai Dikirim"
+                    icon="i-lucide-truck"
+                    color="success"
+                    variant="soft"
+                    size="sm"
+                    :disabled="!itemsForBulkAction.length || isActionLoading"
+                    @click="openConfirmShip"
+                  />
+                  <UButton
+                    label="Cetak Label"
+                    icon="i-lucide-printer"
+                    color="primary"
+                    size="sm"
+                    :loading="isPrinting"
+                    :disabled="!itemsForBulkAction.length || isPrinting"
+                    @click="printSelectedShippingLabels"
+                  />
+                </div>
+              </div>
 
-            <div v-else-if="!isLoading" class="flex flex-col items-center justify-center gap-2 py-8 text-center">
-              <UIcon name="i-lucide-tags" class="size-8 text-muted" />
-              <p class="text-sm font-medium text-highlighted">
-                Belum ada label untuk ditampilkan
-              </p>
+              <UTable
+                v-model:global-filter="search"
+                :get-row-id="getPrintRowKey"
+                :data="visiblePrintRows"
+                :columns="warrantyColumns"
+                :global-filter-options="printTableGlobalFilterOptions"
+                :loading="isQueueLoading"
+                class="w-full"
+                :ui="{
+                  root: 'w-full',
+                  base: 'w-full min-w-190 table-fixed border-separate border-spacing-0',
+                  thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
+                  tbody: '[&>tr]:last:[&>td]:border-b-0',
+                  tr: 'transition-colors hover:bg-elevated/30',
+                  th: 'border-b border-muted px-4 py-3 text-xs font-semibold uppercase text-muted',
+                  td: 'border-b border-muted px-4 py-4 text-sm align-middle',
+                  separator: 'h-0'
+                }"
+              >
+                <template #empty>
+                  <div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                    <UIcon
+                      :name="queueLoadError ? 'i-lucide-circle-alert' : 'i-lucide-tags'"
+                      class="size-8 text-muted"
+                    />
+                    <p class="text-sm font-medium text-highlighted">
+                      {{ queueLoadError ? 'Label pengiriman belum bisa dimuat' : 'Belum ada item Printed untuk label' }}
+                    </p>
+                    <p v-if="queueLoadError" class="max-w-md text-sm text-muted">
+                      {{ queueLoadError }}
+                    </p>
+                    <p v-else-if="batchId" class="text-sm text-muted">
+                      Batch {{ batchId }} tidak memiliki item Printed.
+                    </p>
+                  </div>
+                </template>
+              </UTable>
+
+              <div v-if="visiblePrintRows.length" class="border-t border-accented px-4 py-3 text-xs text-muted">
+                {{ totalPages }} halaman label ({{ totalLabelsForVisible }} label) untuk {{ visibleSummary.totalItems }} item / {{ visibleSummary.totalGroups }} group.
+              </div>
             </div>
           </section>
         </div>
@@ -251,5 +579,20 @@ async function handleApiError(error: unknown, fallback: string) {
     </UDashboardPanel>
 
     <PrintLabelPengiriman ref="labelPrintRef" :labels="labelPrintRows" :batch-id="batchId" />
+
+    <UModal v-model:open="confirmShipOpen" title="Tandai label sudah dikirim?" description="Item terpilih dan seluruh row dalam group yang sama akan disimpan sebagai Dikirim. Pastikan barang sudah benar-benar dikirim ke cabang tujuan.">
+      <template #body>
+        <p class="text-sm text-muted">
+          {{ itemsForBulkAction.length }} item (dalam {{ selectedGroupCount }} group cabang+nama) akan ditandai Dikirim. Centang otomatis semua row di group yang dipilih.
+        </p>
+      </template>
+
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton label="Batal" color="neutral" variant="ghost" :disabled="isActionLoading" @click="confirmShipOpen = false" />
+          <UButton label="Tandai Dikirim" color="success" :loading="isActionLoading" @click="markSelectedShippingLabelsShipped" />
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
