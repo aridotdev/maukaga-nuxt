@@ -24,7 +24,10 @@ export function useAppsScriptApi() {
 
     if (!response.ok) throw new Error(`Google Apps Script merespons ${response.status}.`)
 
-    return response.json() as Promise<ApiResult<T>>
+    const result = await response.json() as ApiResult<T>
+    if (!result.success) throw new Error(result.error || 'Request gagal.')
+
+    return result
   }
 
   return {

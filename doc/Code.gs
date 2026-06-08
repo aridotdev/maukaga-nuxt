@@ -926,7 +926,9 @@ function handleUpdateItemStatus(data) {
     itemSheet.getRange(itemRow, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
     itemSheet.getRange(itemRow, itemCol['User Update Status Item'] + 1).setValue(session.username);
 
-    // Reuse itemValues yang sudah dibaca di awal (baris 909-910) untuk hindari getDataRange kedua.
+    itemValues[itemRow - 1][itemCol['Status Item']] = statusBaru;
+
+    // Reuse itemValues yang sudah dibaca di awal untuk hindari getDataRange kedua.
     const refreshedItems = itemValues.slice(1)
       .filter(function (row) { return row[itemCol['ID Pengajuan']] === id; })
       .map(function (row) { return clean_(row[itemCol['Status Item']]) || parentStatusLama || 'Baru'; });
