@@ -102,8 +102,8 @@ const visibleSummary = computed(() => {
   }
 })
 
-// Selection: per row, tapi aksi "Tandai Dikirim" / "Cetak Label" meluas ke seluruh group
-// (cabang+nama) yang visible & punya minimal satu row tercentang.
+// Selection: hanya row yang dicentang user yang ikut diproses.
+// Tidak ada ekspansi group — biar sederhana & sesuai checklist user.
 const visibleKeys = computed(() => visiblePrintRows.value.map((row) => getPrintRowKey(row)))
 const selectedVisibleCount = computed(() => visibleKeys.value.filter((key) => selectedPrintKeys.value.has(key)).length)
 const allVisibleSelected = computed(() => visibleKeys.value.length > 0 && selectedVisibleCount.value === visibleKeys.value.length)
@@ -116,19 +116,13 @@ const selectedRows = computed(() => {
     .filter(Boolean) as WarrantyPrintQueueRow[]
 })
 
-// Group resolution: dari selected rows, ambil semua row visible di group yang sama
-const bulkGroups = computed(() => {
+const itemsForBulkAction = computed(() => selectedRows.value)
+
+const selectedGroupCount = computed(() => {
   const groups = new Set<string>()
   selectedRows.value.forEach((row) => groups.add(getPrintGroupKey(row)))
-  return groups
+  return groups.size
 })
-
-const itemsForBulkAction = computed(() => {
-  if (!bulkGroups.value.size) return []
-  return visiblePrintRows.value.filter((row) => bulkGroups.value.has(getPrintGroupKey(row)))
-})
-
-const selectedGroupCount = computed(() => bulkGroups.value.size)
 
 const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
   id: 'select',
@@ -319,7 +313,7 @@ async function markSelectedShippingLabelsShipped() {
   pageAlert.value = {
     type: 'loading',
     title: 'Menyimpan status kirim',
-    description: `Menandai ${items.length} item (${selectedGroupCount.value} group) sebagai Dikirim.`
+    description: `Menandai ${items.length} item (${selectedGroupCount.value} group cabang+nama) sebagai Dikirim.`
   }
 
   try {
@@ -360,7 +354,7 @@ async function printSelectedShippingLabels() {
   pageAlert.value = {
     type: 'info',
     title: `${labels.length} label siap dicetak`,
-    description: `Mencakup ${items.length} item (${selectedGroupCount.value} group). Dialog print browser akan terbuka.`
+    description: `Mencakup ${items.length} item (${selectedGroupCount.value} group cabang+nama). Dialog print browser akan terbuka.`
   }
   await labelPrintRef.value?.print().catch(() => { isPrinting.value = false })
 }
@@ -502,7 +496,7 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
               <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3">
                 <p class="text-sm text-muted">
                   <template v-if="selectedPrintKeys.size">
-                    {{ itemsForBulkAction.length }} item (dalam {{ selectedGroupCount }} group) akan diproses dari {{ visiblePrintRows.length }} item tampil.
+                    {{ itemsForBulkAction.length }} item (dalam {{ selectedGroupCount }} group cabang+nama) akan diproses dari {{ visiblePrintRows.length }} item tampil.
                   </template>
                   <template v-else>
                     {{ visiblePrintRows.length }} item tampil.
@@ -580,10 +574,10 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
 
     <PrintLabelPengiriman ref="labelPrintRef" :labels="labelPrintRows" :batch-id="batchId" />
 
-    <UModal v-model:open="confirmShipOpen" title="Tandai label sudah dikirim?" description="Item terpilih dan seluruh row dalam group yang sama akan disimpan sebagai Dikirim. Pastikan barang sudah benar-benar dikirim ke cabang tujuan.">
+    <UModal v-model:open="confirmShipOpen" title="Tandai label sudah dikirim?" description="Hanya item yang Anda centang akan disimpan sebagai Dikirim. Pastikan barang sudah benar-benar dikirim ke cabang tujuan.">
       <template #body>
         <p class="text-sm text-muted">
-          {{ itemsForBulkAction.length }} item (dalam {{ selectedGroupCount }} group cabang+nama) akan ditandai Dikirim. Centang otomatis semua row di group yang dipilih.
+          {{ itemsForBulkAction.length }} item (dalam {{ selectedGroupCount }} group cabang+nama) akan ditandai Dikirim.
         </p>
       </template>
 
