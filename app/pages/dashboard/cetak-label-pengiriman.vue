@@ -22,20 +22,15 @@ definePageMeta({
 
 const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
-const USelect = resolveComponent('USelect')
 
 const toast = useToast()
 const router = useRouter()
-const route = useRoute()
 const { callApi } = useAppsScriptApi()
 
 const adminName = ref('Admin')
 const printQueue = ref<WarrantyPrintQueueRow[]>([])
 const selectedPrintKeys = ref<Set<string>>(new Set())
 const search = ref('')
-type ShipStatusFilter = 'all' | 'unsent' | 'sent'
-const shipStatusFilter = ref<ShipStatusFilter>('all')
-const batchId = ref('')
 const isQueueLoading = ref(false)
 const isActionLoading = ref(false)
 const pageAlert = ref<AlertState>(null)
@@ -44,17 +39,6 @@ const confirmShipOpen = ref(false)
 const labelPrintRows = ref<ShippingLabel[]>([])
 const labelPrintRef = ref<{ print: () => Promise<void> } | null>(null)
 const isPrinting = ref(false)
-
-const shipStatusFilterItems = [{
-  label: 'Semua Status',
-  value: 'all'
-}, {
-  label: 'Belum Dikirim',
-  value: 'unsent'
-}, {
-  label: 'Dikirim',
-  value: 'sent'
-}]
 
 const printTableGlobalFilterOptions = {
   globalFilterFn: (row: { original: WarrantyPrintQueueRow }, _columnId: string, filterValue: unknown) =>
@@ -65,11 +49,6 @@ const visiblePrintRows = computed(() => {
   const keyword = search.value.trim().toLowerCase()
 
   return printQueue.value
-    .filter((row) => {
-      if (shipStatusFilter.value === 'unsent') return row.statusKirim === 'Belum Dikirim'
-      if (shipStatusFilter.value === 'sent') return row.statusKirim === 'Dikirim'
-      return true
-    })
     .filter((row) => {
       if (!keyword) return true
       return matchesPrintRowSearch(row, keyword)
@@ -208,7 +187,6 @@ onMounted(async () => {
     return
   }
 
-  batchId.value = String(route.query.batchId || '')
   window.addEventListener('afterprint', onAfterPrint)
   await loadPrintQueue(false)
 })
@@ -225,23 +203,42 @@ async function loadPrintQueue(showLoading = true) {
     pageAlert.value = {
       type: 'loading',
       title: 'Memuat data label',
-      description: batchId.value ? `Mengambil item Printed untuk batch ${batchId.value}.` : 'Mengambil semua item Printed sesuai pencarian aktif.'
+      description: 'Mengambil kandidat label dengan status Belum Dikirim.'
     }
   }
 
   try {
-    const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', {
-      search: batchId.value ? '' : search.value.trim(),
-      includePrinted: true
+    // Sumber utama: sheet ShippingLabels (sudah terisi otomatis saat kartu ditandai Printed).
+    const labelResult = await callApi<WarrantyPrintQueueResponse>('getShippingLabelQueue', {
+      statusKirim: 'Belum Dikirim'
     })
-    if (!result.success || !result.data) throw new Error(result.error || 'Gagal memuat data label')
+    if (!labelResult.success || !labelResult.data) throw new Error(labelResult.error || 'Gagal memuat data label')
 
-    const printedRows = (result.data.rows || [])
-      .filter((row) => row.statusCetak === 'Printed')
-      .filter((row) => !batchId.value || row.printBatchId === batchId.value)
-      .map((row) => ({ ...row, key: getPrintRowKey(row) }))
+    const unsentKey = new Set<string>()
+    const shippingRows = (labelResult.data.rows || []).map((row) => {
+      unsentKey.add(getPrintRowKey(row))
+      return { ...row, key: getPrintRowKey(row) }
+    })
 
-    printQueue.value = printedRows
+    // Sumber fallback: kartu Printed dengan statusKirim='Belum Dikirim' (filter di server)
+    // yang belum masuk ShippingLabels (mis. data lama sebelum insert otomatis diterapkan).
+    let fallbackRows: WarrantyPrintQueueRow[] = []
+    try {
+      const printedResult = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', {
+        includePrinted: true,
+        onlyUnsent: true
+      })
+      if (printedResult.success && printedResult.data?.rows) {
+        fallbackRows = printedResult.data.rows
+          .filter((row) => !unsentKey.has(getPrintRowKey(row)))
+          .map((row) => ({ ...row, key: getPrintRowKey(row) }))
+      }
+    } catch (fallbackError) {
+      // Fallback gagal bukan hal kritis — sumber utama tetap dipakai.
+      console.warn('Fallback getWarrantyPrintQueue gagal:', fallbackError)
+    }
+
+    printQueue.value = [...shippingRows, ...fallbackRows]
     pruneSelection()
 
     if (showLoading && pageAlert.value?.type === 'loading') pageAlert.value = null
@@ -249,10 +246,8 @@ async function loadPrintQueue(showLoading = true) {
     if (!printQueue.value.length && showLoading) {
       pageAlert.value = {
         type: 'info',
-        title: 'Belum ada item Printed untuk label',
-        description: batchId.value
-          ? `Batch ${batchId.value} tidak memiliki item Printed.`
-          : 'Belum ada kartu yang ditandai Printed.'
+        title: 'Belum ada label yang perlu dikirim',
+        description: 'Belum ada kartu Printed yang siap dikirim.'
       }
     } else if (printQueue.value.length && pageAlert.value?.type === 'info') {
       pageAlert.value = null
@@ -367,12 +362,6 @@ function onAfterPrint() {
   endPrinting()
 }
 
-async function clearBatchFilter() {
-  batchId.value = ''
-  await router.replace('/dashboard/cetak-label-pengiriman')
-  await loadPrintQueue()
-}
-
 function showInlineError(message: string) {
   pageAlert.value = {
     type: 'error',
@@ -463,25 +452,9 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
                   class="w-full max-w-sm"
                   icon="i-lucide-search"
                   placeholder="Cari ID, cabang, nama, produk, model, atau serial..."
-                  :disabled="!!batchId"
                 />
 
                 <div class="flex flex-wrap items-center gap-2">
-                  <UButton
-                    v-if="batchId"
-                    label="Semua Printed"
-                    icon="i-lucide-list-restart"
-                    color="neutral"
-                    variant="soft"
-                    size="sm"
-                    @click="clearBatchFilter"
-                  />
-                  <USelect
-                    v-model="shipStatusFilter"
-                    :items="shipStatusFilterItems"
-                    class="w-full sm:w-44"
-                    :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-                  />
                   <UButton
                     label="Refresh"
                     icon="i-lucide-refresh-cw"
@@ -551,13 +524,10 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
                       class="size-8 text-muted"
                     />
                     <p class="text-sm font-medium text-highlighted">
-                      {{ queueLoadError ? 'Label pengiriman belum bisa dimuat' : 'Belum ada item Printed untuk label' }}
+                      {{ queueLoadError ? 'Label pengiriman belum bisa dimuat' : 'Belum ada label yang perlu dikirim' }}
                     </p>
                     <p v-if="queueLoadError" class="max-w-md text-sm text-muted">
                       {{ queueLoadError }}
-                    </p>
-                    <p v-else-if="batchId" class="text-sm text-muted">
-                      Batch {{ batchId }} tidak memiliki item Printed.
                     </p>
                   </div>
                 </template>
@@ -572,7 +542,7 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
       </template>
     </UDashboardPanel>
 
-    <PrintLabelPengiriman ref="labelPrintRef" :labels="labelPrintRows" :batch-id="batchId" />
+    <PrintLabelPengiriman ref="labelPrintRef" :labels="labelPrintRows" />
 
     <UModal v-model:open="confirmShipOpen" title="Tandai label sudah dikirim?" description="Hanya item yang Anda centang akan disimpan sebagai Dikirim. Pastikan barang sudah benar-benar dikirim ke cabang tujuan.">
       <template #body>

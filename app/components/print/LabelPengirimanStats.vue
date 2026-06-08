@@ -20,7 +20,7 @@ const normalizedSummary = computed(() => ({
 }))
 
 const stats = computed(() => [{
-  title: 'Total Item Printed',
+  title: 'Total Item',
   icon: 'i-lucide-package-check',
   value: normalizedSummary.value.totalItems,
   description: `${normalizedSummary.value.totalGroups} group cabang+nama`
@@ -30,15 +30,15 @@ const stats = computed(() => [{
   value: normalizedSummary.value.totalGroups,
   description: `${Number(props.selectedCount || 0)} item dipilih`
 }, {
-  title: 'Belum Dikirim',
+  title: 'Siap Dikirim',
   icon: 'i-lucide-truck',
   value: normalizedSummary.value.belumDikirim,
-  description: 'Siap ditandai Dikirim'
+  description: 'Menunggu ditandai Dikirim'
 }, {
-  title: 'Dikirim',
+  title: 'Sudah Dikirim',
   icon: 'i-lucide-circle-check',
   value: normalizedSummary.value.dikirim,
-  description: 'Sudah terkirim'
+  description: 'Lihat di halaman rekap'
 }])
 </script>
 
