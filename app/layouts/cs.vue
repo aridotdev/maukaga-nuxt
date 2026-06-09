@@ -118,7 +118,7 @@
       </NuxtLink>
     </header>
 
-    <main class="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col py-10">
+    <main class="relative z-10 mx-auto flex w-full max-w-400 flex-1 flex-col py-10">
       <slot />
     </main>
 
