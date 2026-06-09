@@ -486,24 +486,33 @@ function handleCheckDraftPengajuanStatus(data) {
 }
 
 function handleCheckPengajuanStatus(data) {
-  const id = clean_(data.idPengajuan);
-  if (!id) throw new Error('Masukkan ID Pengajuan terlebih dahulu.');
-
-  const record = findPengajuanRecord_(id);
-  if (!record) throw new Error('ID Pengajuan tidak ditemukan. Periksa kembali ID yang dimasukkan.');
+  const lookup = resolvePengajuanStatusLookup_(data);
+  const record = lookup.record;
+  const matchedItem = lookup.item ? lookup.item.data : null;
 
   const row = record.row;
   const col = record.col;
-  const status = clean_(row[col['Status']]);
-  if (VALID_STATUSES.concat([DRAFT_STATUS]).indexOf(status) === -1) {
+  const id = clean_(row[col['ID Pengajuan']]);
+  const parentStatus = clean_(row[col['Status']]);
+  if (VALID_STATUSES.concat([DRAFT_STATUS]).indexOf(parentStatus) === -1) {
     throw new Error('Status pengajuan tidak bisa ditampilkan.');
   }
+
+  const itemStatus = matchedItem ? clean_(matchedItem['Status Item']) : '';
+  const status = matchedItem && parentStatus !== DRAFT_STATUS ? (itemStatus || parentStatus) : parentStatus;
 
   return {
     success: true,
     data: {
       idPengajuan: id,
+      searchBy: lookup.searchBy,
       status: status,
+      parentStatus: parentStatus,
+      statusItem: itemStatus,
+      noItem: matchedItem ? matchedItem['No Item'] : '',
+      nomorSeri: matchedItem ? matchedItem['Nomor Seri'] : '',
+      produk: matchedItem ? matchedItem['Produk'] : '',
+      model: matchedItem ? matchedItem['Model'] : '',
       timestampSubmit: toIso_(row[col['Timestamp Submit']]),
       jumlahItem: row[col['Jumlah Item']],
       catatanAdmin: row[col['Catatan Admin']],
@@ -511,6 +520,24 @@ function handleCheckPengajuanStatus(data) {
       draftUpdatedAt: toIso_(row[col['Draft Updated At']]),
     },
   };
+}
+
+function resolvePengajuanStatusLookup_(data) {
+  data = data || {};
+  const keyword = clean_(data.keyword || data.search || data.query || data.idPengajuan || data.nomorSeri);
+  if (!keyword) throw new Error('Masukkan ID Pengajuan atau Nomor Seri terlebih dahulu.');
+
+  const record = findPengajuanRecord_(keyword) || findPengajuanRecord_(keyword.toUpperCase());
+  if (record) return { record: record, item: null, searchBy: 'idPengajuan' };
+
+  const item = findItemRecordBySerial_(keyword);
+  if (!item) throw new Error('ID Pengajuan atau Nomor Seri tidak ditemukan. Periksa kembali input yang dimasukkan.');
+
+  const itemId = clean_(item.data['ID Pengajuan']);
+  const itemRecord = itemId ? findPengajuanRecord_(itemId) : null;
+  if (!itemRecord) throw new Error('Data pengajuan untuk Nomor Seri ini tidak ditemukan.');
+
+  return { record: itemRecord, item: item, searchBy: 'nomorSeri' };
 }
 
 function handleGetModelProduk() {
@@ -1879,6 +1906,39 @@ function findPengajuanRecord_(id) {
     }
   }
   return null;
+}
+
+function findItemRecordBySerial_(nomorSeri) {
+  const serial = clean_(nomorSeri).toLowerCase();
+  if (!serial) return null;
+
+  const sheet = getSheet_(SHEETS.ITEMS);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return null;
+
+  const headers = values[0];
+  const col = indexMap_(headers);
+  const matches = [];
+
+  for (let i = 1; i < values.length; i++) {
+    if (clean_(values[i][col['Nomor Seri']]).toLowerCase() !== serial) continue;
+    matches.push({
+      sheet: sheet,
+      values: values,
+      headers: headers,
+      col: col,
+      rowNumber: i + 1,
+      row: values[i],
+      data: listToObject_(headers, values[i]),
+    });
+  }
+
+  if (!matches.length) return null;
+  if (matches.length > 1) {
+    throw new Error('Nomor Seri ditemukan di lebih dari satu item. Gunakan ID Pengajuan untuk hasil yang lebih spesifik.');
+  }
+
+  return matches[0];
 }
 
 function getItemsForPengajuan_(id, fallbackStatus) {

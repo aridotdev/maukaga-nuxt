@@ -16,7 +16,14 @@ type ApiResult<T = Record<string, unknown>> = {
 
 type StatusData = {
   idPengajuan?: string
+  searchBy?: 'idPengajuan' | 'nomorSeri'
   status?: string
+  parentStatus?: string
+  statusItem?: string
+  noItem?: string | number
+  nomorSeri?: string
+  produk?: string
+  model?: string
 }
 
 type ResultType = 'idle' | 'loading' | 'success' | 'error'
@@ -33,7 +40,7 @@ const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
 const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 
-const idPengajuanInput = ref('')
+const searchInput = ref('')
 const resultType = ref<ResultType>('idle')
 const resultMessage = ref('')
 const statusData = ref<StatusData>({})
@@ -46,6 +53,7 @@ const showStatusResult = computed(() => resultType.value !== 'idle')
 const statusText = computed(() => statusData.value.status || '-')
 const statusTone = computed(() => statusCheckBadge(statusData.value.status))
 const statusInfoText = computed(() => statusCheckInfoText(statusData.value.status))
+const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
 
 async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
   if (!appsScriptApiUrl.value) {
@@ -81,13 +89,13 @@ function showToast(message: string, type: ToastType = 'info') {
 
 async function handleCheckStatus() {
   const requestId = ++statusCheckRequestId.value
-  const idPengajuan = idPengajuanInput.value.trim()
+  const keyword = searchInput.value.trim()
   hasInputError.value = false
   resetStatusCheckResult()
 
-  if (!idPengajuan) {
+  if (!keyword) {
     hasInputError.value = true
-    showToast('Masukkan ID Pengajuan terlebih dahulu.', 'error')
+    showToast('Masukkan ID Pengajuan atau Nomor Seri terlebih dahulu.', 'error')
     return
   }
 
@@ -95,11 +103,11 @@ async function handleCheckStatus() {
   showStatusCheckResult('loading', 'Memeriksa status pengajuan...')
 
   try {
-    const result = await callAPI<StatusData>('checkPengajuanStatus', { idPengajuan })
+    const result = await callAPI<StatusData>('checkPengajuanStatus', { keyword })
     if (requestId !== statusCheckRequestId.value) return
-    if (!result.success) throw new Error(result.error || 'Status pengajuan gagal dimuat')
+    if (!result.success) throw new Error(result.error || 'Status pengajuan atau nomor seri gagal dimuat')
 
-    renderStatusCheckResult(result.data || { idPengajuan })
+    renderStatusCheckResult(result.data || {})
   } catch (error) {
     if (requestId === statusCheckRequestId.value) {
       const message = getErrorMessage(error)
@@ -216,21 +224,21 @@ function getErrorMessage(error: unknown) {
           Lacak Status Pengajuan
         </h2>
         <p class="mb-8 text-sm text-slate-500">
-          Masukkan ID Pengajuan Anda untuk melihat progres dokumen terbaru secara real-time.
+          Masukkan ID Pengajuan atau Nomor Seri untuk melihat progres dokumen terbaru secara real-time.
         </p>
 
         <form class="space-y-6" @submit.prevent="handleCheckStatus">
           <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
             <UInput
-              v-model="idPengajuanInput"
+              v-model="searchInput"
               type="text"
               class="w-full md:flex-1"
               size="xl"
               color="neutral"
               variant="outline"
               :highlight="hasInputError"
-              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3.5 font-mono uppercase shadow-inner transition-colors focus:bg-white' }"
-              placeholder="Contoh: KG-YYYYMMDD-XXXX"
+              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3.5 font-mono shadow-inner transition-colors focus:bg-white' }"
+              placeholder="Contoh: KG-YYYYMMDD-XXXX atau SN123456"
               autocomplete="off"
               @focusin="hasStatusInputInteraction = true"
               @focusout="hasStatusInputInteraction = false"
@@ -268,8 +276,23 @@ function getErrorMessage(error: unknown) {
                   
                   <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
                   <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
-                    {{ statusData.idPengajuan || idPengajuanInput || '-' }}
+                    {{ statusData.idPengajuan || searchInput || '-' }}
                   </h3>
+
+                  <div v-if="statusData.nomorSeri" class="mx-auto mb-4 grid max-w-sm gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-500">
+                    <div class="flex items-center justify-between gap-3">
+                      <span>Nomor Seri</span>
+                      <span class="break-all font-mono font-semibold text-slate-700">{{ statusData.nomorSeri }}</span>
+                    </div>
+                    <div v-if="itemProductText" class="flex items-center justify-between gap-3">
+                      <span>Produk</span>
+                      <span class="text-right font-semibold text-slate-700">{{ itemProductText }}</span>
+                    </div>
+                    <div v-if="statusData.noItem" class="flex items-center justify-between gap-3">
+                      <span>No Item</span>
+                      <span class="font-semibold text-slate-700">#{{ statusData.noItem }}</span>
+                    </div>
+                  </div>
 
                   <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="statusTone.badge">
                     <span class="relative flex size-2.5">
