@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
+import { getPaginationRowModel, type Table } from '@tanstack/table-core'
 import type {
   AlertState,
   ShippingLabel,
@@ -19,6 +20,10 @@ import {
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
 })
+
+type LabelTableRef = {
+  tableApi?: Table<WarrantyPrintQueueRow>
+}
 
 const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
@@ -39,6 +44,11 @@ const confirmShipOpen = ref(false)
 const labelPrintRows = ref<ShippingLabel[]>([])
 const labelPrintRef = ref<{ print: () => Promise<void> } | null>(null)
 const isPrinting = ref(false)
+const labelTable = useTemplateRef<LabelTableRef>('labelTable')
+const labelPagination = ref({
+  pageIndex: 0,
+  pageSize: 15
+})
 
 const printTableGlobalFilterOptions = {
   globalFilterFn: (row: { original: WarrantyPrintQueueRow }, _columnId: string, filterValue: unknown) =>
@@ -88,6 +98,13 @@ const selectedVisibleCount = computed(() => visibleKeys.value.filter((key) => se
 const allVisibleSelected = computed(() => visibleKeys.value.length > 0 && selectedVisibleCount.value === visibleKeys.value.length)
 const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && selectedVisibleCount.value < visibleKeys.value.length)
 const checkboxAllState = computed(() => someVisibleSelected.value ? 'indeterminate' : allVisibleSelected.value)
+const labelPaginationTotal = computed<number>(() => labelTable.value?.tableApi?.getFilteredRowModel().rows.length || 0)
+const labelCurrentPage = computed<number>(() =>
+  (labelTable.value?.tableApi?.getState().pagination.pageIndex ?? labelPagination.value.pageIndex) + 1
+)
+const labelItemsPerPage = computed<number>(() =>
+  labelTable.value?.tableApi?.getState().pagination.pageSize || labelPagination.value.pageSize
+)
 
 const selectedRows = computed(() => {
   return Array.from(selectedPrintKeys.value)
@@ -195,6 +212,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('afterprint', onAfterPrint)
 })
 
+watch(search, () => {
+  labelTable.value?.tableApi?.setPageIndex(0)
+})
+
 async function loadPrintQueue(showLoading = true) {
   if (showLoading) isQueueLoading.value = true
   queueLoadError.value = ''
@@ -279,6 +300,10 @@ function toggleVisiblePrintRows(checked: boolean) {
 function pruneSelection() {
   const activeKeys = new Set(printQueue.value.map((row) => getPrintRowKey(row)))
   selectedPrintKeys.value = new Set(Array.from(selectedPrintKeys.value).filter((key) => activeKeys.has(key)))
+}
+
+function setLabelPage(page: number) {
+  labelTable.value?.tableApi?.setPageIndex(page - 1)
 }
 
 function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem' | 'key'>) {
@@ -499,11 +524,14 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
               </div>
 
               <UTable
+                ref="labelTable"
+                v-model:pagination="labelPagination"
                 v-model:global-filter="search"
                 :get-row-id="getPrintRowKey"
                 :data="visiblePrintRows"
                 :columns="warrantyColumns"
                 :global-filter-options="printTableGlobalFilterOptions"
+                :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
                 :loading="isQueueLoading"
                 class="w-full"
                 :ui="{
@@ -533,8 +561,16 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
                 </template>
               </UTable>
 
-              <div v-if="visiblePrintRows.length" class="border-t border-accented px-4 py-3 text-xs text-muted">
-                {{ totalPages }} halaman label ({{ totalLabelsForVisible }} label) untuk {{ visibleSummary.totalItems }} item / {{ visibleSummary.totalGroups }} group.
+              <div v-if="visiblePrintRows.length" class="flex flex-wrap items-center justify-between gap-3 border-t border-accented px-4 py-3">
+                <p class="text-xs text-muted">
+                  {{ totalPages }} halaman label ({{ totalLabelsForVisible }} label) untuk {{ visibleSummary.totalItems }} item / {{ visibleSummary.totalGroups }} group.
+                </p>
+                <UPagination
+                  :page="labelCurrentPage"
+                  :items-per-page="labelItemsPerPage"
+                  :total="labelPaginationTotal"
+                  @update:page="setLabelPage"
+                />
               </div>
             </div>
           </section>

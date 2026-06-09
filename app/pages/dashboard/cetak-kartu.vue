@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
+import { getPaginationRowModel, type Table } from '@tanstack/table-core'
 import type {
   AlertState,
   CardTypeFilter,
@@ -15,6 +16,10 @@ import { matchesPrintRowSearch } from '~/utils/print'
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
 })
+
+type WarrantyTableRef = {
+  tableApi?: Table<WarrantyPrintQueueRow>
+}
 
 const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
@@ -41,6 +46,11 @@ const activePrintLayouts = ref<Record<CardTypeKey, PrintLayout | null>>({
 const warrantyPrintRows = ref<WarrantyPrintQueueRow[]>([])
 const warrantyPrintRef = ref<{ print: () => Promise<void> } | null>(null)
 const isPrinting = ref(false)
+const warrantyTable = useTemplateRef<WarrantyTableRef>('warrantyTable')
+const warrantyPagination = ref({
+  pageIndex: 0,
+  pageSize: 15
+})
 
 function endPrinting() {
   isPrinting.value = false
@@ -120,6 +130,13 @@ const selectedVisibleCount = computed(() => visibleKeys.value.filter((key) => se
 const allVisibleSelected = computed(() => visibleKeys.value.length > 0 && selectedVisibleCount.value === visibleKeys.value.length)
 const someVisibleSelected = computed(() => selectedVisibleCount.value > 0 && selectedVisibleCount.value < visibleKeys.value.length)
 const checkboxAllState = computed(() => someVisibleSelected.value ? 'indeterminate' : allVisibleSelected.value)
+const warrantyPaginationTotal = computed<number>(() => warrantyTable.value?.tableApi?.getFilteredRowModel().rows.length || 0)
+const warrantyCurrentPage = computed<number>(() =>
+  (warrantyTable.value?.tableApi?.getState().pagination.pageIndex ?? warrantyPagination.value.pageIndex) + 1
+)
+const warrantyItemsPerPage = computed<number>(() =>
+  warrantyTable.value?.tableApi?.getState().pagination.pageSize || warrantyPagination.value.pageSize
+)
 
 const batchLabelRoute = computed(() => {
   const batchId = pageAlert.value?.batchId
@@ -227,6 +244,10 @@ onMounted(async () => {
     loadPrintLayouts(),
     loadWarrantyPrintQueue(false)
   ])
+})
+
+watch([search, cardTypeFilter], () => {
+  warrantyTable.value?.tableApi?.setPageIndex(0)
 })
 
 async function loadPrintLayouts() {
@@ -398,6 +419,10 @@ function toggleVisiblePrintRows(checked: boolean) {
 function pruneSelection() {
   const activeKeys = new Set(printQueue.value.map((row) => getPrintRowKey(row)))
   selectedPrintKeys.value = new Set(Array.from(selectedPrintKeys.value).filter((key) => activeKeys.has(key)))
+}
+
+function setWarrantyPage(page: number) {
+  warrantyTable.value?.tableApi?.setPageIndex(page - 1)
 }
 
 function updateRowsCardType(keys: string[], jenisKartu: CardTypeKey) {
@@ -619,11 +644,14 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
               
 
               <UTable
+                ref="warrantyTable"
+                v-model:pagination="warrantyPagination"
                 v-model:global-filter="search"
                 :get-row-id="getPrintRowKey"
                 :data="visiblePrintRows"
                 :columns="warrantyColumns"
                 :global-filter-options="printTableGlobalFilterOptions"
+                :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
                 :loading="isQueueLoading"
                 class="w-full"
                 :ui="{
@@ -652,6 +680,15 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
                   </div>
                 </template>
               </UTable>
+
+              <div v-if="visiblePrintRows.length" class="flex justify-end border-t border-accented px-4 py-3">
+                <UPagination
+                  :page="warrantyCurrentPage"
+                  :items-per-page="warrantyItemsPerPage"
+                  :total="warrantyPaginationTotal"
+                  @update:page="setWarrantyPage"
+                />
+              </div>
             </div>
           </section>
         </div>
