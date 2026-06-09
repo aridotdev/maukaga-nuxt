@@ -1,12 +1,35 @@
 <script setup lang="ts">
 const router = useRouter()
 
-const { summary, isLoading, error, ensureLoaded } = useDashboardData()
+const { summary, rows, isLoading, error, ensureLoaded } = useDashboardData()
+
+const totalItems = computed(() => {
+  if (summary.value.totalItems !== undefined) return Number(summary.value.totalItems || 0)
+  return rows.value.reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+})
+
+const approvedItems = computed(() => {
+  if (summary.value.itemDisetujui !== undefined) return Number(summary.value.itemDisetujui || 0)
+  return rows.value
+    .filter((row) => row.status === 'Disetujui')
+    .reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+})
+
+const rejectedItems = computed(() => {
+  if (summary.value.itemDitolak !== undefined) return Number(summary.value.itemDitolak || 0)
+  return rows.value
+    .filter((row) => row.status === 'Ditolak')
+    .reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+})
 
 const stats = computed(() => [{
   title: 'Total Pengajuan',
   icon: 'i-lucide-files',
   value: Number(summary.value.total || 0)
+}, {
+  title: 'Total Item',
+  icon: 'i-lucide-boxes',
+  value: totalItems.value
 }, {
   title: 'Pengajuan Baru',
   icon: 'i-lucide-file-plus',
@@ -14,14 +37,14 @@ const stats = computed(() => [{
 }, {
   title: 'Disetujui (Siap Cetak)',
   icon: 'i-lucide-circle-check',
-  value: Number(summary.value.disetujui || 0)
+  value: approvedItems.value
 }, {
   title: 'Ditolak',
   icon: 'i-lucide-x-circle',
-  value: Number(summary.value.ditolak || 0)
+  value: rejectedItems.value
 }])
 
-const showSkeleton = computed(() => isLoading.value && !summary.value.total)
+const showSkeleton = computed(() => isLoading.value && !summary.value.total && !summary.value.totalItems)
 
 onMounted(() => {
   ensureLoaded()
@@ -39,7 +62,7 @@ watch(error, async (msg) => {
 </script>
 
 <template>
-  <UPageGrid class="lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-px">
+  <UPageGrid class="lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-px">
     <UPageCard
       v-for="(stat, index) in stats"
       :key="index"

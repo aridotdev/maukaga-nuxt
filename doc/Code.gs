@@ -763,10 +763,51 @@ function handleGetDashboard(data) {
     return true;
   });
 
-  const summary = { total: rows.length, baru: 0, disetujui: 0, ditolak: 0, selesai: 0 };
+  const summary = {
+    total: rows.length,
+    totalItems: 0,
+    baru: 0,
+    disetujui: 0,
+    ditolak: 0,
+    selesai: 0,
+    itemBaru: 0,
+    itemDisetujui: 0,
+    itemDitolak: 0,
+    itemSelesai: 0
+  };
+  const rowById = {};
   rows.forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    if (id) rowById[id] = row;
+
     const key = String(row['Status'] || '').toLowerCase();
     if (summary.hasOwnProperty(key)) summary[key] += 1;
+  });
+
+  const itemCountById = {};
+  readObjects_(SHEETS.ITEMS).forEach(function (item) {
+    const id = clean_(item['ID Pengajuan']);
+    const parent = rowById[id];
+    if (!parent) return;
+
+    let statusItem = clean_(item['Status Item']) || clean_(parent['Status']) || 'Baru';
+    if (VALID_STATUSES.indexOf(statusItem) === -1) statusItem = 'Baru';
+    const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
+    itemCountById[id] = (itemCountById[id] || 0) + 1;
+    summary.totalItems += 1;
+    if (summary.hasOwnProperty(itemKey)) summary[itemKey] += 1;
+  });
+
+  rows.forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    if (!id || itemCountById[id]) return;
+
+    const itemCount = Number(row['Jumlah Item'] || 0);
+    let statusItem = clean_(row['Status']) || 'Baru';
+    if (VALID_STATUSES.indexOf(statusItem) === -1) statusItem = 'Baru';
+    const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
+    summary.totalItems += itemCount;
+    if (summary.hasOwnProperty(itemKey)) summary[itemKey] += itemCount;
   });
 
   rows.sort(function (a, b) {

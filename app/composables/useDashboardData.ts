@@ -8,10 +8,15 @@ type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
 
 type DashboardSummary = {
   total?: number
+  totalItems?: number
   baru?: number
   disetujui?: number
   ditolak?: number
   selesai?: number
+  itemBaru?: number
+  itemDisetujui?: number
+  itemDitolak?: number
+  itemSelesai?: number
 }
 
 type DashboardRow = {
