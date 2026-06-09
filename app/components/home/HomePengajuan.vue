@@ -35,14 +35,20 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'timestampSubmit',
   header: 'Waktu Submit',
   meta: { class: { th: 'w-[17%]', td: 'w-[17%]' } },
-  cell: ({ row }) => h('span', { class: 'text-muted' }, formatSubmitTime(row.original.timestampSubmit))
+  cell: ({ row }) => h('span', { class: 'text-sm text-muted' }, formatSubmitTime(row.original.timestampSubmit))
 }, {
   accessorKey: 'nama',
-  header: 'Nama & Cabang',
+  header: 'Nama',
   meta: { class: { th: 'w-[27%]', td: 'w-[27%]' } },
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-    h('p', { class: 'truncate font-semibold text-highlighted' }, row.original.nama || '-'),
-    h('p', { class: 'truncate text-xs text-muted' }, row.original.bagianCabang || '-')
+    h('p', { class: 'truncate text-sm font-semibold text-highlighted' }, row.original.nama || '-'),
+  ])
+}, {
+  accessorKey: 'bagianCabang',
+  header: 'Cabang',
+  meta: { class: { th: 'w-[27%]', td: 'w-[27%]' } },
+  cell: ({ row }) => h('div', { class: 'min-w-0' }, [
+    h('p', { class: 'truncate text-sm text-muted' }, row.original.bagianCabang || '-')
   ])
 }, {
   accessorKey: 'jumlahItem',

@@ -43,7 +43,7 @@ const period = ref<Period>('daily')
 
     <template #body>
       <HomeStats />
-      <div class="flex gap-6 max-w-full">
+      <div class="flex gap-6 max-w-full max-h-121.75">
         <HomeChart :period="period" :range="range" class="flex-1" />
         <HomeReviewProductName />
       </div>

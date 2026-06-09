@@ -35,7 +35,7 @@ const stats = computed(() => [{
   icon: 'i-lucide-file-plus',
   value: Number(summary.value.baru || 0)
 }, {
-  title: 'Disetujui (Siap Cetak)',
+  title: 'Disetujui',
   icon: 'i-lucide-circle-check',
   value: approvedItems.value
 }, {
