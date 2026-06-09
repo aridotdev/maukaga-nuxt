@@ -61,7 +61,7 @@ export function useDashboardData() {
   const latestRows = computed<DashboardRow[]>(() => {
     return [...rows.value]
       .sort((a, b) => getTime(b.timestampSubmit) - getTime(a.timestampSubmit))
-      .slice(0, 10)
+      .slice(0, 5)
       .map((row, index) => ({ ...row, nomor: index + 1 }))
   })
 

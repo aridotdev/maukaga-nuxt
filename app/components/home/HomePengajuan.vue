@@ -124,10 +124,17 @@ function getStatusColor(status: string) {
 <template>
   <section class="relative mt-6 rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
     <div class="border-b border-muted px-4 py-4 sm:px-6">
-      <div class="min-w-0">
+      <div class="min-w-0 flex justify-between items-center gap-4 sm:flex-row">
         <h2 class="text-base font-semibold text-highlighted sm:text-lg">
           Daftar Pengajuan Terbaru
         </h2>
+        <NuxtLink
+          to="/dashboard/pengajuan"
+          class="mt-1 inline-flex items-center text-sm font-medium text-primary hover:text-primary/80"
+        >
+          Lihat Semua
+          <UIcon name="i-lucide-arrow-right" class="size-4 ml-1" />
+        </NuxtLink>
       </div>
     </div>
 
