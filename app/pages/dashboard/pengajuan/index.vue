@@ -77,8 +77,9 @@ const pengajuanTableGlobalFilterOptions = {
 // sehingga setiap noItem 1..N tampil sebagai baris sendiri.
 const filteredRows = computed<DashboardPengajuanRow[]>(() => {
   const keyword = globalFilter.value.trim().toLowerCase()
+  const source = rows.value as DashboardPengajuanRow[]
 
-  return [...rows.value]
+  return [...source]
     .filter((row) => statusFilter.value === 'all' || row.status === statusFilter.value)
     .filter((row) => {
       if (!keyword) return true
