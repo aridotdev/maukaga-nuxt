@@ -90,6 +90,7 @@ const visibleSummary = computed(() => {
     dikirim
   }
 })
+const labelTableRows = computed(() => isQueueLoading.value ? [] : visiblePrintRows.value)
 
 // Selection: hanya row yang dicentang user yang ikut diproses.
 // Tidak ada ekspansi group — biar sederhana & sesuai checklist user.
@@ -217,7 +218,7 @@ watch(search, () => {
 })
 
 async function loadPrintQueue(showLoading = true) {
-  if (showLoading) isQueueLoading.value = true
+  isQueueLoading.value = true
   queueLoadError.value = ''
 
   if (showLoading) {
@@ -528,11 +529,13 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
                 v-model:pagination="labelPagination"
                 v-model:global-filter="search"
                 :get-row-id="getPrintRowKey"
-                :data="visiblePrintRows"
+                :data="labelTableRows"
                 :columns="warrantyColumns"
                 :global-filter-options="printTableGlobalFilterOptions"
                 :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
                 :loading="isQueueLoading"
+                loading-color="primary"
+                loading-animation="carousel"
                 class="w-full"
                 :ui="{
                   root: 'w-full',
@@ -545,6 +548,19 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
                   separator: 'h-0'
                 }"
               >
+                <template #loading>
+                  <div
+                    class="flex flex-col items-center justify-center gap-2 py-8 text-center text-primary"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
+                    <p class="text-sm font-medium">
+                      Loading ...
+                    </p>
+                  </div>
+                </template>
+
                 <template #empty>
                   <div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
                     <UIcon
@@ -561,7 +577,7 @@ const totalLabelsForVisible = computed(() => labelPagesForVisible.value.flat().l
                 </template>
               </UTable>
 
-              <div v-if="visiblePrintRows.length" class="flex flex-wrap items-center justify-between gap-3 border-t border-accented px-4 py-3">
+              <div v-if="!isQueueLoading && visiblePrintRows.length" class="flex flex-wrap items-center justify-between gap-3 border-t border-accented px-4 py-3">
                 <p class="text-xs text-muted">
                   {{ totalPages }} halaman label ({{ totalLabelsForVisible }} label) untuk {{ visibleSummary.totalItems }} item / {{ visibleSummary.totalGroups }} group.
                 </p>

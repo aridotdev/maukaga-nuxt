@@ -108,6 +108,7 @@ const visibleSummary = computed(() => {
     { total: visiblePrintRows.value.length, local: 0, import: 0, unset: 0 }
   )
 })
+const warrantyTableRows = computed(() => isQueueLoading.value ? [] : visiblePrintRows.value)
 
 const selectedRows = computed(() => {
   return Array.from(selectedPrintKeys.value)
@@ -265,7 +266,7 @@ async function loadPrintLayouts() {
 }
 
 async function loadWarrantyPrintQueue(showLoading = true) {
-  if (showLoading) isQueueLoading.value = true
+  isQueueLoading.value = true
   queueLoadError.value = ''
 
   if (showLoading) {
@@ -648,11 +649,13 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
                 v-model:pagination="warrantyPagination"
                 v-model:global-filter="search"
                 :get-row-id="getPrintRowKey"
-                :data="visiblePrintRows"
+                :data="warrantyTableRows"
                 :columns="warrantyColumns"
                 :global-filter-options="printTableGlobalFilterOptions"
                 :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
                 :loading="isQueueLoading"
+                loading-color="primary"
+                loading-animation="carousel"
                 class="w-full"
                 :ui="{
                   root: 'w-full',
@@ -665,6 +668,19 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
                   separator: 'h-0'
                 }"
               >
+                <template #loading>
+                  <div
+                    class="flex flex-col items-center justify-center gap-2 py-8 text-center text-primary"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
+                    <p class="text-sm font-medium">
+                      Loading ...
+                    </p>
+                  </div>
+                </template>
+
                 <template #empty>
                   <div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
                     <UIcon
@@ -681,7 +697,7 @@ async function handleApiError(error: unknown, fallback: string, options: { inlin
                 </template>
               </UTable>
 
-              <div v-if="visiblePrintRows.length" class="flex justify-end border-t border-accented px-4 py-3">
+              <div v-if="!isQueueLoading && visiblePrintRows.length" class="flex justify-end border-t border-accented px-4 py-3">
                 <UPagination
                   :page="warrantyCurrentPage"
                   :items-per-page="warrantyItemsPerPage"
