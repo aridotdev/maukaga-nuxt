@@ -1,4 +1,4 @@
-# Nuxt Minimal Starter
+# Mau KaGa Nuxt
 
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
@@ -38,7 +38,34 @@ yarn dev
 bun run dev
 ```
 
-## Production
+## Build CS Static
+
+CS tidak membutuhkan Node runtime di server kantor. Node hanya diperlukan di mesin build atau CI.
+
+```bash
+pnpm install
+pnpm build:cs
+```
+
+Deploy isi folder berikut ke static hosting internal:
+
+```text
+apps/cs-web/.output/public/
+```
+
+Recommended runtime: IIS, Apache, Nginx, static intranet host, atau static hosting internal lain yang disetujui IT.
+
+Fallback: zip folder `apps/cs-web/.output/public/`, extract di PC cabang, lalu buka `index.html`. Fallback ini wajib diuji karena `file://` tidak sama dengan static hosting untuk routing, asset path, MIME type, dan fetch browser.
+
+Untuk deployment di subfolder, set base URL saat build:
+
+```bash
+NUXT_APP_BASE_URL=/maukaga-cs/ pnpm build:cs
+```
+
+Artifact produksi CS harus tetap bebas dari halaman, route, middleware, composable, dan server API admin.
+
+## Production Root App
 
 Build the application for production:
 
