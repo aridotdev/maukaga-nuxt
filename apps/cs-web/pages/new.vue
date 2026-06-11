@@ -396,6 +396,21 @@ function getErrorMessage(error: unknown) {
 
 <template>
   <div class="new-page-root">
+    <Teleport to="body">
+      <div
+        v-if="isSavingDraft"
+        class="fixed inset-0 z-100 flex items-center justify-center bg-default/70 backdrop-blur-sm"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div class="flex flex-col items-center gap-3 rounded-2xl border border-muted bg-default px-8 py-6 shadow-lg">
+          <UIcon name="i-lucide-loader-circle" class="size-10 animate-spin text-primary" />
+          <p class="text-sm font-medium text-highlighted">
+            Menyimpan draft...
+          </p>
+        </div>
+      </div>
+    </Teleport>
     <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <!-- Header Section -->
       <header class="flex flex-col items-start justify-between gap-3 rounded-2xl border border-muted bg-default/45 p-4 shadow-sm backdrop-blur-xl lg:flex-row lg:items-center lg:p-5">
