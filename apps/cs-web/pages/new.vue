@@ -109,6 +109,7 @@ const showPrintPreview = ref(false)
 const savedPrintPayload = ref<SubmissionPayload | null>(null)
 const savedPrintId = ref('')
 const showDraftConfirm = ref(false)
+const showNewDraftConfirm = ref(false)
 
 const finalSubmitUrl = computed(() => {
   if (!currentDraftId.value) return '/final-submit'
@@ -348,7 +349,36 @@ function buildFinalSubmitUrl(idPengajuan: string, resumeToken: string) {
 }
 
 function backToForm() {
+  showNewDraftConfirm.value = true
+}
+
+function startNewDraft() {
+  showNewDraftConfirm.value = false
+  clearDraftState()
   showPrintPreview.value = false
+}
+
+function cancelNewDraft() {
+  showNewDraftConfirm.value = false
+}
+
+function clearDraftState() {
+  currentDraftId.value = ''
+  currentResumeToken.value = ''
+  savedPrintPayload.value = null
+  savedPrintId.value = ''
+
+  formState.namaPemohon = ''
+  formState.bagianCabang = ''
+  formState.namaPemilikBarang = ''
+  formState.alasanPengajuan = ''
+  formState.catatanTambahan = ''
+  formState.tanggalForm = createTodayDateValue()
+  formState.products.splice(0, formState.products.length, createProductItem())
+
+  if (import.meta.client) {
+    localStorage.removeItem(draftStorageKey)
+  }
 }
 
 function clonePayload(payload: SubmissionPayload): SubmissionPayload {
@@ -687,6 +717,29 @@ function getErrorMessage(error: unknown) {
       </template>
     </UModal>
 
+    <UModal
+      v-model:open="showNewDraftConfirm"
+      title="Buat Pengajuan Baru"
+      description="Data pengajuan saat ini akan dihapus dan form dikosongkan. Lanjutkan?"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer>
+        <UButton
+          type="button"
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          @click="cancelNewDraft"
+        />
+        <UButton
+          type="button"
+          label="Ya, Buat Baru"
+          color="primary"
+          @click="startNewDraft"
+        />
+      </template>
+    </UModal>
+
     <section
       v-show="showPrintPreview"
       id="section-print"
@@ -702,8 +755,8 @@ function getErrorMessage(error: unknown) {
           <div class="flex flex-col gap-2 sm:flex-row">
             <UButton
               type="button"
-              label="Kembali"
-              icon="i-lucide-arrow-left"
+              label="Buat Pengajuan Baru"
+              icon="i-lucide-file-plus-2"
               color="neutral"
               variant="subtle"
               @click="backToForm"
