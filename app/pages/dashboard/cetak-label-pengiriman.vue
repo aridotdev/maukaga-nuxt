@@ -3,7 +3,6 @@ import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import { getPaginationRowModel, type Table } from '@tanstack/table-core'
 import type {
-  AlertState,
   ShippingLabel,
   WarrantyPrintQueueResponse,
   WarrantyPrintQueueRow
@@ -12,10 +11,12 @@ import {
   buildShippingLabels,
   chunkShippingLabels,
   getPrintGroupKey,
+  getPrintRowKey,
   getAlertColor,
   getAlertIcon,
   matchesPrintRowSearch
 } from '~/utils/print'
+import { useWarrantyPrintQueue } from '~/composables/useWarrantyPrintQueue'
 
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
@@ -28,18 +29,27 @@ type LabelTableRef = {
 const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
 
-const toast = useToast()
 const router = useRouter()
-const { callApi } = useAppsScriptApi()
+const selectedPrintKeys = ref<Set<string>>(new Set())
+const {
+  printQueue,
+  isQueueLoading,
+  queueLoadError,
+  pageAlert,
+  setPageAlert,
+  setQueue,
+  toggleVisiblePrintRows,
+  withApiError,
+  notify,
+  callApi
+} = useWarrantyPrintQueue({
+  selectedKeys: selectedPrintKeys,
+  fetchQueue: () => Promise.resolve({ success: true, data: { rows: [], summary: { total: 0, local: 0, import: 0, belumJenisKartu: 0, printed: 0 } } })
+})
 
 const adminName = ref('Admin')
-const printQueue = ref<WarrantyPrintQueueRow[]>([])
-const selectedPrintKeys = ref<Set<string>>(new Set())
 const search = ref('')
-const isQueueLoading = ref(false)
 const isActionLoading = ref(false)
-const pageAlert = ref<AlertState>(null)
-const queueLoadError = ref('')
 const confirmShipOpen = ref(false)
 const labelPrintRows = ref<ShippingLabel[]>([])
 const labelPrintRef = ref<{ print: () => Promise<void> } | null>(null)
@@ -126,7 +136,7 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
   header: () => h(UCheckbox, {
     modelValue: checkboxAllState.value,
     'aria-label': 'Pilih semua item tampil',
-    'onUpdate:modelValue': (value: boolean | 'indeterminate') => toggleVisiblePrintRows(!!value)
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => toggleVisiblePrintRows(visibleKeys.value, !!value)
   }),
   cell: ({ row }) => h(UCheckbox, {
     modelValue: selectedPrintKeys.value.has(getPrintRowKey(row.original)),
@@ -222,11 +232,11 @@ async function loadPrintQueue(showLoading = true) {
   queueLoadError.value = ''
 
   if (showLoading) {
-    pageAlert.value = {
+    setPageAlert({
       type: 'loading',
       title: 'Memuat data label',
       description: 'Mengambil kandidat label dengan status Belum Dikirim.'
-    }
+    })
   }
 
   try {
@@ -238,8 +248,9 @@ async function loadPrintQueue(showLoading = true) {
 
     const unsentKey = new Set<string>()
     const shippingRows = (labelResult.data.rows || []).map((row) => {
-      unsentKey.add(getPrintRowKey(row))
-      return { ...row, key: getPrintRowKey(row) }
+      const key = getPrintRowKey(row)
+      unsentKey.add(key)
+      return { ...row, key }
     })
 
     // Sumber fallback: kartu Printed dengan statusKirim='Belum Dikirim' (filter di server)
@@ -260,23 +271,25 @@ async function loadPrintQueue(showLoading = true) {
       console.warn('Fallback getWarrantyPrintQueue gagal:', fallbackError)
     }
 
-    printQueue.value = [...shippingRows, ...fallbackRows]
-    pruneSelection()
+    setQueue([...shippingRows, ...fallbackRows])
 
-    if (showLoading && pageAlert.value?.type === 'loading') pageAlert.value = null
+    if (showLoading && pageAlert.value?.type === 'loading') {
+      setPageAlert(null)
+    }
 
     if (!printQueue.value.length && showLoading) {
-      pageAlert.value = {
+      setPageAlert({
         type: 'info',
         title: 'Belum ada label yang perlu dikirim',
         description: 'Belum ada kartu Printed yang siap dikirim.'
-      }
+      })
     } else if (printQueue.value.length && pageAlert.value?.type === 'info') {
-      pageAlert.value = null
+      setPageAlert(null)
     }
   } catch (error) {
-    queueLoadError.value = getErrorMessage(error, 'Label pengiriman belum bisa dimuat')
-    await handleApiError(error, 'Label pengiriman belum bisa dimuat')
+    const message = error instanceof Error ? error.message : String(error || 'Label pengiriman belum bisa dimuat')
+    queueLoadError.value = message
+    setPageAlert({ type: 'error', title: 'Label pengiriman belum bisa dimuat', description: message })
   } finally {
     isQueueLoading.value = false
   }
@@ -289,29 +302,8 @@ function handlePrintRowCheck(key: string, checked: boolean) {
   selectedPrintKeys.value = next
 }
 
-function toggleVisiblePrintRows(checked: boolean) {
-  const next = new Set(selectedPrintKeys.value)
-  visibleKeys.value.forEach((key) => {
-    if (checked) next.add(key)
-    else next.delete(key)
-  })
-  selectedPrintKeys.value = next
-}
-
-function pruneSelection() {
-  const activeKeys = new Set(printQueue.value.map((row) => getPrintRowKey(row)))
-  selectedPrintKeys.value = new Set(Array.from(selectedPrintKeys.value).filter((key) => activeKeys.has(key)))
-}
-
 function setLabelPage(page: number) {
   labelTable.value?.tableApi?.setPageIndex(page - 1)
-}
-
-function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem' | 'key'>) {
-  const id = String(row.idPengajuan || '').trim()
-  const noItem = String(row.noItem ?? '').trim()
-
-  return id && noItem ? `${id}::${noItem}` : row.key
 }
 
 function openConfirmShip() {
@@ -331,13 +323,13 @@ async function markSelectedShippingLabelsShipped() {
 
   confirmShipOpen.value = false
   isActionLoading.value = true
-  pageAlert.value = {
+  setPageAlert({
     type: 'loading',
     title: 'Menyimpan status kirim',
     description: `Menandai ${items.length} item (${selectedGroupCount.value} group cabang+nama) sebagai Dikirim.`
-  }
+  })
 
-  try {
+  await withApiError(async () => {
     const result = await callApi<{ batchId: string, count: number }>('markShippingLabelsShipped', {
       items: items.map((row) => ({
         idPengajuan: row.idPengajuan,
@@ -348,17 +340,15 @@ async function markSelectedShippingLabelsShipped() {
 
     selectedPrintKeys.value = new Set()
     await loadPrintQueue(false)
-    pageAlert.value = {
+    setPageAlert({
       type: 'success',
       title: `Batch ${result.data.batchId} tersimpan`,
       description: `${result.data.count} item ditandai Dikirim.`
-    }
+    })
     notify('Status kirim tersimpan', 'success')
-  } catch (error) {
-    await handleApiError(error, 'Status kirim gagal disimpan')
-  } finally {
-    isActionLoading.value = false
-  }
+  }, 'Status kirim gagal disimpan')
+
+  isActionLoading.value = false
 }
 
 async function printSelectedShippingLabels() {
@@ -372,11 +362,11 @@ async function printSelectedShippingLabels() {
   isPrinting.value = true
   const labels = buildShippingLabels(items)
   labelPrintRows.value = labels
-  pageAlert.value = {
+  setPageAlert({
     type: 'info',
     title: `${labels.length} label siap dicetak`,
     description: `Mencakup ${items.length} item (${selectedGroupCount.value} group cabang+nama). Dialog print browser akan terbuka.`
-  }
+  })
   await labelPrintRef.value?.print().catch(() => { isPrinting.value = false })
 }
 
@@ -389,40 +379,11 @@ function onAfterPrint() {
 }
 
 function showInlineError(message: string) {
-  pageAlert.value = {
+  setPageAlert({
     type: 'error',
     title: message
-  }
-  notify(message, 'error')
-}
-
-function notify(title: string, color: 'success' | 'error' | 'info') {
-  toast.add({
-    title,
-    color,
-    icon: color === 'success' ? 'i-lucide-circle-check' : color === 'error' ? 'i-lucide-circle-alert' : 'i-lucide-info'
   })
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : String(error || fallback)
-}
-
-async function handleApiError(error: unknown, fallback: string) {
-  const message = getErrorMessage(error, fallback)
-  pageAlert.value = {
-    type: 'error',
-    title: fallback,
-    description: message
-  }
   notify(message, 'error')
-
-  if (message.includes('Unauthorized')) {
-    sessionStorage.removeItem('admin_token')
-    sessionStorage.removeItem('admin_nama')
-    sessionStorage.removeItem('admin_username')
-    await router.push('/login')
-  }
 }
 
 // Hitung halaman label di-cache agar tidak rebuild tiap render template.

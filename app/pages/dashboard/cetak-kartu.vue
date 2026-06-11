@@ -3,7 +3,6 @@ import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import { getPaginationRowModel, type Table } from '@tanstack/table-core'
 import type {
-  AlertState,
   CardTypeFilter,
   CardTypeKey,
   PrintLayout,
@@ -11,7 +10,8 @@ import type {
   WarrantyPrintQueueResponse,
   WarrantyPrintQueueRow
 } from '~/types/print'
-import { matchesPrintRowSearch } from '~/utils/print'
+import { getPrintRowKey, matchesPrintRowSearch } from '~/utils/print'
+import { useWarrantyPrintQueue } from '~/composables/useWarrantyPrintQueue'
 
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
@@ -25,19 +25,28 @@ const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
 const USelect = resolveComponent('USelect')
 
-const toast = useToast()
 const router = useRouter()
-const { callApi } = useAppsScriptApi()
+const selectedPrintKeys = ref<Set<string>>(new Set())
+const {
+  printQueue,
+  isQueueLoading,
+  queueLoadError,
+  pageAlert,
+  setPageAlert,
+  loadQueue,
+  toggleVisiblePrintRows,
+  withApiError,
+  notify,
+  callApi
+} = useWarrantyPrintQueue({
+  selectedKeys: selectedPrintKeys,
+  fetchQueue: (params) => callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', params || {})
+})
 
 const adminName = ref('Admin')
-const printQueue = ref<WarrantyPrintQueueRow[]>([])
-const selectedPrintKeys = ref<Set<string>>(new Set())
 const search = ref('')
 const cardTypeFilter = ref<CardTypeFilter>('all')
-const isQueueLoading = ref(false)
 const isActionLoading = ref(false)
-const pageAlert = ref<AlertState>(null)
-const queueLoadError = ref('')
 const confirmPrintedOpen = ref(false)
 const activePrintLayouts = ref<Record<CardTypeKey, PrintLayout | null>>({
   local: null,
@@ -152,7 +161,7 @@ const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
   header: () => h(UCheckbox, {
     modelValue: checkboxAllState.value,
     'aria-label': 'Pilih semua item tampil',
-    'onUpdate:modelValue': (value: boolean | 'indeterminate') => toggleVisiblePrintRows(!!value)
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => toggleVisiblePrintRows(visibleKeys.value, !!value)
   }),
   cell: ({ row }) => h(UCheckbox, {
     modelValue: selectedPrintKeys.value.has(getPrintRowKey(row.original)),
@@ -252,7 +261,7 @@ watch([search, cardTypeFilter], () => {
 })
 
 async function loadPrintLayouts() {
-  try {
+  await withApiError(async () => {
     const result = await callApi<PrintLayoutState>('getPrintLayouts')
     if (!result.success || !result.data) throw new Error(result.error || 'Gagal memuat layout cetak')
 
@@ -260,41 +269,22 @@ async function loadPrintLayouts() {
       local: null,
       import: null
     }
-  } catch (error) {
-    await handleApiError(error, 'Layout cetak belum bisa dimuat')
-  }
+  }, 'Layout cetak belum bisa dimuat')
 }
 
 async function loadWarrantyPrintQueue(showLoading = true) {
-  isQueueLoading.value = true
-  queueLoadError.value = ''
+  setPageAlert({
+    type: 'loading',
+    title: 'Memuat antrean cetak',
+    description: 'Mengambil item Disetujui dan verified dari Google Sheet.'
+  })
 
-  if (showLoading) {
-    pageAlert.value = {
-      type: 'loading',
-      title: 'Memuat antrean cetak',
-      description: 'Mengambil item Disetujui dan verified dari Google Sheet.'
-    }
-  }
-
-  try {
-    const result = await callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue')
-    if (!result.success || !result.data) throw new Error(result.error || 'Gagal memuat antrean cetak')
-
-    printQueue.value = normalizePrintRows(result.data.rows || [])
-    pruneSelection()
-    if (showLoading && pageAlert.value?.type === 'loading') pageAlert.value = null
-  } catch (error) {
-    queueLoadError.value = getErrorMessage(error, 'Antrean cetak belum bisa dimuat')
-    await handleApiError(error, 'Antrean cetak belum bisa dimuat')
-  } finally {
-    isQueueLoading.value = false
-  }
+  await loadQueue({}, showLoading)
 }
 
 async function saveWarrantyCardTypes(items: Array<{ idPengajuan: string, noItem: string | number, jenisKartu: string }>, successMessage: string) {
   isActionLoading.value = true
-  pageAlert.value = null
+  setPageAlert(null)
 
   try {
     const result = await callApi<{ count: number }>('saveWarrantyCardTypes', { items })
@@ -302,7 +292,7 @@ async function saveWarrantyCardTypes(items: Array<{ idPengajuan: string, noItem:
 
     notify(successMessage, 'success', `${result.data?.count || items.length} item berhasil diperbarui.`)
   } catch (error) {
-    await handleApiError(error, 'Jenis kartu gagal disimpan', { inline: false })
+    notify('Jenis kartu gagal disimpan', 'error', String(error instanceof Error ? error.message : error))
     throw error
   } finally {
     isActionLoading.value = false
@@ -343,11 +333,11 @@ async function printSelectedWarrantyCards() {
 
   await loadPrintLayouts()
   warrantyPrintRows.value = rows
-  pageAlert.value = {
+  setPageAlert({
     type: 'info',
     title: `${rows.length} kartu siap dicetak`,
     description: 'Dialog print browser akan terbuka. Status printed belum disimpan sampai Anda menandainya.'
-  }
+  })
   // Fire-and-forget: tombol tetap loading sampai dialog ditutup.
   warrantyPrintRef.value?.print().catch(() => endPrinting())
 }
@@ -369,13 +359,13 @@ async function markSelectedWarrantyCardsPrinted() {
 
   confirmPrintedOpen.value = false
   isActionLoading.value = true
-  pageAlert.value = {
+  setPageAlert({
     type: 'loading',
     title: 'Menyimpan status cetak',
     description: 'Membuat batch dan menghapus item printed dari antrean normal.'
-  }
+  })
 
-  try {
+  await withApiError(async () => {
     const result = await callApi<{ batchId: string, count: number }>('markWarrantyCardsPrinted', {
       items: rows.map((row) => ({
         idPengajuan: row.idPengajuan,
@@ -387,18 +377,16 @@ async function markSelectedWarrantyCardsPrinted() {
 
     selectedPrintKeys.value = new Set()
     await loadWarrantyPrintQueue(false)
-    pageAlert.value = {
+    setPageAlert({
       type: 'success',
       title: `Batch ${result.data.batchId} tersimpan`,
       description: `${result.data.count} kartu berhasil ditandai Printed.`,
       batchId: result.data.batchId
-    }
+    })
     notify('Batch cetak tersimpan', 'success')
-  } catch (error) {
-    await handleApiError(error, 'Status cetak gagal disimpan')
-  } finally {
-    isActionLoading.value = false
-  }
+  }, 'Status cetak gagal disimpan')
+
+  isActionLoading.value = false
 }
 
 function handlePrintRowCheck(key: string, checked: boolean) {
@@ -408,27 +396,13 @@ function handlePrintRowCheck(key: string, checked: boolean) {
   selectedPrintKeys.value = next
 }
 
-function toggleVisiblePrintRows(checked: boolean) {
-  const next = new Set(selectedPrintKeys.value)
-  visibleKeys.value.forEach((key) => {
-    if (checked) next.add(key)
-    else next.delete(key)
-  })
-  selectedPrintKeys.value = next
-}
-
-function pruneSelection() {
-  const activeKeys = new Set(printQueue.value.map((row) => getPrintRowKey(row)))
-  selectedPrintKeys.value = new Set(Array.from(selectedPrintKeys.value).filter((key) => activeKeys.has(key)))
-}
-
 function setWarrantyPage(page: number) {
   warrantyTable.value?.tableApi?.setPageIndex(page - 1)
 }
 
 function updateRowsCardType(keys: string[], jenisKartu: CardTypeKey) {
   const keySet = new Set(keys)
-  printQueue.value = normalizePrintRows(printQueue.value.map((row) => {
+  printQueue.value = printQueue.value.map((row) => {
     if (!keySet.has(getPrintRowKey(row))) return row
 
     return {
@@ -436,36 +410,7 @@ function updateRowsCardType(keys: string[], jenisKartu: CardTypeKey) {
       jenisKartuKey: jenisKartu,
       jenisKartu: jenisKartu === 'local' ? 'Local' : 'Import'
     }
-  }))
-}
-
-function normalizePrintRows(rows: WarrantyPrintQueueRow[]) {
-  const rowMap = new Map<string, WarrantyPrintQueueRow>()
-
-  rows.forEach((row) => {
-    const key = getPrintRowKey(row)
-    const normalizedRow = { ...row, key }
-    const existing = rowMap.get(key)
-
-    if (!existing || shouldUsePrintRow(normalizedRow, existing)) {
-      rowMap.set(key, normalizedRow)
-    }
   })
-
-  return Array.from(rowMap.values())
-}
-
-function shouldUsePrintRow(row: WarrantyPrintQueueRow, existing: WarrantyPrintQueueRow) {
-  if (row.statusCetak === 'Printed' && existing.statusCetak !== 'Printed') return true
-  if (row.jenisKartuKey && !existing.jenisKartuKey) return true
-  return false
-}
-
-function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem' | 'key'>) {
-  const id = String(row.idPengajuan || '').trim()
-  const noItem = String(row.noItem ?? '').trim()
-
-  return id && noItem ? `${id}::${noItem}` : row.key
 }
 
 function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {
@@ -479,45 +424,8 @@ function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {
 }
 
 function showActionError(message: string) {
-  pageAlert.value = null
+  setPageAlert(null)
   notify(message, 'error')
-}
-
-function notify(title: string, color: 'success' | 'error' | 'info', description?: string) {
-  toast.add({
-    title,
-    description,
-    color,
-    icon: color === 'success' ? 'i-lucide-circle-check' : color === 'error' ? 'i-lucide-circle-alert' : 'i-lucide-info',
-    duration: color === 'error' ? 7000 : 4000
-  })
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : String(error || fallback)
-}
-
-async function handleApiError(error: unknown, fallback: string, options: { inline?: boolean } = {}) {
-  const message = getErrorMessage(error, fallback)
-  const inline = options.inline ?? true
-
-  if (inline) {
-    pageAlert.value = {
-      type: 'error',
-      title: fallback,
-      description: message
-    }
-  } else {
-    pageAlert.value = null
-    notify(fallback, 'error', message)
-  }
-
-  if (message.includes('Unauthorized')) {
-    sessionStorage.removeItem('admin_token')
-    sessionStorage.removeItem('admin_nama')
-    sessionStorage.removeItem('admin_username')
-    await router.push('/login')
-  }
 }
 </script>
 

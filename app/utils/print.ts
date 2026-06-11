@@ -1,5 +1,12 @@
 import type { ShippingLabel, WarrantyPrintQueueRow } from '~/types/print'
 
+export function getPrintRowKey(row: Pick<WarrantyPrintQueueRow, 'idPengajuan' | 'noItem' | 'key'>) {
+  const id = String(row.idPengajuan || '').trim()
+  const noItem = String(row.noItem ?? '').trim()
+
+  return id && noItem ? `${id}::${noItem}` : row.key
+}
+
 export function buildShippingLabels(rows: WarrantyPrintQueueRow[]) {
   const groups = new Map<string, ShippingLabel>()
 
