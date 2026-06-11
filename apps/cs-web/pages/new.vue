@@ -108,6 +108,7 @@ const isSavingDraft = ref(false)
 const showPrintPreview = ref(false)
 const savedPrintPayload = ref<SubmissionPayload | null>(null)
 const savedPrintId = ref('')
+const showDraftConfirm = ref(false)
 
 const finalSubmitUrl = computed(() => {
   if (!currentDraftId.value) return '/final-submit'
@@ -282,7 +283,16 @@ function onFormError(event: FormErrorEvent) {
 }
 
 async function onDraftSubmit(_event: FormSubmitEvent<FormState>) {
+  showDraftConfirm.value = true
+}
+
+async function confirmDraftAndPrint() {
+  showDraftConfirm.value = false
   await handleSaveDraftAndPrint()
+}
+
+function cancelDraftConfirm() {
+  showDraftConfirm.value = false
 }
 
 async function handleSaveDraftAndPrint() {
@@ -651,6 +661,31 @@ function getErrorMessage(error: unknown) {
         </aside>
       </div>
     </div>
+
+    <UModal
+      v-model:open="showDraftConfirm"
+      title="Konfirmasi"
+      description="Apakah data yang Anda ajukan sudah benar?"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer>
+        <UButton
+          type="button"
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          :disabled="isSavingDraft"
+          @click="cancelDraftConfirm"
+        />
+        <UButton
+          type="button"
+          label="Ya, Lanjutkan"
+          color="primary"
+          :loading="isSavingDraft"
+          @click="confirmDraftAndPrint"
+        />
+      </template>
+    </UModal>
 
     <section
       v-show="showPrintPreview"
