@@ -798,6 +798,9 @@ function handleGetDashboard(data) {
     baru: 0,
     disetujui: 0,
     ditolak: 0,
+    diprint: 0,
+    dikirim: 0,
+    diterima: 0,
     selesai: 0,
     itemBaru: 0,
     itemDisetujui: 0,
@@ -819,8 +822,7 @@ function handleGetDashboard(data) {
     const parent = rowById[id];
     if (!parent) return;
 
-    let statusItem = clean_(item['Status Item']) || clean_(parent['Status']) || 'Baru';
-    if (VALID_STATUSES.indexOf(statusItem) === -1) statusItem = 'Baru';
+    const statusItem = normalizeItemApprovalStatus_(item['Status Item'], parent['Status']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     itemCountById[id] = (itemCountById[id] || 0) + 1;
     summary.totalItems += 1;
@@ -832,8 +834,7 @@ function handleGetDashboard(data) {
     if (!id || itemCountById[id]) return;
 
     const itemCount = Number(row['Jumlah Item'] || 0);
-    let statusItem = clean_(row['Status']) || 'Baru';
-    if (VALID_STATUSES.indexOf(statusItem) === -1) statusItem = 'Baru';
+    const statusItem = normalizeItemApprovalStatus_('', row['Status']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     summary.totalItems += itemCount;
     if (summary.hasOwnProperty(itemKey)) summary[itemKey] += itemCount;
@@ -914,7 +915,6 @@ function handleUpdateStatus(data) {
   const catatanAdmin = clean_(data.catatanAdmin);
   if (!id) throw new Error('ID Pengajuan wajib diisi');
   if (VALID_STATUSES.indexOf(statusBaru) === -1) throw new Error('Status tidak valid');
-  if (statusBaru === 'Ditolak' && !catatanAdmin) throw new Error('Catatan Admin wajib diisi jika status Ditolak');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -932,7 +932,8 @@ function handleUpdateStatus(data) {
     }
     if (targetRow === -1) throw new Error('Pengajuan tidak ditemukan');
 
-    const statusLama = values[targetRow - 1][col['Status']] || '';
+    const statusLama = clean_(values[targetRow - 1][col['Status']]);
+    assertStatusTransitionAllowed_(session, statusLama, statusBaru, catatanAdmin);
     const now = new Date();
     const entry = '[' + formatDateTime_(now) + '] ' + statusLama + ' → ' + statusBaru + ' oleh ' + session.username;
     const oldHistory = values[targetRow - 1][col['Riwayat Singkat']] || '';
@@ -958,7 +959,7 @@ function handleUpdateItemStatus(data) {
   const catatanAdmin = clean_(data.catatanAdmin);
   if (!id) throw new Error('ID Pengajuan wajib diisi');
   if (!noItem) throw new Error('No Item wajib diisi');
-  if (VALID_STATUSES.indexOf(statusBaru) === -1) throw new Error('Status tidak valid');
+  if (ITEM_APPROVAL_STATUSES.indexOf(statusBaru) === -1) throw new Error('Status item tidak valid');
   if (statusBaru === 'Ditolak' && !catatanAdmin) throw new Error('Catatan Admin wajib diisi jika status Ditolak');
 
   const lock = LockService.getScriptLock();
@@ -990,7 +991,7 @@ function handleUpdateItemStatus(data) {
     for (let i = 1; i < itemValues.length; i++) {
       if (itemValues[i][itemCol['ID Pengajuan']] === id && String(itemValues[i][itemCol['No Item']]) === noItem) {
         itemRow = i + 1;
-        statusLama = clean_(itemValues[i][itemCol['Status Item']]) || parentStatusLama || 'Baru';
+        statusLama = normalizeItemApprovalStatus_(itemValues[i][itemCol['Status Item']], parentStatusLama);
         break;
       }
     }
@@ -1007,8 +1008,9 @@ function handleUpdateItemStatus(data) {
     // Reuse itemValues yang sudah dibaca di awal untuk hindari getDataRange kedua.
     const refreshedItems = itemValues.slice(1)
       .filter(function (row) { return row[itemCol['ID Pengajuan']] === id; })
-      .map(function (row) { return clean_(row[itemCol['Status Item']]) || parentStatusLama || 'Baru'; });
-    const parentStatusBaru = derivePengajuanStatusFromItemStatuses_(refreshedItems);
+      .map(function (row) { return normalizeItemApprovalStatus_(row[itemCol['Status Item']], parentStatusLama); });
+    const derivedParentStatus = derivePengajuanStatusFromItemStatuses_(refreshedItems);
+    const parentStatusBaru = shouldApplyItemDerivedParentStatus_(parentStatusLama) ? derivedParentStatus : parentStatusLama;
     const entry = '[' + formatDateTime_(now) + '] Item #' + noItem + ': ' + statusLama + ' → ' + statusBaru + ' oleh ' + session.username;
 
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Status'] + 1).setValue(parentStatusBaru);
@@ -1025,12 +1027,189 @@ function handleUpdateItemStatus(data) {
 }
 
 function derivePengajuanStatusFromItemStatuses_(statuses) {
-  const cleanStatuses = statuses.map(function (status) { return clean_(status) || 'Baru'; });
+  const cleanStatuses = statuses.map(function (status) { return normalizeItemApprovalStatus_(status, 'Baru'); });
   if (!cleanStatuses.length) return 'Baru';
   if (cleanStatuses.indexOf('Baru') !== -1) return 'Baru';
-  if (cleanStatuses.indexOf('Disetujui') !== -1) return 'Disetujui';
   if (cleanStatuses.every(function (status) { return status === 'Ditolak'; })) return 'Ditolak';
-  return 'Selesai';
+  if (cleanStatuses.some(function (status) { return status === 'Disetujui' || status === 'Selesai'; })) return 'Disetujui';
+  return 'Baru';
+}
+
+function normalizeItemApprovalStatus_(status, fallbackStatus) {
+  const cleaned = clean_(status);
+  if (ITEM_APPROVAL_STATUSES.indexOf(cleaned) !== -1) return cleaned;
+
+  const fallback = clean_(fallbackStatus);
+  if (ITEM_APPROVAL_STATUSES.indexOf(fallback) !== -1) return fallback;
+
+  return 'Baru';
+}
+
+function shouldApplyItemDerivedParentStatus_(status) {
+  return ['Baru', 'Disetujui', 'Ditolak'].indexOf(clean_(status)) !== -1;
+}
+
+function getLifecycleRank_(status) {
+  return LIFECYCLE_ORDER.indexOf(clean_(status));
+}
+
+function isBackwardLifecycleTransition_(fromStatus, toStatus) {
+  const fromRank = getLifecycleRank_(fromStatus);
+  const toRank = getLifecycleRank_(toStatus);
+  return fromRank !== -1 && toRank !== -1 && toRank < fromRank;
+}
+
+function assertStatusTransitionAllowed_(session, oldStatus, newStatus, catatanAdmin) {
+  const statusLama = clean_(oldStatus);
+  const statusBaru = clean_(newStatus);
+  const note = clean_(catatanAdmin);
+  if (VALID_STATUSES.indexOf(statusBaru) === -1) throw new Error('Status tidak valid');
+  if (statusBaru === statusLama) return;
+
+  if (statusBaru === 'Ditolak' && !note) {
+    throw new Error('Catatan Admin wajib diisi jika status Ditolak');
+  }
+
+  if (isBackwardLifecycleTransition_(statusLama, statusBaru)) {
+    if (session.role !== 'admin') throw new Error('Transisi status mundur hanya boleh dilakukan Admin');
+    if (!note) throw new Error('Catatan Admin wajib diisi untuk transisi status mundur');
+  }
+
+  if (statusBaru === 'Diterima' && statusLama !== 'Dikirim') {
+    if (session.role !== 'admin') throw new Error('Status Diterima hanya bisa dipilih setelah status Dikirim');
+    if (!note) throw new Error('Catatan Admin wajib diisi jika status Diterima dipilih bukan dari Dikirim');
+  }
+
+  if (statusBaru === 'Selesai' && statusLama !== 'Diterima') {
+    if (session.role !== 'admin') throw new Error('Status Selesai hanya bisa dipilih setelah status Diterima');
+    if (!note) throw new Error('Catatan Admin wajib diisi jika status Selesai dipilih bukan dari Diterima');
+  }
+}
+
+function appendStatusHistory_(sheet, rowNumber, col, id, statusLama, statusBaru, catatanAdmin, actor, noItem, now, historyPrefix) {
+  const timestamp = now || new Date();
+  const username = clean_(actor) || 'system';
+  const note = clean_(catatanAdmin);
+  const prefix = clean_(historyPrefix);
+  const entryText = (prefix ? prefix + ': ' : '') + clean_(statusLama) + ' -> ' + clean_(statusBaru) + ' oleh ' + username;
+  const entry = '[' + formatDateTime_(timestamp) + '] ' + entryText;
+  const oldHistory = sheet.getRange(rowNumber, col['Riwayat Singkat'] + 1).getValue() || '';
+
+  sheet.getRange(rowNumber, col['Status'] + 1).setValue(statusBaru);
+  sheet.getRange(rowNumber, col['Catatan Admin'] + 1).setValue(note);
+  sheet.getRange(rowNumber, col['Tanggal Update Status Terakhir'] + 1).setValue(timestamp);
+  sheet.getRange(rowNumber, col['User Update Status'] + 1).setValue(username);
+  sheet.getRange(rowNumber, col['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entry : entry);
+
+  getSheet_(SHEETS.STATUS_LOG).appendRow([timestamp, id, statusLama, statusBaru, note, username, noItem || '']);
+}
+
+function getApprovedItemKeysForPengajuan_(idPengajuan) {
+  const id = clean_(idPengajuan);
+  if (!id) return [];
+
+  return readObjects_(SHEETS.ITEMS)
+    .filter(function (row) {
+      return clean_(row['ID Pengajuan']) === id && normalizeItemApprovalStatus_(row['Status Item'], '') === 'Disetujui';
+    })
+    .map(function (row) {
+      return warrantyCardKey_(row['ID Pengajuan'], row['No Item']);
+    });
+}
+
+function getApprovedItemKeysByPengajuan_() {
+  const map = {};
+  readObjects_(SHEETS.ITEMS).forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    if (!id || normalizeItemApprovalStatus_(row['Status Item'], '') !== 'Disetujui') return;
+    if (!map[id]) map[id] = [];
+    map[id].push(warrantyCardKey_(id, row['No Item']));
+  });
+  return map;
+}
+
+function summarizeWarrantyFulfillment_(approvedKeys, cardState) {
+  const keys = Array.isArray(approvedKeys) ? approvedKeys : [];
+  const state = {
+    approvedCount: keys.length,
+    printedCount: 0,
+    shippedCount: 0,
+    allPrinted: false,
+    allShipped: false,
+  };
+  if (!keys.length) return state;
+
+  keys.forEach(function (key) {
+    const card = cardState.rows[key] ? cardState.rows[key].data : {};
+    if (clean_(card['Status Cetak']) === 'Printed') state.printedCount += 1;
+    if (clean_(card['Status Kirim']) === 'Dikirim') state.shippedCount += 1;
+  });
+
+  state.allPrinted = state.printedCount === state.approvedCount;
+  state.allShipped = state.shippedCount === state.approvedCount;
+  return state;
+}
+
+function getWarrantyFulfillmentState_(idPengajuan) {
+  return summarizeWarrantyFulfillment_(
+    getApprovedItemKeysForPengajuan_(idPengajuan),
+    getWarrantyCardSheetState_()
+  );
+}
+
+function derivePengajuanLifecycleFromFulfillment_(idPengajuan, currentStatus) {
+  const current = clean_(currentStatus);
+  if (['Ditolak', 'Diterima', 'Selesai'].indexOf(current) !== -1) return current;
+
+  const state = getWarrantyFulfillmentState_(idPengajuan);
+  if (!state.approvedCount) return current;
+
+  let target = current;
+  if (state.allShipped) target = 'Dikirim';
+  else if (state.allPrinted) target = 'Diprint';
+
+  const currentRank = getLifecycleRank_(current);
+  const targetRank = getLifecycleRank_(target);
+  if (currentRank !== -1 && targetRank !== -1 && currentRank > targetRank) return current;
+
+  return target;
+}
+
+function syncPengajuanLifecycleFromWarranty_(idPengajuan, actor, note) {
+  const id = clean_(idPengajuan);
+  if (!id) return { changed: false, status: '' };
+
+  const sheet = getSheet_(SHEETS.PENGAJUAN);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { changed: false, status: '' };
+
+  const col = indexMap_(values[0]);
+  for (let i = 1; i < values.length; i++) {
+    if (clean_(values[i][col['ID Pengajuan']]) !== id) continue;
+
+    const currentStatus = clean_(values[i][col['Status']]);
+    if (VALID_STATUSES.indexOf(currentStatus) === -1) return { changed: false, status: currentStatus };
+
+    const targetStatus = derivePengajuanLifecycleFromFulfillment_(id, currentStatus);
+    if (targetStatus === currentStatus) return { changed: false, status: currentStatus };
+
+    appendStatusHistory_(
+      sheet,
+      i + 1,
+      col,
+      id,
+      currentStatus,
+      targetStatus,
+      note || 'Sinkronisasi lifecycle dari WarrantyCards',
+      actor || 'system',
+      '',
+      new Date(),
+      'Auto lifecycle'
+    );
+    return { changed: true, status: targetStatus };
+  }
+
+  return { changed: false, status: '' };
 }
 
 function handleGetProductReviewQueue(data) {
@@ -1319,6 +1498,7 @@ function handleMarkWarrantyCardsPrinted(data) {
     const state = getWarrantyCardSheetState_();
     const now = new Date();
     const batchId = generatePrintBatchId_('KG');
+    const touchedPengajuanIds = {};
 
     inputs.forEach(function (input) {
       const id = clean_(input.idPengajuan);
@@ -1326,6 +1506,7 @@ function handleMarkWarrantyCardsPrinted(data) {
       const key = warrantyCardKey_(id, noItem);
       const item = approvedMap[key];
       if (!item) throw new Error('Item tidak ditemukan atau belum berstatus Disetujui: ' + id + ' #' + noItem);
+      touchedPengajuanIds[id] = true;
 
       const existing = state.rows[key] ? state.rows[key].data : {};
       const jenisKartu = normalizeWarrantyCardType_(input.jenisKartu || existing['Jenis Kartu'], true);
@@ -1354,11 +1535,16 @@ function handleMarkWarrantyCardsPrinted(data) {
     });
 
     getSheet_(SHEETS.PRINT_BATCH).appendRow([batchId, 'warranty_card', now, session.username, inputs.length, catatan]);
+    const cache = CacheService.getScriptCache();
+    cache.remove('warranty_card_state');
     syncShippingLabelQueue_(inputs.map(function (i) {
       return { idPengajuan: i.idPengajuan, noItem: i.noItem };
     }), 'insert', { batchId: batchId, printedAt: now, printedBy: session.username });
-    CacheService.getScriptCache().remove('warranty_card_state');
-    CacheService.getScriptCache().remove('shipping_label_state');
+    cache.remove('shipping_label_state');
+    cache.remove('warranty_card_state');
+    Object.keys(touchedPengajuanIds).forEach(function (idPengajuan) {
+      syncPengajuanLifecycleFromWarranty_(idPengajuan, session.username, catatan || 'Sinkronisasi setelah tandai printed');
+    });
     return { success: true, data: { batchId: batchId, count: inputs.length } };
   } finally {
     lock.releaseLock();
@@ -1376,6 +1562,7 @@ function handleMarkShippingLabelsShipped(data) {
     const state = getWarrantyCardSheetState_();
     const now = new Date();
     const batchId = generatePrintBatchId_('KIRIM');
+    const touchedPengajuanIds = {};
 
     inputs.forEach(function (input) {
       const id = clean_(input.idPengajuan);
@@ -1384,6 +1571,7 @@ function handleMarkShippingLabelsShipped(data) {
       const existing = state.rows[key] ? state.rows[key].data : null;
       if (!existing) throw new Error('Item tidak ditemukan: ' + id + ' #' + noItem);
       if (clean_(existing['Status Cetak']) !== 'Printed') throw new Error('Item belum berstatus Printed: ' + id + ' #' + noItem);
+      touchedPengajuanIds[id] = true;
 
       writeWarrantyCardRow_(state.sheet, state.rows[key], {
         idPengajuan: id,
@@ -1409,14 +1597,19 @@ function handleMarkShippingLabelsShipped(data) {
     });
 
     getSheet_(SHEETS.PRINT_BATCH).appendRow([batchId, 'shipping_label', now, session.username, inputs.length, '']);
+    const cache = CacheService.getScriptCache();
+    cache.remove('warranty_card_state');
     syncShippingLabelQueue_(inputs, 'update', {
       statusKirim: 'Dikirim',
       shipBatchId: batchId,
       shippedAt: now,
       shippedBy: session.username
     });
-    CacheService.getScriptCache().remove('warranty_card_state');
-    CacheService.getScriptCache().remove('shipping_label_state');
+    cache.remove('shipping_label_state');
+    cache.remove('warranty_card_state');
+    Object.keys(touchedPengajuanIds).forEach(function (idPengajuan) {
+      syncPengajuanLifecycleFromWarranty_(idPengajuan, session.username, 'Sinkronisasi setelah tandai dikirim');
+    });
     return { success: true, data: { batchId: batchId, count: inputs.length } };
   } finally {
     lock.releaseLock();
@@ -1944,7 +2137,7 @@ function findItemRecordBySerial_(nomorSeri) {
 }
 
 function getItemsForPengajuan_(id, fallbackStatus) {
-  const defaultStatus = clean_(fallbackStatus) || 'Baru';
+  const defaultStatus = normalizeItemApprovalStatus_('', fallbackStatus);
   return readObjects_(SHEETS.ITEMS)
     .filter(function (row) { return row['ID Pengajuan'] === id; })
     .sort(function (a, b) { return Number(a['No Item']) - Number(b['No Item']); })
@@ -1957,7 +2150,7 @@ function getItemsForPengajuan_(id, fallbackStatus) {
         modelNormalized: clean_(row['model_normalized']) || normalizeModelKey_(row['Model']),
         produkStatus: clean_(row['produk_status']) || 'needs_review',
         produkSumber: clean_(row['produk_sumber']) || '',
-        statusItem: clean_(row['Status Item']) || defaultStatus,
+        statusItem: normalizeItemApprovalStatus_(row['Status Item'], defaultStatus),
         catatanAdminItem: clean_(row['Catatan Admin Item']),
         tanggalUpdateStatusItem: toIso_(row['Tanggal Update Status Item']),
         userUpdateStatusItem: clean_(row['User Update Status Item']),
