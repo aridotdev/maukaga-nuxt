@@ -46,7 +46,9 @@ const ACTIVE_PRINT_LAYOUT_KEYS = {
   import: 'ACTIVE_PRINT_LAYOUT_IMPORT',
 };
 const DRAFT_STATUS = 'Menunggu Upload';
-const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'];
+const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
+const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'];
+const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
 const VALID_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
 
@@ -499,7 +501,7 @@ function handleCheckPengajuanStatus(data) {
   }
 
   const itemStatus = matchedItem ? clean_(matchedItem['Status Item']) : '';
-  const status = matchedItem && parentStatus !== DRAFT_STATUS ? (itemStatus || parentStatus) : parentStatus;
+  const status = parentStatus;
 
   return {
     success: true,

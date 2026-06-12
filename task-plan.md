@@ -1,467 +1,379 @@
-# Keputusan Final Fitur Auth & Authorization Supabase
+# Technical Plan: Lifecycle Status Kartu Garansi
 
-Tanggal keputusan: 2026-06-04
+## Tujuan
 
-Dokumen ini merangkum keputusan final untuk fitur authentication dan authorization dashboard menggunakan Supabase dan Nuxt module `@nuxtjs/supabase`.
+Memperluas `Pengajuan.Status` agar menjadi lifecycle utama yang mudah dibaca user dan admin, tanpa mencampur status approval item dengan status fulfillment kartu.
 
-> Catatan: dokumen ini adalah keputusan desain. Implementasi kode dilakukan hanya setelah ada konfirmasi eksplisit berikutnya.
-
----
-
-## 1. Scope MVP
-
-Fitur auth dan authorization hanya berlaku untuk area dashboard.
-
-- Public pages: tidak memakai auth dan tetap bisa diakses publik.
-- Dashboard pages: semua route `/dashboard/**` wajib login dan wajib lolos authorization berdasarkan role.
-
----
-
-## 2. Authentication
-
-### Login
-
-- Menggunakan Supabase Auth.
-- Login menggunakan email dan password.
-- Session dikelola melalui `@nuxtjs/supabase`.
-
-### Register
-
-Keputusan final:
-
-- Tidak ada public register.
-- User hanya dibuat atau di-invite oleh admin.
-- Halaman `/register` publik tidak diperlukan untuk MVP ini.
-
-### Email Confirmation
-
-Keputusan final:
-
-- Email confirmation wajib.
-- User yang di-invite harus menerima email dari Supabase dan menyelesaikan proses aktivasi / set password sendiri.
-
----
-
-## 3. First Admin
-
-Keputusan final:
-
-- Admin pertama dibuat manual melalui Supabase Dashboard / SQL.
-- Setelah first admin tersedia, admin tersebut dapat membuat / invite user lain dari halaman user management.
-
----
-
-## 4. Roles
-
-Role MVP:
-
-1. `admin`
-2. `management`
-3. `qrcc`
-
-Tidak memakai public registration, sehingga role `pending` tidak wajib untuk MVP.
-
-Namun, jika ada user yang berhasil login tetapi tidak memiliki profile / role yang valid, sistem harus memperlakukannya sebagai unauthorized dan mengarahkannya ke `/403`.
-
----
-
-## 5. Role Permissions
-
-### Admin
-
-Admin memiliki akses penuh ke seluruh area dashboard.
-
-Admin boleh:
-
-- Mengakses semua route `/dashboard/**`.
-- Melihat, membuat, mengubah, dan menghapus / menonaktifkan user.
-- Mengubah role user.
-- Membuat admin lain.
-- Mengakses dan mengubah data pengajuan.
-
-Guard penting:
-
-- Admin tidak boleh menghapus admin terakhir.
-- Admin tidak boleh downgrade role admin terakhir.
-- Admin tidak boleh menonaktifkan admin terakhir.
-
-### Management
-
-Management hanya boleh mengakses:
-
-- `/dashboard`
-- `/dashboard/pengajuan`
-- detail pengajuan di bawah `/dashboard/pengajuan/**`, jika route detail tersedia.
-
-Management boleh:
-
-- Melihat list pengajuan.
-- Melihat detail pengajuan.
-
-Management tidak boleh:
-
-- Mengubah data pengajuan.
-- Mengubah status pengajuan.
-- Mengubah catatan admin / internal.
-- Menghapus data pengajuan.
-- Mengakses settings members.
-- Mengakses route dashboard lain di luar allowlist.
-
-Catatan export/download:
-
-- Fitur export/download data pengajuan belum dibuat.
-- Keputusan authorization untuk export/download dapat dibahas saat fitur tersebut akan dibuat.
-
-### QRCC
-
-QRCC boleh mengakses seluruh area dashboard kecuali user management.
-
-QRCC boleh:
-
-- Mengakses `/dashboard/**` secara umum.
-- Melihat dan mengubah data pengajuan sesuai kebutuhan operasional.
-- Mengakses settings lain jika nanti tersedia, selama bukan user management.
-
-QRCC tidak boleh:
-
-- Mengakses `/dashboard/settings/members`.
-- Mengakses route turunan `/dashboard/settings/members/**`.
-- Membuat user.
-- Mengubah role user.
-- Menghapus / menonaktifkan user.
-
----
-
-## 6. Route Authorization Matrix
-
-| Route | Admin | Management | QRCC |
-|---|---:|---:|---:|
-| `/dashboard` | ✅ | ✅ | ✅ |
-| `/dashboard/pengajuan` | ✅ full | ✅ view-only | ✅ full |
-| `/dashboard/pengajuan/**` | ✅ full | ✅ view-only | ✅ full |
-| `/dashboard/settings/members` | ✅ | ❌ | ❌ |
-| `/dashboard/settings/members/**` | ✅ | ❌ | ❌ |
-| `/dashboard/**` lainnya | ✅ | ❌ | ✅ |
-
-Aturan konseptual:
+Status utama baru:
 
 ```txt
-admin:
-  allow semua /dashboard/**
-
-management:
-  allow hanya:
-    /dashboard
-    /dashboard/pengajuan
-    /dashboard/pengajuan/**
-
-qrcc:
-  allow semua /dashboard/**
-  kecuali:
-    /dashboard/settings/members
-    /dashboard/settings/members/**
+Baru -> Disetujui/Ditolak -> Diprint -> Dikirim -> Diterima -> Selesai
 ```
 
----
+Status draft `Menunggu Upload` tetap menjadi status khusus dan tidak masuk `VALID_STATUSES`.
 
-## 7. User Management MVP
+## Keputusan Produk
 
-Halaman user management:
+- `Pengajuan.Status` menjadi lifecycle ringkas/customer-facing.
+- `PengajuanItems.Status Item` tetap approval-only:
+  - `Baru`
+  - `Disetujui`
+  - `Ditolak`
+  - `Selesai`
+- `WarrantyCards` tetap menjadi sumber fakta teknis untuk cetak dan kirim:
+  - `Status Cetak`
+  - `Printed At`
+  - `Printed By`
+  - `Status Kirim`
+  - `Shipped At`
+  - `Shipped By`
+- Status `Diprint` otomatis jika semua item yang disetujui sudah `Printed`.
+- Status `Dikirim` otomatis jika semua item yang disetujui sudah `Dikirim`.
+- Item `Ditolak` tidak menghambat lifecycle item yang `Disetujui`.
+- `Diterima` dicatat di level pengajuan saja.
+- `Diterima` dan `Selesai` diubah manual oleh Admin/QRCC.
+- `Diterima` tidak otomatis menjadi `Selesai`.
+- Status mundur hanya boleh oleh Admin dan wajib catatan.
+- Migrasi data lama dihitung ulang dari `WarrantyCards`.
 
-- Route: `/dashboard/settings/members`
-- Akses: admin only
+## Scope File Utama
 
-Field user/member yang dikelola:
+- `doc/Code.gs`
+- `apps/admin-web`
+- `apps/cs-web`
+- `doc/prd.md`
+- `specs.md`
 
-- `email`
-- `full_name`
-- `role`
-- `is_active`
+Catatan: implementasi utama status ada di Apps Script. Frontend perlu disesuaikan agar filter, badge, copy status, dan opsi update status mengenali status baru.
 
-Fitur user management MVP:
+## Data Model
 
-1. List user.
-2. Invite user via email.
-3. Edit `full_name`.
-4. Edit `role`.
-5. Deactivate / soft delete user.
-6. Reactivate user jika diperlukan.
+### Sheet `Pengajuan`
 
-Keputusan delete user:
+Kolom existing tetap dipakai:
 
-- Menggunakan deactivate / soft delete.
-- User tidak langsung dihapus permanen dari Supabase Auth sebagai default MVP.
-- Tujuannya menjaga histori data dan mencegah relasi data rusak.
+- `Status`
+- `Catatan Admin`
+- `Tanggal Update Status Terakhir`
+- `User Update Status`
+- `Riwayat Singkat`
 
----
+Tidak wajib menambah kolom baru untuk `Diterima` dan `Selesai` pada fase ini, karena metadata update terakhir sudah tersedia. Namun jika audit penerimaan perlu dibedakan dari update status umum, opsi tambahan yang bisa dipertimbangkan:
 
-## 8. Invite User Flow
+- `Received At`
+- `Received By`
+- `Completed At`
+- `Completed By`
 
-Keputusan final:
+Rekomendasi fase pertama: jangan tambah kolom baru kecuali UI/reporting membutuhkan timestamp khusus.
 
-- Admin invite user via email.
-- User menerima email invitation / confirmation dari Supabase.
-- User set password sendiri.
-- Admin menentukan role user saat invite atau saat mengedit member.
+### Sheet `PengajuanItems`
 
-Flow konseptual:
+Tidak berubah secara konsep. `Status Item` tetap approval-only dan tidak diisi `Diprint`, `Dikirim`, atau `Diterima`.
 
-```txt
-Admin login
-  -> buka /dashboard/settings/members
-  -> invite user dengan email, full_name, role
-  -> Supabase kirim email invitation
-  -> user klik link email
-  -> user set password sendiri
-  -> user login
-  -> sistem cek role dan is_active
-  -> user masuk dashboard sesuai permission
-```
+### Sheet `WarrantyCards`
 
----
+Tetap menjadi sumber fakta teknis:
 
-## 9. Inactive User Behavior
+- `Status Cetak = Printed` menandakan kartu sudah dicetak.
+- `Status Kirim = Dikirim` menandakan kartu sudah dikirim.
 
-Keputusan final:
+Tidak perlu menambah `Status Diterima` per item, karena keputusan produk adalah `Diterima` level pengajuan.
 
-- Jika user `is_active = false`, user tidak boleh mengakses dashboard.
-- Jika user inactive mencoba masuk dashboard, redirect ke `/403`.
+### Sheet `ShippingLabels`
 
-Catatan:
+Tetap sebagai snapshot/queue label pengiriman. `Status Kirim` tetap disinkronkan dari aksi kirim.
 
-- Supabase login bisa saja berhasil secara auth-level.
-- Guard aplikasi tetap harus menolak akses dashboard berdasarkan `is_active`.
+## Backend Plan
 
----
+### 1. Status Constants
 
-## 10. Data Model Konseptual
+Update status utama:
 
-Tabel profile/member aplikasi direkomendasikan menyimpan data role dan status user.
-
-Konsep minimal:
-
-```txt
-profiles / members
-  id uuid primary key references auth.users(id)
-  email text
-  full_name text nullable
-  role text / enum: admin | management | qrcc
-  is_active boolean
-  created_at timestamptz
-  updated_at timestamptz
+```js
+const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
+const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'];
+const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
 ```
 
 Catatan:
 
-- Role menjadi source of truth authorization aplikasi.
-- User tanpa profile / role valid dianggap unauthorized.
-- User non-admin tidak boleh mengubah role sendiri.
+- `Ditolak` adalah terminal rejection path dan tidak dibandingkan sebagai progres maju normal.
+- `DRAFT_STATUS = 'Menunggu Upload'` tetap terpisah.
 
----
+### 2. Validasi Status Item
 
-## 11. Static-Only Requirement untuk User Management
+Update `handleUpdateItemStatus` agar validasi memakai `ITEM_APPROVAL_STATUSES`, bukan `VALID_STATUSES`.
 
-Aplikasi Nuxt ditargetkan tetap **static-only**.
+Tujuan:
 
-- Node.js hanya diperlukan saat build / generate, bukan saat runtime production.
-- Hasil `pnpm generate` dapat di-host di static hosting selama route fallback SPA tersedia.
-- User management tidak memakai Nuxt/Nitro server endpoint jika target deployment tetap static-only.
+- Item tidak bisa diset menjadi `Diprint`, `Dikirim`, atau `Diterima`.
+- Approval item tetap bersih dari fulfillment status.
 
-Karena fitur user management membutuhkan operasi admin Supabase, maka operasi privileged Supabase Auth Admin harus berjalan di backend eksternal:
+### 3. Validasi Status Pengajuan
 
-1. Rekomendasi utama: Supabase Edge Functions.
-2. Alternatif: Google Apps Script sebagai privileged backend.
+Update `handleUpdateStatus` agar:
 
-Service role key Supabase:
+- Menerima status utama baru.
+- Menolak transisi mundur untuk QRCC.
+- Mengizinkan transisi mundur hanya untuk Admin.
+- Mewajibkan `Catatan Admin` jika:
+  - status baru `Ditolak`
+  - transisi mundur
 
-- Tidak boleh berada di Nuxt runtime config.
-- Tidak boleh berada di `NUXT_PUBLIC_*`.
-- Tidak boleh berada di bundle frontend / static output.
-- Tidak boleh dikirim ke browser.
-- Tidak boleh digunakan di Vue component / client-side composable.
-- Hanya boleh disimpan di Supabase Edge Function secrets atau Google Apps Script Properties.
+Contoh transisi mundur:
 
-Operasi user yang boleh dilakukan dari Nuxt / browser dengan Supabase anon key:
+- `Dikirim -> Diprint`
+- `Diprint -> Disetujui`
+- `Selesai -> Diterima`
 
-- Login / logout via Supabase Auth.
-- Ambil current session / current user.
-- Ambil profile / role dari tabel `profiles` dengan RLS.
-- Admin mengubah row `profiles` jika RLS mengizinkan.
+### 4. Helper Transisi
 
-Operasi user yang tidak boleh dilakukan langsung dari Nuxt / browser:
+Tambahkan helper:
 
-- Invite user via Supabase Auth Admin API.
-- List semua Auth users via Admin API.
-- Delete / ban / unban Auth user.
-- Operasi apa pun yang membutuhkan service role key.
+- `getLifecycleRank_(status)`
+- `isBackwardLifecycleTransition_(fromStatus, toStatus)`
+- `assertStatusTransitionAllowed_(session, oldStatus, newStatus, catatanAdmin)`
+- `appendStatusHistory_(...)` atau helper kecil agar update log konsisten
 
-Endpoint konseptual jika memakai Supabase Edge Functions:
+Tujuan:
 
-```txt
-admin-users-list
-admin-users-invite
-admin-users-update
-admin-users-deactivate
-admin-users-reactivate
+- Aturan status tidak tersebar di banyak fungsi.
+- Audit trail tetap konsisten di `StatusLog` dan `Riwayat Singkat`.
+
+### 5. Helper Agregasi Fulfillment
+
+Tambahkan helper untuk menghitung status pengajuan dari item approved dan `WarrantyCards`:
+
+- `getApprovedItemKeysForPengajuan_(idPengajuan)`
+- `getWarrantyFulfillmentState_(idPengajuan)`
+- `derivePengajuanLifecycleFromFulfillment_(idPengajuan, currentStatus)`
+- `syncPengajuanLifecycleFromWarranty_(idPengajuan, actor, note)`
+
+Aturan agregasi:
+
+- Jika pengajuan `Ditolak`, jangan auto-naik ke fulfillment.
+- Jika pengajuan `Diterima` atau `Selesai`, jangan auto-turun karena aksi print/kirim.
+- Ambil hanya item dengan `Status Item = Disetujui`.
+- Jika tidak ada item disetujui, jangan ubah ke `Diprint` atau `Dikirim`.
+- Jika semua item disetujui punya `Status Kirim = Dikirim`, status target `Dikirim`.
+- Jika semua item disetujui punya `Status Cetak = Printed`, status target `Diprint`.
+- Selain itu status tetap `Disetujui` atau status existing yang lebih rendah.
+
+### 6. Update Saat Mark Printed
+
+Di `handleMarkWarrantyCardsPrinted`:
+
+1. Setelah `WarrantyCards` dan `ShippingLabels` berhasil disinkronkan, kumpulkan unique `ID Pengajuan`.
+2. Untuk setiap ID, panggil `syncPengajuanLifecycleFromWarranty_`.
+3. Jika semua approved item sudah printed, update `Pengajuan.Status` menjadi `Diprint`.
+4. Tambahkan row `StatusLog` jika status berubah.
+
+### 7. Update Saat Mark Shipped
+
+Di `handleMarkShippingLabelsShipped`:
+
+1. Setelah `WarrantyCards.Status Kirim` dan `ShippingLabels.Status Kirim` diset `Dikirim`, kumpulkan unique `ID Pengajuan`.
+2. Untuk setiap ID, panggil `syncPengajuanLifecycleFromWarranty_`.
+3. Jika semua approved item sudah dikirim, update `Pengajuan.Status` menjadi `Dikirim`.
+4. Tambahkan row `StatusLog` jika status berubah.
+
+### 8. Manual Diterima dan Selesai
+
+Gunakan `handleUpdateStatus` untuk status manual:
+
+- Admin/QRCC boleh set `Diterima`.
+- Admin/QRCC boleh set `Selesai`.
+- `Diterima` tidak otomatis menjadi `Selesai`.
+- Transisi mundur dari `Diterima` atau `Selesai` hanya Admin dan catatan wajib.
+
+Tambahan validasi yang disarankan:
+
+- `Diterima` idealnya hanya boleh dari `Dikirim`, kecuali Admin dengan catatan.
+- `Selesai` idealnya hanya boleh dari `Diterima`, kecuali Admin dengan catatan.
+
+### 9. Dashboard Summary
+
+Update `handleGetDashboard`:
+
+- Tambahkan summary:
+  - `diprint`
+  - `dikirim`
+  - `diterima`
+- Pastikan filter status menerima status baru.
+- Pastikan status lama tetap terbaca untuk data existing.
+
+### 10. Public Check Status
+
+Update `handleCheckPengajuanStatus`:
+
+- Izinkan status baru.
+- Response tetap ringkas.
+- Jika search by serial, status item tetap approval-only, sedangkan `parentStatus` menampilkan lifecycle pengajuan.
+
+## Frontend Plan
+
+### 1. Dashboard Admin
+
+Update admin frontend di `apps/admin-web`:
+
+- Dropdown filter status menambah:
+  - `Diprint`
+  - `Dikirim`
+  - `Diterima`
+- Dropdown update status menambah:
+  - `Diprint`
+  - `Dikirim`
+  - `Diterima`
+- Badge status menambah warna untuk status baru.
+- Summary cards menambah `Diprint`, `Dikirim`, `Diterima`.
+- Validasi frontend:
+  - `Ditolak` wajib catatan.
+  - Jika user memilih status mundur, tampilkan catatan wajib jika role tersedia di frontend. Backend tetap menjadi guard utama.
+
+Catatan: jika frontend belum menerima role user, cukup backend yang enforce transisi mundur.
+
+### 2. Public Status UI
+
+Update CS/public frontend di `apps/cs-web`, terutama halaman cek status:
+
+Tambahkan badge dan copy:
+
+- `Diprint`: Kartu garansi sudah dicetak dan sedang disiapkan untuk pengiriman.
+- `Dikirim`: Kartu garansi sudah dikirim ke cabang/alamat terkait.
+- `Diterima`: Kartu garansi sudah dikonfirmasi diterima.
+- `Selesai`: Proses kartu garansi sudah selesai.
+
+### 3. Warranty Print UI
+
+Setelah `markWarrantyCardsPrinted` berhasil:
+
+- Frontend tetap reload antrean seperti sekarang.
+- Status pengajuan akan berubah otomatis di backend jika seluruh approved item sudah printed.
+- Tidak perlu menampilkan status pengajuan di antrean cetak kecuali desain baru membutuhkan.
+
+### 4. Shipping Label UI
+
+Setelah `markShippingLabelsShipped` berhasil:
+
+- Frontend tetap reload label/queue.
+- Status pengajuan akan berubah otomatis di backend jika seluruh approved item sudah dikirim.
+
+## Migrasi Data Lama
+
+### Tujuan Migrasi
+
+Menghitung ulang status pengajuan existing berdasarkan data `WarrantyCards`.
+
+### Strategi
+
+Buat fungsi Apps Script manual, misalnya:
+
+```js
+function migratePengajuanLifecycleFromWarrantyCards()
 ```
 
-Action konseptual jika memakai Google Apps Script:
+Aturan:
 
-```txt
-action: adminUsersList
-action: adminUsersInvite
-action: adminUsersUpdate
-action: adminUsersDeactivate
-action: adminUsersReactivate
+- Hanya proses pengajuan dengan status `Disetujui`, `Diprint`, atau `Dikirim`.
+- Jangan ubah pengajuan `Baru`, `Ditolak`, `Diterima`, atau `Selesai`.
+- Ambil approved item dari `PengajuanItems`.
+- Jika semua approved item sudah `Status Kirim = Dikirim`, set `Dikirim`.
+- Else jika semua approved item sudah `Status Cetak = Printed`, set `Diprint`.
+- Else tetap `Disetujui`.
+- Tambahkan `StatusLog` untuk perubahan otomatis migrasi.
+- Isi `User` dengan `system:migration`.
+- Isi catatan dengan `Migrasi lifecycle dari WarrantyCards`.
+
+### Safety
+
+- Buat dry-run function lebih dulu:
+
+```js
+function previewPengajuanLifecycleMigration()
 ```
 
-Setiap endpoint / function admin wajib:
+Output preview:
 
-```txt
-1. Validasi Supabase access token current user.
-2. Ambil profile / role current user.
-3. Pastikan current user adalah admin dan is_active = true.
-4. Jika bukan admin, return 403.
-5. Baru jalankan operasi dengan Supabase service role client di backend eksternal.
-```
+- jumlah pengajuan yang tetap
+- jumlah yang akan berubah ke `Diprint`
+- jumlah yang akan berubah ke `Dikirim`
+- daftar ID pengajuan yang berubah
 
-Integrasi Google Apps Script yang sudah ada perlu diarahkan ke Supabase session:
+## Dokumentasi
 
-```txt
-Nuxt mengirim Supabase access token ke Apps Script.
-Apps Script memvalidasi token tersebut ke Supabase.
-Apps Script cek profiles.role dan profiles.is_active.
-Baru Apps Script menjalankan action dashboard yang diminta.
-```
+Update `doc/prd.md`:
 
----
+- Bagian status pengajuan.
+- Aturan bisnis status.
+- Data model `Pengajuan.Status`.
+- Alur cetak: mark printed dapat mengubah pengajuan ke `Diprint`.
+- Alur kirim: mark shipped dapat mengubah pengajuan ke `Dikirim`.
+- Alur manual `Diterima` dan `Selesai`.
 
-## 12. Supabase RLS Requirement
+Update `specs.md`:
 
-Authorization tidak boleh hanya mengandalkan UI atau route middleware.
+- Prinsip status lifecycle baru.
+- Pengaruh mark printed dan mark shipped ke status pengajuan.
+- Copy/status badge yang perlu didesain.
 
-RLS tetap wajib untuk melindungi data dari akses langsung melalui Supabase client.
+## Test Plan
 
-Prinsip RLS:
+### Backend Manual Test
 
-### Profiles / Members
+- Submit final menghasilkan `Baru`.
+- Update pengajuan `Baru -> Disetujui` berhasil.
+- Update item hanya menerima approval status.
+- Item tidak bisa diset ke `Diprint`, `Dikirim`, atau `Diterima`.
+- Mark printed sebagian item approved tidak mengubah pengajuan ke `Diprint`.
+- Mark printed semua item approved mengubah pengajuan ke `Diprint`.
+- Mark shipped sebagian item approved tidak mengubah pengajuan ke `Dikirim`.
+- Mark shipped semua item approved mengubah pengajuan ke `Dikirim`.
+- Pengajuan mixed approved/rejected tetap bisa naik jika semua approved item sudah processed.
+- QRCC tidak bisa mundur status.
+- Admin bisa mundur status jika catatan diisi.
+- Admin tidak bisa mundur status tanpa catatan.
+- `Ditolak` tetap wajib catatan.
+- `Diterima` bisa diset manual oleh Admin/QRCC.
+- `Selesai` bisa diset manual oleh Admin/QRCC.
+- `Diterima` tidak otomatis menjadi `Selesai`.
 
-- User boleh membaca profile dirinya sendiri jika diperlukan.
-- Admin boleh membaca semua profiles.
-- Admin boleh mengubah role dan status user.
-- Non-admin tidak boleh mengubah role.
-- Non-admin tidak boleh mengubah `is_active`.
+### Frontend Manual Test
 
-### Pengajuan
+- Filter dashboard menampilkan status baru.
+- Summary dashboard menghitung status baru.
+- Detail pengajuan bisa update status baru.
+- Badge status baru tampil di dashboard.
+- Cek status publik menampilkan copy untuk `Diprint`, `Dikirim`, dan `Diterima`.
+- Flow cetak kartu tetap memisahkan `Cetak Pilihan` dan `Tandai Sudah Dicetak`.
+- Flow label/pengiriman tetap berjalan setelah status utama otomatis berubah.
 
-- Admin, management, dan QRCC boleh select data pengajuan.
-- Management hanya read-only.
-- Admin dan QRCC boleh melakukan mutation sesuai fitur yang tersedia.
-- Management tidak boleh update/delete/ubah status/catatan meskipun mencoba lewat client Supabase langsung.
+### Migration Test
 
----
+- Preview migration tidak mengubah data.
+- Migration mengubah hanya data eligible.
+- Migration tidak mengubah `Ditolak`, `Diterima`, `Selesai`, dan `Baru`.
+- StatusLog mencatat perubahan migrasi.
 
-## 13. Nuxt Middleware Requirement
+## Rollout Plan
 
-Middleware dashboard diperlukan untuk UX dan route protection.
+1. Implement constants dan helper status.
+2. Update validasi backend status pengajuan dan status item.
+3. Update sync otomatis setelah printed dan shipped.
+4. Update dashboard dan public status UI.
+5. Update dokumentasi.
+6. Jalankan preview migration di Apps Script.
+7. Review hasil preview bersama user.
+8. Jalankan migration jika hasil preview aman.
+9. Smoke test dashboard, cek status publik, cetak, kirim, diterima, dan selesai.
 
-Middleware konseptual:
+## Acceptance Criteria
 
-### Dashboard Auth Guard
-
-Untuk semua `/dashboard/**`:
-
-```txt
-Jika belum login:
-  redirect ke /login
-```
-
-### Dashboard Role Guard
-
-```txt
-Ambil role user
-Cek route tujuan
-Jika role tidak punya akses:
-  redirect ke /403
-```
-
-### Active User Guard
-
-```txt
-Jika is_active = false:
-  redirect ke /403
-```
-
-### Guest Guard Login
-
-Untuk `/login`:
-
-```txt
-Jika sudah login dan user valid:
-  redirect ke /dashboard
-```
-
----
-
-## 14. UI Authorization Requirement
-
-UI harus menyesuaikan role user, tetapi bukan menjadi satu-satunya lapisan keamanan.
-
-Contoh behavior:
-
-### Admin
-
-- Melihat semua menu dashboard.
-- Melihat menu Members.
-- Melihat semua tombol action.
-
-### Management
-
-- Hanya melihat menu Dashboard dan Pengajuan.
-- Pada Pengajuan hanya melihat list dan detail.
-- Tombol edit/update/delete/status/catatan tidak ditampilkan.
-
-### QRCC
-
-- Melihat menu dashboard secara umum.
-- Tidak melihat menu Members.
-- Jika memaksa akses URL members, diarahkan ke `/403`.
-
----
-
-## 15. Security Guard Penting
-
-Guard yang wajib ada saat implementasi:
-
-1. Public register tidak tersedia.
-2. Semua `/dashboard/**` wajib login.
-3. Role dashboard dicek sebelum route diakses.
-4. `is_active = false` diarahkan ke `/403`.
-5. Management read-only secara UI dan database/RLS.
-6. QRCC tidak boleh akses members secara route maupun endpoint API.
-7. Endpoint admin members hanya boleh dipakai oleh admin.
-8. Service role key hanya boleh dipakai di server.
-9. User tidak boleh mengubah role sendiri.
-10. Tidak boleh menghapus, menonaktifkan, atau downgrade admin terakhir.
-
----
-
-## 16. Keputusan Final Ringkas
-
-```txt
-A. Register tidak publik; user hanya dibuat/invite oleh admin.
-B. First admin manual lewat Supabase Dashboard/SQL.
-C. Management boleh lihat list + detail pengajuan, tidak boleh mutate.
-D. QRCC boleh semua dashboard kecuali /dashboard/settings/members.
-E. User management admin-only: full CRUD secara soft delete + ubah role.
-F. Email confirmation wajib.
-G. Delete user memakai deactivate / soft delete.
-H. Invite email; user set password sendiri.
-I. Field member: email, full_name, role, is_active.
-J. Export/download pengajuan belum dibuat; authorization dibahas saat fitur dibuat.
-K. User inactive redirect ke /403.
-L. Admin boleh membuat admin lain, tapi tidak boleh menghapus/downgrade/deactivate admin terakhir.
-M. Deployment target static-only; Nuxt tidak membutuhkan Node.js runtime production.
-N. Supabase Auth Admin user CRUD dijalankan via Supabase Edge Functions atau Google Apps Script, bukan Nuxt/Nitro endpoint.
-O. Service role key hanya boleh berada di backend eksternal, tidak di Nuxt/browser.
-```
+- `Pengajuan.Status` mendukung `Diprint`, `Dikirim`, dan `Diterima`.
+- `PengajuanItems.Status Item` tidak tercampur status fulfillment.
+- Semua approved item printed membuat status pengajuan menjadi `Diprint`.
+- Semua approved item shipped membuat status pengajuan menjadi `Dikirim`.
+- `Diterima` dan `Selesai` hanya berubah lewat aksi manual Admin/QRCC.
+- Transisi mundur hanya Admin dan wajib catatan.
+- Dashboard, detail, filter, badge, summary, dan cek status publik mengenali status baru.
+- Data lama bisa dimigrasikan dari `WarrantyCards` dengan preview aman.
