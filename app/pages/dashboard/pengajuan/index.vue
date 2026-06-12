@@ -10,7 +10,7 @@ definePageMeta({
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
-type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
 
 type DashboardPengajuanRow = {
   key: string
@@ -52,6 +52,15 @@ const statusFilterItems = [{
 }, {
   label: 'Ditolak',
   value: 'Ditolak'
+}, {
+  label: 'Diprint',
+  value: 'Diprint'
+}, {
+  label: 'Dikirim',
+  value: 'Dikirim'
+}, {
+  label: 'Diterima',
+  value: 'Diterima'
 }, {
   label: 'Selesai',
   value: 'Selesai'
@@ -234,6 +243,9 @@ function getStatusColor(status: string) {
     Baru: 'info',
     Disetujui: 'success',
     Ditolak: 'error',
+    Diprint: 'warning',
+    Dikirim: 'primary',
+    Diterima: 'secondary',
     Selesai: 'neutral'
   }
   return colors[status] || 'neutral'

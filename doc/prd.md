@@ -167,9 +167,14 @@ Catatan migrasi: di Vue/Nuxt, nilai ini sebaiknya menjadi runtime config/environ
 | `Baru` | Submit final berhasil, file hard copy sudah tersimpan, menunggu proses admin. | Ya | Ya |
 | `Disetujui` | Pengajuan disetujui admin dan item eligible untuk antrean cetak jika nama produk verified. | Ya | Ya |
 | `Ditolak` | Pengajuan ditolak admin. Catatan admin wajib saat menyimpan status ini. | Ya | Ya |
+| `Diprint` | Semua item approved sudah dicetak sebagai kartu garansi. | Ya | Ya |
+| `Dikirim` | Semua item approved sudah ditandai dikirim. | Ya | Ya |
+| `Diterima` | Kartu garansi sudah dikonfirmasi diterima di level pengajuan. | Ya | Ya |
 | `Selesai` | Pengajuan selesai diproses. | Ya | Ya |
 
-`VALID_STATUSES` di backend hanya berisi `Baru`, `Disetujui`, `Ditolak`, `Selesai`. Status `Menunggu Upload` adalah status draft khusus.
+`VALID_STATUSES` di backend berisi `Baru`, `Disetujui`, `Ditolak`, `Diprint`, `Dikirim`, `Diterima`, dan `Selesai`. Status `Menunggu Upload` adalah status draft khusus dan tidak masuk daftar status final.
+
+`PengajuanItems.Status Item` tetap approval-only: `Baru`, `Disetujui`, `Ditolak`, dan `Selesai`. Status fulfillment seperti `Diprint`, `Dikirim`, dan `Diterima` tidak ditulis ke item.
 
 ### 6.2 Status Verifikasi Nama Produk Item
 

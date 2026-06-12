@@ -9,6 +9,9 @@
 
 const DETAIL_TTL = 60_000
 
+export type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
+export type ItemApprovalStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+
 type RiwayatStatus = {
   timestamp?: string
   noItem?: number | string
@@ -26,7 +29,7 @@ export type DetailItem = {
   modelNormalized?: string
   produkStatus?: string
   produkSumber?: string
-  statusItem?: 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+  statusItem?: ItemApprovalStatus
   catatanAdminItem?: string
   tanggalUpdateStatusItem?: string
   userUpdateStatusItem?: string
@@ -44,7 +47,7 @@ export type DetailPengajuan = {
   fileHardCopyId?: string
   catatanTambahan?: string
   jumlahItem?: number | string
-  status: 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+  status: PengajuanStatus
   catatanAdmin?: string
   tanggalUpdateStatusTerakhir?: string
   userUpdateStatus?: string
@@ -76,14 +79,14 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 
   // Patch lokal untuk optimistic update + invalidate cache 'getDashboard'
   // sehingga list di halaman lain ikut segar.
-  function patchItem(noItem: number | string, statusBaru: string, catatanAdmin: string) {
+  function patchItem(noItem: number | string, statusBaru: ItemApprovalStatus, catatanAdmin: string) {
     query.mutate((current) => {
       if (!current || !Array.isArray(current.items)) return current
       const items = current.items.map((it) => {
         if (String(it.noItem) !== String(noItem)) return it
         return {
           ...it,
-          statusItem: statusBaru as DetailItem['statusItem'],
+          statusItem: statusBaru,
           catatanAdminItem: catatanAdmin,
           tanggalUpdateStatusItem: new Date().toISOString()
         }
@@ -97,7 +100,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 
   async function setItemStatus(
     noItem: number | string,
-    statusBaru: 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai',
+    statusBaru: ItemApprovalStatus,
     catatanAdmin: string
   ) {
     if (!id.value) throw new Error('ID Pengajuan tidak valid.')
@@ -129,6 +132,40 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     }
   }
 
+  async function setPengajuanStatus(statusBaru: PengajuanStatus, catatanAdmin: string) {
+    if (!id.value) throw new Error('ID Pengajuan tidak valid.')
+
+    const previous = query.data.value
+    query.mutate((current) => current
+      ? {
+          ...current,
+          status: statusBaru,
+          catatanAdmin,
+          tanggalUpdateStatusTerakhir: new Date().toISOString()
+        }
+      : current)
+
+    try {
+      await callApi<Record<string, never>>('updateStatus', {
+        idPengajuan: id.value,
+        statusBaru,
+        catatanAdmin
+      })
+
+      invalidate('getDashboard')
+      void query.refresh()
+    } catch (err) {
+      query.mutate(() => previous)
+      toast.add({
+        title: 'Gagal memperbarui status pengajuan',
+        description: err instanceof Error ? err.message : String(err),
+        color: 'error',
+        icon: 'i-lucide-circle-alert'
+      })
+      throw err
+    }
+  }
+
   return {
     detail: query.data,
     error: query.error,
@@ -138,6 +175,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     refresh: query.refresh,
     invalidate: query.invalidate,
     setItemStatus,
+    setPengajuanStatus,
     getParams
   }
 }

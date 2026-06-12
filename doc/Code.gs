@@ -167,6 +167,10 @@ function doPost(e) {
         return jsonResponse_(handleMarkShippingLabelsShipped(data));
       case 'getShippingLabelQueue':
         return jsonResponse_(handleGetShippingLabelQueue(data));
+      case 'previewPengajuanLifecycleMigration':
+        return jsonResponse_(handlePreviewPengajuanLifecycleMigration(data));
+      case 'migratePengajuanLifecycleFromWarrantyCards':
+        return jsonResponse_(handleMigratePengajuanLifecycleFromWarrantyCards(data));
       case 'adminLogout':
         return jsonResponse_(handleAdminLogout(data));
       default:
@@ -1210,6 +1214,137 @@ function syncPengajuanLifecycleFromWarranty_(idPengajuan, actor, note) {
   }
 
   return { changed: false, status: '' };
+}
+
+function previewPengajuanLifecycleMigration() {
+  return buildPengajuanLifecycleMigrationPreview_();
+}
+
+function migratePengajuanLifecycleFromWarrantyCards() {
+  return runPengajuanLifecycleMigration_('system:migration', 'Migrasi lifecycle dari WarrantyCards');
+}
+
+function handlePreviewPengajuanLifecycleMigration(data) {
+  requireSession_(data.token, ['admin']);
+  return { success: true, data: buildPengajuanLifecycleMigrationPreview_() };
+}
+
+function handleMigratePengajuanLifecycleFromWarrantyCards(data) {
+  const session = requireSession_(data.token, ['admin']);
+  return { success: true, data: runPengajuanLifecycleMigration_(session.username, 'Migrasi lifecycle dari WarrantyCards') };
+}
+
+function buildPengajuanLifecycleMigrationPreview_() {
+  const changes = getPengajuanLifecycleMigrationChanges_();
+  const summary = {
+    eligible: changes.eligible,
+    unchanged: changes.unchanged,
+    willChange: changes.rows.length,
+    toDisetujui: 0,
+    toDiprint: 0,
+    toDikirim: 0,
+  };
+
+  changes.rows.forEach(function (row) {
+    if (row.targetStatus === 'Disetujui') summary.toDisetujui += 1;
+    else if (row.targetStatus === 'Diprint') summary.toDiprint += 1;
+    else if (row.targetStatus === 'Dikirim') summary.toDikirim += 1;
+  });
+
+  return {
+    summary: summary,
+    changes: changes.rows,
+  };
+}
+
+function runPengajuanLifecycleMigration_(actor, note) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const changes = getPengajuanLifecycleMigrationChanges_();
+    const sheet = getSheet_(SHEETS.PENGAJUAN);
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return { updated: 0, changes: [] };
+
+    const col = indexMap_(values[0]);
+    const rowById = {};
+    for (let i = 1; i < values.length; i++) {
+      rowById[clean_(values[i][col['ID Pengajuan']])] = i + 1;
+    }
+
+    const now = new Date();
+    changes.rows.forEach(function (change) {
+      const rowNumber = rowById[change.idPengajuan];
+      if (!rowNumber) return;
+      appendStatusHistory_(
+        sheet,
+        rowNumber,
+        col,
+        change.idPengajuan,
+        change.currentStatus,
+        change.targetStatus,
+        note,
+        actor || 'system:migration',
+        '',
+        now,
+        'Migrasi lifecycle'
+      );
+    });
+
+    return {
+      updated: changes.rows.length,
+      changes: changes.rows,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getPengajuanLifecycleMigrationChanges_() {
+  const eligibleStatuses = ['Disetujui', 'Diprint', 'Dikirim'];
+  const approvedById = getApprovedItemKeysByPengajuan_();
+  const cardState = getWarrantyCardSheetState_();
+  const rows = [];
+  let eligible = 0;
+  let unchanged = 0;
+
+  readObjects_(SHEETS.PENGAJUAN).forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    const currentStatus = clean_(row['Status']);
+    if (!id || eligibleStatuses.indexOf(currentStatus) === -1) return;
+
+    eligible += 1;
+    const approvedKeys = approvedById[id] || [];
+    const state = summarizeWarrantyFulfillment_(approvedKeys, cardState);
+    const targetStatus = deriveMigrationLifecycleTarget_(currentStatus, state);
+
+    if (targetStatus === currentStatus) {
+      unchanged += 1;
+      return;
+    }
+
+    rows.push({
+      idPengajuan: id,
+      currentStatus: currentStatus,
+      targetStatus: targetStatus,
+      approvedCount: state.approvedCount,
+      printedCount: state.printedCount,
+      shippedCount: state.shippedCount,
+    });
+  });
+
+  return {
+    eligible: eligible,
+    unchanged: unchanged,
+    rows: rows,
+  };
+}
+
+function deriveMigrationLifecycleTarget_(currentStatus, state) {
+  if (!state || !state.approvedCount) return currentStatus;
+  if (state.allShipped) return 'Dikirim';
+  if (state.allPrinted) return 'Diprint';
+  return 'Disetujui';
 }
 
 function handleGetProductReviewQueue(data) {

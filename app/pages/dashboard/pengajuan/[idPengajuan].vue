@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { DetailItem } from '~/composables/usePengajuanDetail'
+import type { DetailItem, ItemApprovalStatus, PengajuanStatus } from '~/composables/usePengajuanDetail'
 
 definePageMeta({
   layout: 'dashboard',
   middleware: ['auth-guard', 'role-guard']
 })
 
-const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
-
-type PengajuanStatus = typeof VALID_STATUSES[number]
+const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
+const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
+const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
 
 type RiwayatStatus = {
   timestamp?: string
@@ -21,6 +21,14 @@ type RiwayatStatus = {
 }
 
 type ItemStatusForm = {
+  statusBaru: ItemApprovalStatus
+  catatanAdmin: string
+  isSubmitting: boolean
+  error: string
+  notice: string
+}
+
+type PengajuanStatusForm = {
   statusBaru: PengajuanStatus
   catatanAdmin: string
   isSubmitting: boolean
@@ -47,14 +55,27 @@ const {
   error: queryError,
   isLoading,
   load,
-  setItemStatus
+  setItemStatus,
+  setPengajuanStatus
 } = usePengajuanDetail(() => idPengajuan.value)
 
 const loadError = computed(() => queryError.value || '')
 
 const itemForms = ref<Record<string, ItemStatusForm>>({})
+const pengajuanForm = reactive<PengajuanStatusForm>({
+  statusBaru: 'Baru',
+  catatanAdmin: '',
+  isSubmitting: false,
+  error: '',
+  notice: ''
+})
 
-const statusItems = VALID_STATUSES.map((status) => ({
+const pengajuanStatusItems = PENGAJUAN_STATUSES.map((status) => ({
+  label: status,
+  value: status
+}))
+
+const itemStatusItems = ITEM_APPROVAL_STATUSES.map((status) => ({
   label: status,
   value: status
 }))
@@ -108,7 +129,12 @@ const historyColumns: TableColumn<RiwayatStatus>[] = [{
 
 // Inisialisasi form per-item ketika detail pertama kali dimuat (atau berubah).
 watch(detail, (next) => {
-  if (next?.items) initItemForms(next.items)
+  if (!next) return
+  pengajuanForm.statusBaru = isPengajuanStatus(next.status) ? next.status : 'Baru'
+  pengajuanForm.catatanAdmin = next.catatanAdmin || ''
+  pengajuanForm.error = ''
+  pengajuanForm.notice = ''
+  if (next.items) initItemForms(next.items)
 }, { immediate: true })
 
 onMounted(() => {
@@ -161,7 +187,7 @@ async function submitItemStatus(item: DetailItem) {
     return
   }
 
-  if (!isValidStatus(statusBaru)) {
+  if (!isItemApprovalStatus(statusBaru)) {
     form.error = 'Status tidak valid.'
     return
   }
@@ -199,7 +225,53 @@ async function submitItemStatus(item: DetailItem) {
   }
 }
 
-function getTransitionConfirmMessage(currentStatus: PengajuanStatus, nextStatus: PengajuanStatus, noItem: number | string) {
+async function submitPengajuanStatus() {
+  if (!detail.value) return
+
+  pengajuanForm.error = ''
+  pengajuanForm.notice = ''
+
+  const statusBaru = pengajuanForm.statusBaru
+  const catatanAdmin = pengajuanForm.catatanAdmin.trim()
+  const statusLama = detail.value.status
+
+  if (!isPengajuanStatus(statusBaru)) {
+    pengajuanForm.error = 'Status pengajuan tidak valid.'
+    return
+  }
+
+  if (statusBaru === statusLama) {
+    pengajuanForm.notice = 'Tidak ada perubahan status pengajuan untuk disimpan.'
+    return
+  }
+
+  if (requiresPengajuanStatusNote(statusLama, statusBaru) && !catatanAdmin) {
+    pengajuanForm.error = 'Catatan Admin wajib diisi untuk perubahan status ini.'
+    return
+  }
+
+  const confirmMessage = getPengajuanTransitionConfirmMessage(statusLama, statusBaru)
+  if (confirmMessage && !window.confirm(confirmMessage)) return
+
+  pengajuanForm.isSubmitting = true
+
+  try {
+    await setPengajuanStatus(statusBaru, catatanAdmin)
+    toast.add({
+      title: 'Status pengajuan berhasil disimpan',
+      description: `Pengajuan diperbarui menjadi ${statusBaru}.`,
+      color: 'success',
+      icon: 'i-lucide-circle-check'
+    })
+    pengajuanForm.notice = 'Tersimpan.'
+  } catch (err) {
+    pengajuanForm.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    pengajuanForm.isSubmitting = false
+  }
+}
+
+function getTransitionConfirmMessage(currentStatus: ItemApprovalStatus, nextStatus: ItemApprovalStatus, noItem: number | string) {
   if (currentStatus === 'Disetujui' && nextStatus === 'Selesai') {
     return `Tandai item #${noItem} sebagai Selesai? Pastikan proses kartu garansi untuk item ini sudah selesai.`
   }
@@ -238,32 +310,66 @@ function getItemForm(item: DetailItem) {
   return itemForms.value[key] as ItemStatusForm
 }
 
-function getItemStatus(item: DetailItem): PengajuanStatus {
+function getItemStatus(item: DetailItem): ItemApprovalStatus {
   const status = item.statusItem || detail.value?.status || 'Baru'
-  return isValidStatus(status) ? status : 'Baru'
+  return isItemApprovalStatus(status) ? status : 'Baru'
 }
 
 function normalizeRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] || '' : value || ''
 }
 
-function isValidStatus(status: string): status is PengajuanStatus {
-  return VALID_STATUSES.includes(status as PengajuanStatus)
+function isPengajuanStatus(status: string): status is PengajuanStatus {
+  return PENGAJUAN_STATUSES.includes(status as PengajuanStatus)
+}
+
+function isItemApprovalStatus(status: string): status is ItemApprovalStatus {
+  return ITEM_APPROVAL_STATUSES.includes(status as ItemApprovalStatus)
 }
 
 function isProductVerified(status: string | undefined) {
   return String(status || '').trim().toLowerCase() === 'verified'
 }
 
-function getStatusColor(status: PengajuanStatus) {
+function getStatusColor(status: string) {
   const colors = {
     Baru: 'info',
     Disetujui: 'success',
     Ditolak: 'error',
+    Diprint: 'warning',
+    Dikirim: 'primary',
+    Diterima: 'secondary',
     Selesai: 'neutral'
   } as const
 
   return colors[status] || 'neutral'
+}
+
+function getLifecycleRank(status: string) {
+  return LIFECYCLE_ORDER.indexOf(status as typeof LIFECYCLE_ORDER[number])
+}
+
+function isBackwardPengajuanTransition(currentStatus: string, nextStatus: string) {
+  const currentRank = getLifecycleRank(currentStatus)
+  const nextRank = getLifecycleRank(nextStatus)
+  return currentRank !== -1 && nextRank !== -1 && nextRank < currentRank
+}
+
+function requiresPengajuanStatusNote(currentStatus: string, nextStatus: string) {
+  return nextStatus === 'Ditolak'
+    || isBackwardPengajuanTransition(currentStatus, nextStatus)
+    || (nextStatus === 'Diterima' && currentStatus !== 'Dikirim')
+    || (nextStatus === 'Selesai' && currentStatus !== 'Diterima')
+}
+
+function getPengajuanTransitionConfirmMessage(currentStatus: string, nextStatus: string) {
+  if (isBackwardPengajuanTransition(currentStatus, nextStatus)) {
+    return `Status akan mundur dari ${currentStatus} ke ${nextStatus}. Lanjutkan?`
+  }
+  if (nextStatus === 'Ditolak') return 'Tolak pengajuan ini? Pastikan catatan admin sudah menjelaskan alasannya.'
+  if (nextStatus === 'Diterima') return 'Tandai kartu garansi sudah diterima?'
+  if (nextStatus === 'Selesai') return 'Tandai proses kartu garansi sudah selesai?'
+  return ''
 }
 
 function formatDateTime(value: string | undefined) {
@@ -473,7 +579,7 @@ function formatDateTime(value: string | undefined) {
                     <UFormField label="Ubah Status Ke" :name="`status-${getItemKey(item)}`" class="w-full lg:w-32">
                       <USelect
                         v-model="getItemForm(item).statusBaru"
-                        :items="statusItems"
+                        :items="itemStatusItems"
                         class="w-full"
                       />
                     </UFormField>
@@ -547,9 +653,53 @@ function formatDateTime(value: string | undefined) {
                     class="font-semibold"
                   />
                   <p class="mt-2 text-xs text-muted">
-                    Status ini adalah ringkasan dari status tiap item. Ubah status dan catatan melalui daftar item pengajuan.
+                    Status ini adalah lifecycle utama pengajuan. Status pada daftar item tetap khusus approval item.
                   </p>
                 </div>
+
+                <form class="space-y-3 border-t border-muted/40 pt-3" @submit.prevent="submitPengajuanStatus">
+                  <UAlert
+                    v-if="pengajuanForm.notice"
+                    color="info"
+                    variant="subtle"
+                    :description="pengajuanForm.notice"
+                    class="text-xs"
+                  />
+                  <UAlert
+                    v-if="pengajuanForm.error"
+                    color="error"
+                    variant="subtle"
+                    :description="pengajuanForm.error"
+                    class="text-xs"
+                  />
+
+                  <UFormField label="Ubah Status Pengajuan" name="status-pengajuan">
+                    <USelect
+                      v-model="pengajuanForm.statusBaru"
+                      :items="pengajuanStatusItems"
+                      class="w-full"
+                    />
+                  </UFormField>
+
+                  <UFormField label="Catatan Admin" name="catatan-pengajuan">
+                    <UTextarea
+                      v-model="pengajuanForm.catatanAdmin"
+                      :rows="3"
+                      placeholder="Wajib untuk Ditolak, transisi mundur, atau pengecualian alur..."
+                      class="w-full"
+                    />
+                  </UFormField>
+
+                  <UButton
+                    type="submit"
+                    label="Simpan Pengajuan"
+                    icon="i-lucide-save"
+                    color="primary"
+                    class="w-full justify-center"
+                    :loading="pengajuanForm.isSubmitting"
+                    :disabled="pengajuanForm.isSubmitting"
+                  />
+                </form>
 
                 <div class="border-t border-muted/40 pt-3">
                   <span class="text-muted block mb-1">Update Terakhir:</span>

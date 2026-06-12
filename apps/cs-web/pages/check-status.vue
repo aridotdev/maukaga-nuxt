@@ -150,6 +150,27 @@ function statusCheckBadge(status?: string): StatusTone {
       icon: 'i-lucide-x-octagon',
       iconColor: 'text-red-500 bg-red-100'
     },
+    Diprint: {
+      badge: 'border-amber-200 bg-amber-100/70 text-amber-800',
+      dotPing: 'bg-amber-500',
+      dot: 'bg-amber-600',
+      icon: 'i-lucide-printer-check',
+      iconColor: 'text-amber-600 bg-amber-100'
+    },
+    Dikirim: {
+      badge: 'border-sky-200 bg-sky-100/70 text-sky-800',
+      dotPing: 'bg-sky-500',
+      dot: 'bg-sky-600',
+      icon: 'i-lucide-truck',
+      iconColor: 'text-sky-600 bg-sky-100'
+    },
+    Diterima: {
+      badge: 'border-violet-200 bg-violet-100/70 text-violet-800',
+      dotPing: 'bg-violet-500',
+      dot: 'bg-violet-600',
+      icon: 'i-lucide-package-check',
+      iconColor: 'text-violet-600 bg-violet-100'
+    },
     Selesai: {
       badge: 'border-slate-300 bg-slate-200/70 text-slate-800',
       dotPing: 'bg-slate-500',
@@ -173,7 +194,10 @@ function statusCheckInfoText(status?: string) {
     Baru: 'Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin.',
     Disetujui: 'Pengajuan telah diperiksa dan disetujui. Kartu garansi akan segera dibuat dan dikirimkan.',
     Ditolak: 'Pengajuan telah diperiksa dan ditolak, silakan hubungi admin untuk informasi lebih lanjut.',
-    Selesai: 'Kartu sudah selesai dibuat dan dikirimkan ke alamat yang tertera di pengajuan.',
+    Diprint: 'Kartu garansi sudah dicetak dan sedang disiapkan untuk pengiriman.',
+    Dikirim: 'Kartu garansi sudah dikirim ke cabang atau alamat terkait.',
+    Diterima: 'Kartu garansi sudah dikonfirmasi diterima.',
+    Selesai: 'Proses kartu garansi sudah selesai.',
     'Menunggu Upload': 'Pengajuan masih berupa draft. Lanjutkan draft untuk upload hard copy bertanda tangan dan submit final.'
   }
 

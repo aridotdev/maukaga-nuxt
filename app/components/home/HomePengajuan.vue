@@ -2,7 +2,7 @@
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 
-type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
 
 type DashboardPengajuanRow = {
   nomor?: number
@@ -115,6 +115,9 @@ function getStatusColor(status: string) {
     Baru: 'info',
     Disetujui: 'success',
     Ditolak: 'error',
+    Diprint: 'warning',
+    Dikirim: 'primary',
+    Diterima: 'secondary',
     Selesai: 'neutral'
   }
   return colors[status] || 'neutral'
