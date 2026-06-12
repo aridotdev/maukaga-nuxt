@@ -23,6 +23,9 @@ Fitur ini membutuhkan sesi admin yang valid. Semua API admin mengirim `token` da
 - **Data persistent untuk cetak ada di sheet `WarrantyCards`.** Sheet ini menyimpan jenis kartu, status cetak, batch, timestamp, user, dan data reprint.
 - **Layout cetak aktif dipisah per jenis kartu.** `Local` dan `Import` masing-masing punya layout aktif sendiri.
 - **Label cabang berbasis item printed.** Label tidak berasal dari antrean belum dicetak, tetapi dari item yang sudah berstatus `Printed`.
+- **Status lifecycle pengajuan terpisah dari status approval item.** `Pengajuan.Status` mengikuti alur ringkas customer-facing: `Baru -> Disetujui -> Diprint -> Dikirim -> Diterima -> Selesai` (dengan `Ditolak` sebagai terminal rejection path). `PengajuanItems.Status Item` tetap approval-only: `Baru`, `Disetujui`, `Ditolak`, `Selesai`. Status fulfillment seperti `Diprint`, `Dikirim`, dan `Diterima` tidak ditulis ke item.
+- **Status `Diprint` dan `Dikirim` pengajuan diturunkan otomatis dari `WarrantyCards`.** Setelah `markWarrantyCardsPrinted` atau `markShippingLabelsShipped`, backend memanggil `syncPengajuanLifecycleFromWarranty_` untuk menaik-turunkan status pengajuan berdasarkan agregasi item approved. Item yang `Ditolak` tidak menghambat lifecycle pengajuan.
+- **`Diterima` dan `Selesai` diubah manual oleh Admin/QRCC.** `Diterima` tidak otomatis menjadi `Selesai`. Transisi mundur hanya boleh dilakukan Admin dan wajib catatan admin.
 
 ## Modul UI Saat Ini
 
@@ -158,6 +161,8 @@ State utama yang relevan:
 
 Dipakai sebagai sumber data pengajuan utama. Untuk antrean cetak, hanya row dengan `Status = Disetujui` yang dipakai.
 
+`Status` adalah lifecycle utama pengajuan. Nilai yang valid mengikuti `VALID_STATUSES` backend: `Baru`, `Disetujui`, `Ditolak`, `Diprint`, `Dikirim`, `Diterima`, `Selesai`. Status `Menunggu Upload` adalah status draft khusus dan tidak masuk daftar status final.
+
 Kolom relevan:
 
 | Kolom | Dipakai Untuk |
@@ -167,7 +172,11 @@ Kolom relevan:
 | Nama | Search dan data row |
 | Bagian/Cabang | Tabel antrean dan label cabang |
 | Jumlah Item | Informasi pengajuan |
-| Status | Gate utama: harus `Disetujui` |
+| Status | Gate utama antrean cetak: harus `Disetujui`. Otomatis naik ke `Diprint`/`Dikirim` saat `WarrantyCards` sinkron. `Diterima` dan `Selesai` diubah manual Admin/QRCC. |
+| Catatan Admin | Catatan update status; wajib untuk `Ditolak`, transisi mundur, dan transisi `Diterima`/`Selesai` di luar alur normal |
+| Tanggal Update Status Terakhir | Timestamp update terakhir |
+| User Update Status | Username admin/QRCC yang melakukan update |
+| Riwayat Singkat | Log singkat transisi status, format `[tanggal] StatusLama -> StatusBaru oleh user` |
 
 ### Sheet: `PengajuanItems`
 
@@ -714,11 +723,14 @@ Yang tidak terjadi pada flow ini:
 6. Jika admin confirm, frontend memanggil `markWarrantyCardsPrinted`.
 7. Backend membuat batch dan update `WarrantyCards`.
 8. Backend append `PrintBatch`.
-9. Frontend clear selection.
-10. Frontend reload antrean. Karena printed items tidak diminta dengan `includePrinted`, item yang baru printed hilang dari antrean normal.
-11. Frontend tampilkan success:
+9. Backend memanggil `syncPengajuanLifecycleFromWarranty_` untuk setiap `ID Pengajuan` yang tersentuh. Jika semua item approved sudah `Printed`, status pengajuan naik ke `Diprint`. Baris `StatusLog` dan `Riwayat Singkat` ditambah dengan prefix `Auto lifecycle`.
+10. Frontend clear selection.
+11. Frontend reload antrean. Karena printed items tidak diminta dengan `includePrinted`, item yang baru printed hilang dari antrean normal.
+12. Frontend tampilkan success:
     - `Batch {batchId} tersimpan ({count} kartu)`
     - Jika ada batch ID, tampil tombol inline `Preview Label`.
+
+Catatan: Perubahan status pengajuan ke `Diprint` tidak ditampilkan eksplisit di UI antrean cetak; designer tidak perlu menambah kontrol status pengajuan di sini kecuali ditemukan kebutuhan baru.
 
 ### Flow H: Preview Label Cabang
 
@@ -864,6 +876,26 @@ Status cetak:
 | `Printed` | Printed |
 | Selain `Printed` atau kosong | Belum Dicetak |
 
+Status lifecycle pengajuan (badge di dashboard dan detail):
+
+| Status | Warna/Sentuhan yang Disarankan | Copy di Cek Status Publik |
+| --- | --- | --- |
+| `Baru` | Info (biru) | Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin. |
+| `Disetujui` | Success (hijau) | Pengajuan telah diperiksa dan disetujui. Kartu garansi akan segera dibuat dan dikirimkan. |
+| `Ditolak` | Error (merah) | Pengajuan telah diperiksa dan ditolak, silakan hubungi admin untuk informasi lebih lanjut. |
+| `Diprint` | Warning (amber) | Kartu garansi sudah dicetak dan sedang disiapkan untuk pengiriman. |
+| `Dikirim` | Primary (sky) | Kartu garansi sudah dikirim ke cabang atau alamat terkait. |
+| `Diterima` | Secondary (violet) | Kartu garansi sudah dikonfirmasi diterima. |
+| `Selesai` | Neutral (slate) | Proses kartu garansi sudah selesai. |
+| `Menunggu Upload` | Warning (amber) | Pengajuan masih berupa draft. Lanjutkan draft untuk upload hard copy bertanda tangan dan submit final. |
+
+Catatan perilaku badge dan status:
+
+- Filter dashboard, dropdown update status, dan summary card menerima ketujuh status lifecycle di atas.
+- `Diprint` dan `Dikirim` dihitung otomatis oleh backend dari `WarrantyCards`; admin tidak mengubahnya secara manual dari UI detail pengajuan kecuali untuk transisi mundur (Admin + catatan).
+- `Diterima` dan `Selesai` hanya berubah lewat aksi manual Admin/QRCC.
+- `Diterima` tidak otomatis menjadi `Selesai`.
+
 Jenis kartu:
 
 | UI value | Backend normalized | Display |
@@ -915,6 +947,10 @@ Desain baru boleh mengubah layout visual, komposisi, dan komponen, tetapi harus 
 - Setting layout harus memberi konteks layout aktif Local dan Import karena hasil cetak tergantung type.
 - Preview label cabang harus menjelaskan secara visual bahwa label dihitung dari item printed, bukan dari antrean yang belum printed.
 - Empty, loading, success, error, dan confirmation state harus tersedia.
+- Status lifecycle pengajuan (`Baru`, `Disetujui`, `Ditolak`, `Diprint`, `Dikirim`, `Diterima`, `Selesai`) harus ditampilkan konsisten di dashboard, detail, dan cek status publik. Badge baru (`Diprint`, `Dikirim`, `Diterima`, `Selesai`) perlu tone warna berbeda dari badge yang sudah ada.
+- Filter dashboard dan dropdown update status pengajuan harus mengenali ketujuh status lifecycle di atas.
+- Detail pengajuan memvalidasi transisi mundur (Admin + catatan admin wajib) sebelum mengirim ke backend. Backend tetap menjadi guard utama.
+- Cek status publik menampilkan copy khusus untuk `Diprint`, `Dikirim`, `Diterima`, dan `Selesai`.
 
 ## Checklist Fungsional Untuk Designer
 
