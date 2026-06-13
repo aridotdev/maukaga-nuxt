@@ -31,8 +31,6 @@ const {
   printQueue,
   isQueueLoading,
   queueLoadError,
-  pageAlert,
-  setPageAlert,
   loadQueue,
   toggleVisiblePrintRows,
   withApiError,
@@ -147,14 +145,6 @@ const warrantyCurrentPage = computed<number>(() =>
 const warrantyItemsPerPage = computed<number>(() =>
   warrantyTable.value?.tableApi?.getState().pagination.pageSize || warrantyPagination.value.pageSize
 )
-
-const batchLabelRoute = computed(() => {
-  const batchId = pageAlert.value?.batchId
-
-  return batchId
-    ? { path: '/dashboard/cetak-label-pengiriman', query: { batchId } }
-    : '/dashboard/cetak-label-pengiriman'
-})
 
 const warrantyColumns: TableColumn<WarrantyPrintQueueRow>[] = [{
   id: 'select',
@@ -273,18 +263,11 @@ async function loadPrintLayouts() {
 }
 
 async function loadWarrantyPrintQueue(showLoading = true) {
-  setPageAlert({
-    type: 'loading',
-    title: 'Memuat antrean cetak',
-    description: 'Mengambil item Disetujui dan verified dari Google Sheet.'
-  })
-
   await loadQueue({}, showLoading)
 }
 
 async function saveWarrantyCardTypes(items: Array<{ idPengajuan: string, noItem: string | number, jenisKartu: string }>, successMessage: string) {
   isActionLoading.value = true
-  setPageAlert(null)
 
   try {
     const result = await callApi<{ count: number }>('saveWarrantyCardTypes', { items })
@@ -333,11 +316,11 @@ async function printSelectedWarrantyCards() {
 
   await loadPrintLayouts()
   warrantyPrintRows.value = rows
-  setPageAlert({
-    type: 'info',
-    title: `${rows.length} kartu siap dicetak`,
-    description: 'Dialog print browser akan terbuka. Status printed belum disimpan sampai Anda menandainya.'
-  })
+  notify(
+    `${rows.length} kartu siap dicetak`,
+    'info',
+    'Dialog print browser akan terbuka. Status printed belum disimpan sampai Anda menandainya.'
+  )
   // Fire-and-forget: tombol tetap loading sampai dialog ditutup.
   warrantyPrintRef.value?.print().catch(() => endPrinting())
 }
@@ -359,11 +342,6 @@ async function markSelectedWarrantyCardsPrinted() {
 
   confirmPrintedOpen.value = false
   isActionLoading.value = true
-  setPageAlert({
-    type: 'loading',
-    title: 'Menyimpan status cetak',
-    description: 'Membuat batch dan menghapus item printed dari antrean normal.'
-  })
 
   await withApiError(async () => {
     const result = await callApi<{ batchId: string, count: number }>('markWarrantyCardsPrinted', {
@@ -377,13 +355,11 @@ async function markSelectedWarrantyCardsPrinted() {
 
     selectedPrintKeys.value = new Set()
     await loadWarrantyPrintQueue(false)
-    setPageAlert({
-      type: 'success',
-      title: `Batch ${result.data.batchId} tersimpan`,
-      description: `${result.data.count} kartu berhasil ditandai Printed.`,
-      batchId: result.data.batchId
-    })
-    notify('Batch cetak tersimpan', 'success')
+    notify(
+      `Batch ${result.data.batchId} tersimpan`,
+      'success',
+      `${result.data.count} kartu berhasil ditandai Printed.`
+    )
   }, 'Status cetak gagal disimpan')
 
   isActionLoading.value = false
@@ -424,7 +400,6 @@ function ensureRowsHaveCardType(rows: WarrantyPrintQueueRow[]) {
 }
 
 function showActionError(message: string) {
-  setPageAlert(null)
   notify(message, 'error')
 }
 </script>
@@ -447,36 +422,6 @@ function showActionError(message: string) {
             :selected-count="selectedPrintKeys.size"
             :loading="isQueueLoading"
           />
-
-          <UAlert
-            v-if="pageAlert"
-            :color="getAlertColor(pageAlert.type)"
-            :icon="getAlertIcon(pageAlert.type)"
-            :title="pageAlert.title"
-            :description="pageAlert.description"
-            variant="subtle"
-          >
-            <template v-if="pageAlert.batchId || pageAlert.type !== 'loading'" #actions>
-              <UButton
-                v-if="pageAlert.batchId"
-                label="Cetak Label Cabang"
-                icon="i-lucide-tags"
-                color="neutral"
-                variant="soft"
-                size="sm"
-                :to="batchLabelRoute"
-              />
-              <UButton
-                v-if="pageAlert.type !== 'loading'"
-                icon="i-lucide-x"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="Tutup pesan"
-                @click="pageAlert = null"
-              />
-            </template>
-          </UAlert>
 
           <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
             <div class="min-h-0 w-full overflow-x-auto">
