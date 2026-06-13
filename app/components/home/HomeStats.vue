@@ -8,6 +8,20 @@ const totalItems = computed(() => {
   return rows.value.reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
 })
 
+const approvedItems = computed(() => {
+  if (summary.value.itemDisetujui !== undefined) return Number(summary.value.itemDisetujui || 0)
+  return rows.value
+    .filter((row) => row.status === 'Disetujui')
+    .reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+})
+
+const rejectedItems = computed(() => {
+  if (summary.value.itemDitolak !== undefined) return Number(summary.value.itemDitolak || 0)
+  return rows.value
+    .filter((row) => row.status === 'Ditolak')
+    .reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+})
+
 const stats = computed(() => [{
   title: 'Total Pengajuan',
   icon: 'i-lucide-files',
@@ -23,23 +37,11 @@ const stats = computed(() => [{
 }, {
   title: 'Disetujui',
   icon: 'i-lucide-circle-check',
-  value: Number(summary.value.disetujui || 0)
-}, {
-  title: 'Diprint',
-  icon: 'i-lucide-printer-check',
-  value: Number(summary.value.diprint || 0)
-}, {
-  title: 'Dikirim',
-  icon: 'i-lucide-truck',
-  value: Number(summary.value.dikirim || 0)
-}, {
-  title: 'Diterima',
-  icon: 'i-lucide-package-check',
-  value: Number(summary.value.diterima || 0)
+  value: approvedItems.value
 }, {
   title: 'Ditolak',
   icon: 'i-lucide-x-circle',
-  value: Number(summary.value.ditolak || 0)
+  value: rejectedItems.value
 }])
 
 const showSkeleton = computed(() => isLoading.value && !summary.value.total && !summary.value.totalItems)
@@ -60,7 +62,7 @@ watch(error, async (msg) => {
 </script>
 
 <template>
-  <UPageGrid class="lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-px">
+  <UPageGrid class="lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-px">
     <UPageCard
       v-for="(stat, index) in stats"
       :key="index"
