@@ -21,6 +21,11 @@ export default defineNuxtConfig({
       login: '/login',
       callback: '/confirm',
       exclude: ['/', '/login', '/confirm', '/403']
+    },
+    cookieOptions: {
+      maxAge: 60 * 60 * 24 * 2, // 2 hari
+      sameSite: 'lax',
+      secure: true
     }
   },
 
