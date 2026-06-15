@@ -2,6 +2,10 @@
 definePageMeta({
   layout: 'cs'
 })
+
+defineOptions({
+  name: 'CsNotFoundPage'
+})
 </script>
 
 <template>

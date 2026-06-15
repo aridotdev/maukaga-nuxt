@@ -1,3 +1,9 @@
+<script setup lang="ts">
+defineOptions({
+  name: 'AdminIndexPage'
+})
+</script>
+
 <template>
   <main class="flex min-h-screen items-center justify-center bg-default px-6 py-12">
     <section class="flex w-full max-w-md flex-col items-center gap-4 text-center">

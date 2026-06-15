@@ -2,6 +2,10 @@
 definePageMeta({
   layout: 'cs'
 })
+
+defineOptions({
+  name: 'CsForbiddenPage'
+})
 </script>
 
 <template>

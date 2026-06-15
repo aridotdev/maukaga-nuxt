@@ -20,8 +20,7 @@ type ReviewQueueItem = {
 }
 
 type ReviewQueueGroup = {
-  modelNormalized: string
-  modelDisplay?: string
+  model: string
   produk?: string
   count: number
   items?: ReviewQueueItem[]

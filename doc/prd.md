@@ -378,7 +378,7 @@ Sistem memakai master `ModelProduk` sebagai mapping dari model ke nama produk. T
 ### 9.2 Perilaku di Form Publik
 
 - Saat halaman form dimuat, frontend memanggil `getModelProduk`.
-- Response berisi daftar model verified.
+- Response berisi daftar mapping verified dengan field `model` dan `produk`.
 - Jika pengguna mengetik model yang cocok setelah normalisasi, frontend otomatis mengisi `Produk` dan men-disable input Produk.
 - Jika model tidak ditemukan, pengguna tetap bisa mengisi Produk manual.
 
@@ -726,8 +726,7 @@ Catatan: config `LAST_EMAIL_SENT_AT` diperbarui setelah digest, tetapi implement
 
 | Kolom | Keterangan |
 | --- | --- |
-| `model_normalized` | Key model hasil normalisasi. |
-| `model_display` | Model display. |
+| `model` | Model canonical hasil normalisasi trim/collapse space/uppercase. |
 | `produk` | Nama produk verified. |
 | `status` | Saat ini yang dipakai adalah `verified`. |
 | `updated_at` | Timestamp update. |

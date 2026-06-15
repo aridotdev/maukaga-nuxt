@@ -1,3 +1,9 @@
+<script setup lang="ts">
+defineOptions({
+  name: 'CsLayout'
+})
+</script>
+
 <template>
   <div
     class="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[linear-gradient(135deg,#DDE4E8_0%,#F0F4F8_100%)] p-6 antialiased selection:bg-slate-200 md:p-8 font-[Inter,sans-serif]"

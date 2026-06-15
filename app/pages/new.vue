@@ -56,7 +56,6 @@ type ApiResult<T = Record<string, unknown>> = {
 
 type ModelProdukRow = {
   model?: string
-  modelNormalized?: string
   produk?: string
 }
 
@@ -189,7 +188,7 @@ async function loadModelProduk() {
 
     const map: Record<string, string> = {}
     for (const row of result.data?.rows || []) {
-      const key = row.modelNormalized || normalizeModelKey(row.model)
+      const key = normalizeModelKey(row.model)
       if (key && row.produk) map[key] = row.produk
     }
     modelProdukMap.value = map

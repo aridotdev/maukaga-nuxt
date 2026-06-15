@@ -6,6 +6,10 @@ definePageMeta({
   layout: 'cs'
 })
 
+defineOptions({
+  name: 'CsNewPage'
+})
+
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
 type ProductItem = {
@@ -50,7 +54,6 @@ type FormState = z.infer<typeof pengajuanSchema>
 
 type ModelProdukRow = {
   model?: string
-  modelNormalized?: string
   produk?: string
 }
 
@@ -167,7 +170,7 @@ async function loadModelProduk() {
 
     const map: Record<string, string> = {}
     for (const row of result.data?.rows || []) {
-      const key = row.modelNormalized || normalizeModelKey(row.model)
+      const key = normalizeModelKey(row.model)
       if (key && row.produk) map[key] = row.produk
     }
     modelProdukMap.value = map

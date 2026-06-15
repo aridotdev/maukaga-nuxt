@@ -15,8 +15,7 @@ type ProductOption = {
 }
 
 type ReviewQueueGroup = {
-  modelNormalized: string
-  modelDisplay?: string
+  model: string
   produk?: string
   count: number
   items?: ReviewQueueItem[]
@@ -85,15 +84,14 @@ async function approveGroup(group: ReviewQueueGroup) {
   approvingModels.value[key] = true
 
   try {
-    const result = await callApi<{ modelNormalized: string; produk: string; count: number }>('approveModelProduk', {
-      modelNormalized: group.modelNormalized,
-      modelDisplay: group.modelDisplay || group.modelNormalized,
+    const result = await callApi<{ model: string; produk: string; count: number }>('approveModelProduk', {
+      model: group.model,
       produk
     })
 
     toast.add({
       title: 'Nama Produk disetujui',
-      description: `${Number(result.data?.count || 0)} item diverifikasi untuk ${group.modelDisplay || group.modelNormalized}.`,
+      description: `${Number(result.data?.count || 0)} item diverifikasi untuk ${group.model}.`,
       color: 'success',
       icon: 'i-lucide-circle-check'
     })
@@ -124,7 +122,7 @@ async function approveGroup(group: ReviewQueueGroup) {
 }
 
 function getGroupKey(group: ReviewQueueGroup) {
-  return group.modelNormalized || group.modelDisplay || ''
+  return group.model || ''
 }
 
 function getTopProductOption(group: ReviewQueueGroup) {
@@ -230,7 +228,7 @@ function getTopProductOption(group: ReviewQueueGroup) {
             />
             <div class="min-w-0">
               <h3 class="truncate text-sm font-semibold text-highlighted">
-                {{ group.modelDisplay || group.modelNormalized }} - {{ group.produk }}
+                {{ group.model }} - {{ group.produk }}
               </h3>
             </div>
           </div>

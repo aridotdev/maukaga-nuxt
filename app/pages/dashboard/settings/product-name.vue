@@ -9,8 +9,7 @@ definePageMeta({
 })
 
 type ModelProdukRow = {
-  modelNormalized: string
-  modelDisplay: string
+  model: string
   produk: string
   status: string
   updatedAt: string
@@ -18,8 +17,7 @@ type ModelProdukRow = {
 
 type ModelProdukResponse = {
   rows?: Array<{
-    modelNormalized?: string
-    modelDisplay?: string
+    model?: string
     produk?: string
     status?: string
     updatedAt?: string
@@ -27,8 +25,7 @@ type ModelProdukResponse = {
 }
 
 type ModelProdukFormState = {
-  modelNormalized: string
-  modelDisplay: string
+  model: string
   produk: string
 }
 
@@ -41,15 +38,10 @@ const { callApi } = useAppsScriptApi()
 const { invalidate } = useAppSheetInvalidate()
 
 const modelProdukSchema = z.object({
-  modelNormalized: z
+  model: z
     .string()
     .trim()
-    .min(1, 'Model (normalized) wajib diisi')
-    .max(120, 'Model terlalu panjang'),
-  modelDisplay: z
-    .string()
-    .trim()
-    .min(1, 'Model (tampilan) wajib diisi')
+    .min(1, 'Model wajib diisi')
     .max(120, 'Model terlalu panjang'),
   produk: z
     .string()
@@ -70,8 +62,7 @@ const rows = ref<ModelProdukRow[]>([])
 const formOpen = ref(false)
 const editingKey = ref<string | null>(null)
 const formState = reactive<ModelProdukFormState>({
-  modelNormalized: '',
-  modelDisplay: '',
+  model: '',
   produk: ''
 })
 const formError = ref('')
@@ -95,8 +86,7 @@ const filteredRows = computed(() => {
 
   return rows.value.filter((row) => {
     return [
-      row.modelNormalized,
-      row.modelDisplay,
+      row.model,
       row.produk,
       row.status
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
@@ -119,8 +109,7 @@ const globalFilterOptions = {
     if (!keyword) return true
 
     return [
-      row.original.modelNormalized,
-      row.original.modelDisplay,
+      row.original.model,
       row.original.produk,
       row.original.status
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
@@ -128,7 +117,7 @@ const globalFilterOptions = {
 }
 
 const columns: TableColumn<ModelProdukRow>[] = [{
-  accessorKey: 'modelDisplay',
+  accessorKey: 'model',
   header: 'Model',
   meta: {
     class: {
@@ -136,10 +125,7 @@ const columns: TableColumn<ModelProdukRow>[] = [{
       td: 'w-[34%]'
     }
   },
-  cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-    h('p', { class: 'truncate font-semibold text-highlighted' }, row.original.modelDisplay || '-'),
-    h('p', { class: 'truncate font-mono text-xs text-muted' }, row.original.modelNormalized)
-  ])
+  cell: ({ row }) => h('p', { class: 'truncate font-semibold text-highlighted' }, row.original.model || '-')
 }, {
   accessorKey: 'produk',
   header: 'Nama Produk',
@@ -220,8 +206,8 @@ async function loadProducts() {
 
     rows.value = (result.data.rows || [])
       .map(normalizeRow)
-      .filter((row) => row.modelNormalized && row.produk)
-      .toSorted((a, b) => String(a.modelDisplay).localeCompare(String(b.modelDisplay)))
+      .filter((row) => row.model && row.produk)
+      .toSorted((a, b) => String(a.model).localeCompare(String(b.model)))
   } catch (error) {
     loadError.value = getErrorMessage(error)
     rows.value = []
@@ -234,17 +220,15 @@ async function loadProducts() {
 
 function openCreate() {
   editingKey.value = null
-  formState.modelNormalized = ''
-  formState.modelDisplay = ''
+  formState.model = ''
   formState.produk = ''
   formError.value = ''
   formOpen.value = true
 }
 
 function openEdit(row: ModelProdukRow) {
-  editingKey.value = row.modelNormalized
-  formState.modelNormalized = row.modelNormalized
-  formState.modelDisplay = row.modelDisplay
+  editingKey.value = row.model
+  formState.model = row.model
   formState.produk = row.produk
   formError.value = ''
   formOpen.value = true
@@ -253,20 +237,18 @@ function openEdit(row: ModelProdukRow) {
 async function submitForm(event: FormSubmitEvent<ModelProdukSchema>) {
   formError.value = ''
 
-  const modelNormalized = normalizeModelKey(event.data.modelNormalized)
-  const modelDisplay = String(event.data.modelDisplay || '').trim() || modelNormalized
+  const model = normalizeModelKey(event.data.model)
   const produk = String(event.data.produk || '').trim()
 
-  if (!modelNormalized || !produk) {
+  if (!model || !produk) {
     formError.value = 'Model dan Nama Produk wajib diisi'
     return
   }
 
-  // Deteksi duplikat saat create (case-insensitive pada key normalized).
   if (!editingKey.value) {
-    const exists = rows.value.some((row) => normalizeModelKey(row.modelNormalized) === modelNormalized)
+    const exists = rows.value.some((row) => normalizeModelKey(row.model) === model)
     if (exists) {
-      formError.value = `Model "${modelNormalized}" sudah ada. Gunakan aksi Edit.`
+      formError.value = `Model "${model}" sudah ada. Gunakan aksi Edit.`
       return
     }
   }
@@ -275,8 +257,7 @@ async function submitForm(event: FormSubmitEvent<ModelProdukSchema>) {
 
   try {
     const result = await callApi<{ count: number }>('approveModelProduk', {
-      modelNormalized,
-      modelDisplay,
+      model,
       produk
     })
     if (!result.success) throw new Error(result.error || 'Gagal menyimpan Model Produk')
@@ -288,7 +269,7 @@ async function submitForm(event: FormSubmitEvent<ModelProdukSchema>) {
     notify(
       editingKey.value ? 'Model Produk diperbarui' : 'Model Produk ditambahkan',
       'success',
-      `${modelDisplay} → ${produk}`
+      `${model} -> ${produk}`
     )
 
     formOpen.value = false
@@ -310,8 +291,7 @@ function setPage(page: number) {
 
 function normalizeRow(row: NonNullable<ModelProdukResponse['rows']>[number]): ModelProdukRow {
   return {
-    modelNormalized: String(row.modelNormalized || '').trim(),
-    modelDisplay: String(row.modelDisplay || row.modelNormalized || '').trim(),
+    model: normalizeModelKey(String(row.model || '')),
     produk: String(row.produk || '').trim(),
     status: String(row.status || 'verified').trim() || 'verified',
     updatedAt: row.updatedAt || ''
@@ -362,25 +342,16 @@ async function redirectIfUnauthorized(message: string) {
 
 <template>
   <div class="contents">
-    <UDashboardPanel id="product-name">
-      <template #header>
-        <UDashboardNavbar title="Manajemen Product Name" :description="`Halo, ${adminName}`">
-          <template #leading>
-            <UDashboardSidebarCollapse />
-          </template>
-
-          <template #right>
-            <UButton
-              label="Tambah Model"
-              icon="i-lucide-plus"
-              :loading="isSaving"
-              @click="openCreate"
-            />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
+    <UDashboardPanel id="product-name">      
       <template #body>
+        <div class="flex items-center justify-end gap-2">
+          <UButton
+            label="Tambah Model"
+            icon="i-lucide-plus"
+            :loading="isSaving"
+            @click="openCreate"
+          />
+        </div>
         <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3.5">
             <UInput
@@ -497,32 +468,16 @@ async function redirectIfUnauthorized(message: string) {
           @submit="submitForm"
         >
           <UFormField
-            label="Model (normalized)"
-            name="modelNormalized"
+            label="Model"
+            name="model"
             required
-            help="Huruf besar, spasi tunggal. Contoh: ABC 123"
           >
             <UInput
-              v-model="formState.modelNormalized"
+              v-model="formState.model"
               :disabled="Boolean(editingKey) || isSaving"
               autocomplete="off"
               class="w-full"
-              placeholder="MODEL NORMALIZED"
-              @blur="formState.modelDisplay = formState.modelDisplay || formState.modelNormalized"
-            />
-          </UFormField>
-
-          <UFormField
-            label="Model (tampilan)"
-            name="modelDisplay"
-            required
-          >
-            <UInput
-              v-model="formState.modelDisplay"
-              :disabled="isSaving"
-              autocomplete="off"
-              class="w-full"
-              placeholder="Model yang ditampilkan"
+              placeholder="Model"
             />
           </UFormField>
 

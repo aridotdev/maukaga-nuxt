@@ -33,7 +33,7 @@ const HEADERS = {
   [SHEETS.WARRANTY_CARDS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Jenis Kartu', 'Status Cetak', 'Print Batch ID', 'Printed At', 'Printed By', 'Reprint Count', 'Last Reprint At', 'Last Reprint By', 'Catatan', 'Status Kirim', 'Shipped At', 'Shipped By', 'Ship Batch ID'],
   [SHEETS.PRINT_BATCH]: ['Batch ID', 'Tipe Batch', 'Created At', 'Created By', 'Jumlah Item', 'Catatan'],
   [SHEETS.PRINT_LAYOUTS]: ['ID', 'Type', 'Name', 'Offset X', 'Offset Y', 'Gap Product Model', 'Gap Model Serial', 'Is Builtin', 'Created At', 'Updated At', 'Updated By'],
-  [SHEETS.MODEL_PRODUK]: ['model_normalized', 'model_display', 'produk', 'status', 'updated_at', 'updated_by'],
+  [SHEETS.MODEL_PRODUK]: ['model', 'produk', 'status', 'updated_at', 'updated_by'],
   [SHEETS.SHIPPING_LABELS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Bagian/Cabang', 'Nama', 'Print Batch ID', 'Printed At', 'Status Kirim', 'Ship Batch ID', 'Shipped At', 'Shipped By', 'Created At', 'Updated At'],
 };
 
@@ -54,9 +54,7 @@ const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/p
 
 function setupApp() {
   const ss = getSpreadsheet_();
-  Object.keys(HEADERS).forEach(function (name) {
-    ensureSheet_(ss, name, HEADERS[name]);
-  });
+  ensureAllSheets_(ss);
 
   const usersSheet = ss.getSheetByName(SHEETS.USERS);
   if (usersSheet.getLastRow() < 2) {
@@ -549,8 +547,7 @@ function resolvePengajuanStatusLookup_(data) {
 function handleGetModelProduk() {
   const rows = getModelProdukRows_().map(function (row) {
     return {
-      modelNormalized: row.modelNormalized,
-      modelDisplay: row.modelDisplay,
+      model: row.model,
       produk: row.produk,
       status: row.status,
       updatedAt: toIso_(row.updatedAt),
@@ -1360,19 +1357,18 @@ function handleGetProductReviewQueue(data) {
     if (!pengajuan) return;
     const status = clean_(row['produk_status']);
     if (status === 'verified') return;
-    const modelNormalized = clean_(row['model_normalized']) || normalizeModelKey_(row['Model']);
-    if (!modelNormalized) return;
-    if (!groups[modelNormalized]) {
-      groups[modelNormalized] = {
-        modelNormalized: modelNormalized,
-        modelDisplay: clean_(row['Model']),
+    const model = clean_(row['model_normalized']) || normalizeModelKey_(row['Model']);
+    if (!model) return;
+    if (!groups[model]) {
+      groups[model] = {
+        model: model,
         produk: clean_(row['Produk']),
         count: 0,
         items: [],
         produkOptions: {},
       };
     }
-    const group = groups[modelNormalized];
+    const group = groups[model];
     const produk = clean_(row['Produk']);
     group.count += 1;
     if (produk) group.produkOptions[produk] = (group.produkOptions[produk] || 0) + 1;
@@ -1399,7 +1395,7 @@ function handleGetProductReviewQueue(data) {
     return group;
   }).sort(function (a, b) {
     if (b.count !== a.count) return b.count - a.count;
-    return a.modelDisplay.localeCompare(b.modelDisplay);
+    return a.model.localeCompare(b.model);
   });
 
   return { success: true, data: { rows: rows } };
@@ -1407,19 +1403,18 @@ function handleGetProductReviewQueue(data) {
 
 function handleApproveModelProduk(data) {
   const session = requireSession_(data.token, ['admin', 'qrcc']);
-  const modelNormalized = clean_(data.modelNormalized || data.model_normalized) || normalizeModelKey_(data.modelDisplay || data.model);
-  const modelDisplay = clean_(data.modelDisplay || data.model) || modelNormalized;
+  const model = normalizeModelKey_(data.model);
   const produk = clean_(data.produk || data.kategori);
-  if (!modelNormalized) throw new Error('Model wajib dipilih');
+  if (!model) throw new Error('Model wajib dipilih');
   if (!produk) throw new Error('Nama Produk wajib diisi');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    upsertModelProduk_(modelNormalized, modelDisplay, produk, session.username);
-    const count = verifyPendingItemsByModel_(modelNormalized, produk);
+    upsertModelProduk_(model, produk, session.username);
+    const count = verifyPendingItemsByModel_(model, produk);
     CacheService.getScriptCache().remove('model_produk_map');
-    return { success: true, data: { modelNormalized: modelNormalized, produk: produk, count: count } };
+    return { success: true, data: { model: model, produk: produk, count: count } };
   } finally {
     lock.releaseLock();
   }
@@ -1964,10 +1959,7 @@ function sendEmailDigest() {
 }
 
 function ensureRuntimeHeaders_() {
-  const ss = getSpreadsheet_();
-  Object.keys(HEADERS).forEach(function (name) {
-    ensureSheet_(ss, name, HEADERS[name]);
-  });
+  ensureAllSheets_(getSpreadsheet_());
 }
 
 function getSpreadsheet_() {
@@ -1988,6 +1980,63 @@ function getSpreadsheet_() {
 function getSheet_(name) {
   const sheet = getSpreadsheet_().getSheetByName(name);
   if (!sheet) throw new Error('Sheet ' + name + ' belum ada. Jalankan setupApp() terlebih dahulu.');
+  return sheet;
+}
+
+function ensureAllSheets_(ss) {
+  Object.keys(HEADERS).forEach(function (name) {
+    if (name === SHEETS.MODEL_PRODUK) {
+      ensureModelProdukSheet_(ss);
+      return;
+    }
+    ensureSheet_(ss, name, HEADERS[name]);
+  });
+}
+
+function ensureModelProdukSheet_(ss) {
+  const headers = HEADERS[SHEETS.MODEL_PRODUK];
+  const sheet = ss.getSheetByName(SHEETS.MODEL_PRODUK) || ss.insertSheet(SHEETS.MODEL_PRODUK);
+  if (!sheet.getLastRow()) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  const existing = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0];
+  const isCurrent = headers.every(function (header, index) { return existing[index] === header; }) &&
+    existing.slice(headers.length).every(function (header) { return !header; });
+  if (isCurrent) {
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  const values = sheet.getDataRange().getValues();
+  const oldHeaders = values[0] || [];
+  const rowsByModel = {};
+  for (let i = 1; i < values.length; i++) {
+    const source = {};
+    oldHeaders.forEach(function (header, index) {
+      if (header) source[header] = values[i][index];
+    });
+
+    const row = normalizeModelProdukObject_(source);
+    if (!row.model || !row.produk) continue;
+    rowsByModel[row.model] = [
+      row.model,
+      row.produk,
+      row.status,
+      row.updatedAt,
+      row.updatedBy,
+    ];
+  }
+
+  const rows = Object.keys(rowsByModel).sort().map(function (model) { return rowsByModel[model]; });
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (rows.length) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+  sheet.setFrozenRows(1);
   return sheet;
 }
 
@@ -2046,18 +2095,34 @@ function normalizeModelKey_(value) {
   return clean_(value).replace(/\s+/g, ' ').toUpperCase();
 }
 
+function normalizeModelProdukObject_(row) {
+  const model = normalizeModelKey_(row.model || row['model_normalized']);
+  let produk = clean_(row.produk);
+  let status = clean_(row.status) || 'verified';
+  let updatedAt = row.updated_at || '';
+  const updatedBy = clean_(row.updated_by);
+
+  if (status !== 'verified' && clean_(row.updated_at) === 'verified') {
+    produk = status;
+    status = 'verified';
+    updatedAt = '';
+  }
+
+  return {
+    model: model,
+    produk: produk,
+    status: status,
+    updatedAt: updatedAt,
+    updatedBy: updatedBy,
+  };
+}
+
 function getModelProdukRows_() {
-  return readObjects_(SHEETS.MODEL_PRODUK).map(function (row) {
-    return {
-      modelNormalized: clean_(row['model_normalized']),
-      modelDisplay: clean_(row['model_display']),
-      produk: clean_(row['produk']),
-      status: clean_(row['status']) || 'verified',
-      updatedAt: row['updated_at'],
-    };
-  }).filter(function (row) {
-    return row.modelNormalized && row.produk && row.status === 'verified';
-  });
+  return readObjects_(SHEETS.MODEL_PRODUK)
+    .map(normalizeModelProdukObject_)
+    .filter(function (row) {
+      return row.model && row.produk && row.status === 'verified';
+    });
 }
 
 function getModelProdukMap_() {
@@ -2068,7 +2133,7 @@ function getModelProdukMap_() {
   }
   const map = {};
   getModelProdukRows_().forEach(function (row) {
-    map[row.modelNormalized] = row;
+    map[row.model] = row;
   });
   cache.put('model_produk_map', JSON.stringify(map), 60);
   return map;
@@ -2092,26 +2157,28 @@ function resolveItemProduk_(item, modelMap) {
   });
 }
 
-function upsertModelProduk_(modelNormalized, modelDisplay, produk, username) {
+function upsertModelProduk_(model, produk, username) {
   const sheet = getSheet_(SHEETS.MODEL_PRODUK);
   const values = sheet.getDataRange().getValues();
   const headers = values[0] || HEADERS[SHEETS.MODEL_PRODUK];
   const col = indexMap_(headers);
   const now = new Date();
   for (let i = 1; i < values.length; i++) {
-    if (clean_(values[i][col['model_normalized']]) === modelNormalized) {
-      sheet.getRange(i + 1, col['model_display'] + 1).setValue(modelDisplay);
-      sheet.getRange(i + 1, col['produk'] + 1).setValue(produk);
-      sheet.getRange(i + 1, col['status'] + 1).setValue('verified');
-      sheet.getRange(i + 1, col['updated_at'] + 1).setValue(now);
-      sheet.getRange(i + 1, col['updated_by'] + 1).setValue(username);
+    if (normalizeModelKey_(values[i][col.model]) === model) {
+      const row = values[i].slice(0, headers.length);
+      row[col.model] = model;
+      row[col.produk] = produk;
+      row[col.status] = 'verified';
+      row[col.updated_at] = now;
+      row[col.updated_by] = username;
+      sheet.getRange(i + 1, 1, 1, headers.length).setValues([row]);
       return;
     }
   }
-  sheet.appendRow([modelNormalized, modelDisplay, produk, 'verified', now, username]);
+  sheet.appendRow([model, produk, 'verified', now, username]);
 }
 
-function verifyPendingItemsByModel_(modelNormalized, produk) {
+function verifyPendingItemsByModel_(model, produk) {
   const sheet = getSheet_(SHEETS.ITEMS);
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return 0;
@@ -2119,13 +2186,16 @@ function verifyPendingItemsByModel_(modelNormalized, produk) {
   let count = 0;
   for (let i = 1; i < values.length; i++) {
     const rowModelNormalized = clean_(values[i][col['model_normalized']]) || normalizeModelKey_(values[i][col['Model']]);
-    if (rowModelNormalized !== modelNormalized) continue;
+    if (rowModelNormalized !== model) continue;
     if (clean_(values[i][col['produk_status']]) === 'verified') continue;
-    sheet.getRange(i + 1, col['Produk'] + 1).setValue(produk);
-    sheet.getRange(i + 1, col['model_normalized'] + 1).setValue(modelNormalized);
-    sheet.getRange(i + 1, col['produk_status'] + 1).setValue('verified');
-    sheet.getRange(i + 1, col['produk_sumber'] + 1).setValue('admin');
+    values[i][col['Produk']] = produk;
+    values[i][col['model_normalized']] = model;
+    values[i][col['produk_status']] = 'verified';
+    values[i][col['produk_sumber']] = 'admin';
     count += 1;
+  }
+  if (count) {
+    sheet.getRange(2, 1, values.length - 1, values[0].length).setValues(values.slice(1));
   }
   return count;
 }

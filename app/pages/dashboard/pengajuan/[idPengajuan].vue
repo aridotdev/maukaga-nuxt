@@ -11,6 +11,18 @@ const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim'
 const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
 const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
 
+type StatusColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+
+const PENGAJUAN_STATUS_COLORS = {
+  Baru: 'info',
+  Disetujui: 'success',
+  Ditolak: 'error',
+  Diprint: 'warning',
+  Dikirim: 'primary',
+  Diterima: 'secondary',
+  Selesai: 'neutral'
+} satisfies Record<PengajuanStatus, StatusColor>
+
 type RiwayatStatus = {
   timestamp?: string
   noItem?: number | string
@@ -331,18 +343,8 @@ function isProductVerified(status: string | undefined) {
   return String(status || '').trim().toLowerCase() === 'verified'
 }
 
-function getStatusColor(status: string) {
-  const colors = {
-    Baru: 'info',
-    Disetujui: 'success',
-    Ditolak: 'error',
-    Diprint: 'warning',
-    Dikirim: 'primary',
-    Diterima: 'secondary',
-    Selesai: 'neutral'
-  } as const
-
-  return colors[status] || 'neutral'
+function getStatusColor(status: string): StatusColor {
+  return isPengajuanStatus(status) ? PENGAJUAN_STATUS_COLORS[status] : 'neutral'
 }
 
 function getLifecycleRank(status: string) {
