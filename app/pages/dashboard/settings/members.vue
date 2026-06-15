@@ -366,24 +366,15 @@ function getErrorMessage(error: unknown) {
 
 <template>
   <div class="contents">
-  <UDashboardPanel id="members">
-    <template #header>
-      <UDashboardNavbar title="User Management" description="Kelola akses dashboard">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-
-        <template #right>
-          <UButton
-            label="Invite User"
-            icon="i-lucide-user-plus"
-            @click="inviteOpen = true"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
+  <UDashboardPanel id="members">  
     <template #body>
+      <div class="flex items-center justify-end gap-2">
+        <UButton
+        label="Invite User"
+        icon="i-lucide-user-plus"
+        @click="inviteOpen = true"
+        />
+      </div>
       <section class="relative rounded-lg border border-muted bg-default/45 shadow-sm backdrop-blur-xl">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-accented px-4 py-3.5">
           <UInput

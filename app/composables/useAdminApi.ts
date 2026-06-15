@@ -1,20 +1,19 @@
 export function useAdminApi() {
-  const supabase = useSupabaseClient()
+  const { getSession } = useCurrentSession()
 
   async function callAdminAction<T>(
     action: string,
     payload: Record<string, unknown> = {}
   ) {
-    const { data, error } = await supabase.auth.getSession()
-    if (error) throw error
-    if (!data.session) throw new Error('Tidak ada session aktif.')
+    const session = await getSession()
+    if (!session) throw new Error('Tidak ada session aktif.')
 
     const response = await fetch('/api/admin-action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action,
-        token: data.session.access_token,
+        token: session.access_token,
         ...payload
       })
     })

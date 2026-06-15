@@ -157,7 +157,7 @@ const columns: TableColumn<ModelProdukRow>[] = [{
   meta: {
     class: {
       th: 'w-[20%]',
-      td: 'w-[20%]'
+      td: 'w-[10%]'
     }
   },
   cell: ({ row }) => h('span', { class: 'text-muted' }, formatDate(row.original.updatedAt))

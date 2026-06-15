@@ -8,6 +8,10 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     appsScriptApiUrl: import.meta.env.NUXT_APPS_SCRIPT_API_URL || import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
+    supabaseUrl: import.meta.env.NUXT_SUPABASE_URL || import.meta.env.NUXT_PUBLIC_SUPABASE_URL || '',
+    supabasePublishableKey: import.meta.env.NUXT_SUPABASE_PUBLISHABLE_KEY || import.meta.env.NUXT_PUBLIC_SUPABASE_KEY || '',
+    supabaseSecretKey: import.meta.env.NUXT_SUPABASE_SECRET_KEY || import.meta.env.NUXT_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_SECRET_KEY || import.meta.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    appUrl: import.meta.env.NUXT_APP_URL || import.meta.env.NUXT_PUBLIC_APP_URL || '',
     public: {
       appsScriptApiUrl: import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
       appName: import.meta.env.NUXT_PUBLIC_APP_NAME || 'Mau KaGa',
