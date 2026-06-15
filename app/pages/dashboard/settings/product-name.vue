@@ -121,8 +121,8 @@ const columns: TableColumn<ModelProdukRow>[] = [{
   header: 'Model',
   meta: {
     class: {
-      th: 'w-[34%]',
-      td: 'w-[34%]'
+      th: 'w-[20%]',
+      td: 'w-[20%]'
     }
   },
   cell: ({ row }) => h('p', { class: 'truncate font-semibold text-highlighted' }, row.original.model || '-')
@@ -131,8 +131,8 @@ const columns: TableColumn<ModelProdukRow>[] = [{
   header: 'Nama Produk',
   meta: {
     class: {
-      th: 'w-[34%]',
-      td: 'w-[34%]'
+      th: 'w-[25%]',
+      td: 'w-[25%]'
     }
   },
   cell: ({ row }) => h('p', { class: 'truncate text-sm' }, row.original.produk || '-')
@@ -141,8 +141,8 @@ const columns: TableColumn<ModelProdukRow>[] = [{
   header: 'Status',
   meta: {
     class: {
-      th: 'w-[12%]',
-      td: 'w-[12%]'
+      th: 'w-[15%]',
+      td: 'w-[15%]'
     }
   },
   cell: ({ row }) => h(UBadge, {
@@ -156,8 +156,8 @@ const columns: TableColumn<ModelProdukRow>[] = [{
   header: 'Diperbarui',
   meta: {
     class: {
-      th: 'w-[10%]',
-      td: 'w-[10%]'
+      th: 'w-[20%]',
+      td: 'w-[20%]'
     }
   },
   cell: ({ row }) => h('span', { class: 'text-muted' }, formatDate(row.original.updatedAt))
