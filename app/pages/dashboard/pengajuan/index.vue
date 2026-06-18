@@ -29,7 +29,16 @@ type PengajuanTableRef = {
 }
 
 const router = useRouter()
-const { rows, isLoading, error, ensureLoaded } = useDashboardData()
+const {
+  rows,
+  isLoading,
+  isRefreshing,
+  error,
+  ensureLoaded,
+  loadedRows,
+  totalRows,
+  isFullyLoaded
+} = useDashboardData({ loadAll: true })
 const loadError = computed(() => error.value || '')
 
 const globalFilter = ref('')
@@ -284,12 +293,29 @@ function getRowKey(idPengajuan: string, noItem: number) {
               placeholder="Global filter..."
             />
 
-            <USelect
-              v-model="statusFilter"
-              :items="statusFilterItems"
-              class="w-full sm:w-40"
-              :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-            />
+            <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+              <p
+                v-if="isRefreshing && totalRows"
+                class="text-xs text-muted"
+                aria-live="polite"
+              >
+                Memuat {{ loadedRows }} dari {{ totalRows }} pengajuan...
+              </p>
+              <p
+                v-else-if="!isFullyLoaded && totalRows"
+                class="text-xs text-muted"
+                aria-live="polite"
+              >
+                {{ loadedRows }} dari {{ totalRows }} pengajuan dimuat.
+              </p>
+
+              <USelect
+                v-model="statusFilter"
+                :items="statusFilterItems"
+                class="w-full sm:w-40"
+                :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+              />
+            </div>
           </div>
 
           <UTable

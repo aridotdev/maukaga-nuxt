@@ -22,6 +22,11 @@ type Entry<T> = {
 }
 
 const DEFAULT_TTL = 30_000
+const INVALIDATION_STATE_KEY = 'appsheet-action-invalidations'
+
+export function useAppSheetInvalidationState() {
+  return useState<Record<string, number>>(INVALIDATION_STATE_KEY, () => ({}))
+}
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
@@ -127,6 +132,12 @@ export function useAppSheetQuery<T = unknown>(
  */
 export function useAppSheetInvalidate() {
   const store = useState<Record<string, unknown>>('appsheet-query-store', () => ({}))
+  const invalidations = useAppSheetInvalidationState()
+
+  function markInvalidated(action: string) {
+    invalidations.value[action] = Date.now()
+  }
+
   return {
     invalidate(action: string) {
       for (const [key, raw] of Object.entries(store.value)) {
@@ -134,11 +145,13 @@ export function useAppSheetInvalidate() {
         const entry = raw as Entry<unknown>
         entry.fetchedAt = 0
       }
+      markInvalidated(action)
     },
     invalidateAll() {
       for (const raw of Object.values(store.value)) {
         (raw as Entry<unknown>).fetchedAt = 0
       }
+      markInvalidated('*')
     }
   }
 }
