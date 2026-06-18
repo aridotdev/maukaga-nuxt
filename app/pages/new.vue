@@ -6,6 +6,10 @@ definePageMeta({
   layout: 'cs'
 })
 
+defineOptions({
+  name: 'CsNewPage'
+})
+
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
 type ProductItem = {
@@ -113,6 +117,8 @@ const isSavingDraft = ref(false)
 const showPrintPreview = ref(false)
 const savedPrintPayload = ref<SubmissionPayload | null>(null)
 const savedPrintId = ref('')
+const showDraftConfirm = ref(false)
+const showNewDraftConfirm = ref(false)
 
 const finalSubmitUrl = computed(() => {
   if (!currentDraftId.value) return '/final-submit'
@@ -305,7 +311,16 @@ function onFormError(event: FormErrorEvent) {
 }
 
 async function onDraftSubmit(_event: FormSubmitEvent<FormState>) {
+  showDraftConfirm.value = true
+}
+
+async function confirmDraftAndPrint() {
+  showDraftConfirm.value = false
   await handleSaveDraftAndPrint()
+}
+
+function cancelDraftConfirm() {
+  showDraftConfirm.value = false
 }
 
 async function handleSaveDraftAndPrint() {
@@ -361,7 +376,36 @@ function buildFinalSubmitUrl(idPengajuan: string, resumeToken: string) {
 }
 
 function backToForm() {
+  showNewDraftConfirm.value = true
+}
+
+function startNewDraft() {
+  showNewDraftConfirm.value = false
+  clearDraftState()
   showPrintPreview.value = false
+}
+
+function cancelNewDraft() {
+  showNewDraftConfirm.value = false
+}
+
+function clearDraftState() {
+  currentDraftId.value = ''
+  currentResumeToken.value = ''
+  savedPrintPayload.value = null
+  savedPrintId.value = ''
+
+  formState.namaPemohon = ''
+  formState.bagianCabang = ''
+  formState.namaPemilikBarang = ''
+  formState.alasanPengajuan = ''
+  formState.catatanTambahan = ''
+  formState.tanggalForm = createTodayDateValue()
+  formState.products.splice(0, formState.products.length, createProductItem())
+
+  if (import.meta.client) {
+    localStorage.removeItem(draftStorageKey)
+  }
 }
 
 function clonePayload(payload: SubmissionPayload): SubmissionPayload {
@@ -379,6 +423,21 @@ function getErrorMessage(error: unknown) {
 
 <template>
   <div class="new-page-root">
+    <Teleport to="body">
+      <div
+        v-if="isSavingDraft"
+        class="fixed inset-0 z-100 flex items-center justify-center bg-default/70 backdrop-blur-sm"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div class="flex flex-col items-center gap-3 rounded-2xl border border-muted bg-default px-8 py-6 shadow-lg">
+          <UIcon name="i-lucide-loader-circle" class="size-10 animate-spin text-primary" />
+          <p class="text-sm font-medium text-highlighted">
+            Menyimpan draft...
+          </p>
+        </div>
+      </div>
+    </Teleport>
     <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <!-- Header Section -->
       <header class="flex flex-col items-start justify-between gap-3 rounded-2xl border border-muted bg-default/45 p-4 shadow-sm backdrop-blur-xl lg:flex-row lg:items-center lg:p-5">
@@ -675,6 +734,54 @@ function getErrorMessage(error: unknown) {
       </div>
     </div>
 
+    <UModal
+      v-model:open="showDraftConfirm"
+      title="Konfirmasi"
+      description="Apakah data yang Anda ajukan sudah benar?"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer>
+        <UButton
+          type="button"
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          :disabled="isSavingDraft"
+          @click="cancelDraftConfirm"
+        />
+        <UButton
+          type="button"
+          label="Ya, Lanjutkan"
+          color="primary"
+          :loading="isSavingDraft"
+          @click="confirmDraftAndPrint"
+        />
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="showNewDraftConfirm"
+      title="Buat Pengajuan Baru"
+      description="Data pengajuan saat ini akan dihapus dan form dikosongkan. Lanjutkan?"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer>
+        <UButton
+          type="button"
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          @click="cancelNewDraft"
+        />
+        <UButton
+          type="button"
+          label="Ya, Buat Baru"
+          color="primary"
+          @click="startNewDraft"
+        />
+      </template>
+    </UModal>
+
     <section
       v-show="showPrintPreview"
       id="section-print"
@@ -690,8 +797,8 @@ function getErrorMessage(error: unknown) {
           <div class="flex flex-col gap-2 sm:flex-row">
             <UButton
               type="button"
-              label="Kembali"
-              icon="i-lucide-arrow-left"
+              label="Buat Pengajuan Baru"
+              icon="i-lucide-file-plus-2"
               color="neutral"
               variant="subtle"
               @click="backToForm"
