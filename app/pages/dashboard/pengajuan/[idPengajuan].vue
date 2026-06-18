@@ -48,6 +48,14 @@ type PengajuanStatusForm = {
   notice: string
 }
 
+type ConfirmDialogOptions = {
+  title?: string
+  description: string
+  confirmLabel?: string
+  confirmColor?: StatusColor
+  onConfirm: () => Promise<void>
+}
+
 type InfoField = {
   label: string
   value: string
@@ -81,6 +89,15 @@ const pengajuanForm = reactive<PengajuanStatusForm>({
   error: '',
   notice: ''
 })
+const showConfirmDialog = ref(false)
+const confirmDialog = reactive({
+  title: 'Konfirmasi',
+  description: '',
+  confirmLabel: 'Ya, Lanjutkan',
+  confirmColor: 'primary' as StatusColor,
+  isSubmitting: false
+})
+const pendingConfirmAction = ref<(() => Promise<void>) | null>(null)
 
 const pengajuanStatusItems = PENGAJUAN_STATUSES.map((status) => ({
   label: status,
@@ -163,6 +180,12 @@ watch(queryError, async (msg) => {
   }
 })
 
+watch(showConfirmDialog, (open) => {
+  if (!open && !confirmDialog.isSubmitting) {
+    pendingConfirmAction.value = null
+  }
+})
+
 function initItemForms(items: DetailItem[]) {
   const nextForms: Record<string, ItemStatusForm> = {}
 
@@ -186,55 +209,70 @@ async function submitItemStatus(item: DetailItem) {
   const key = getItemKey(item)
   const form = itemForms.value[key]
   if (!form) return
+  const statusForm = form
 
-  form.error = ''
-  form.notice = ''
+  statusForm.error = ''
+  statusForm.notice = ''
 
-  const statusBaru = form.statusBaru
-  const catatanAdmin = form.catatanAdmin.trim()
+  const statusBaru = statusForm.statusBaru
+  const catatanAdmin = statusForm.catatanAdmin.trim()
   const statusLama = getItemStatus(item)
+  const noItem = item.noItem
 
-  if (!item.noItem) {
-    form.error = 'No Item tidak valid.'
+  if (!noItem) {
+    statusForm.error = 'No Item tidak valid.'
     return
   }
+  const itemNo = noItem
 
   if (!isItemApprovalStatus(statusBaru)) {
-    form.error = 'Status tidak valid.'
+    statusForm.error = 'Status tidak valid.'
     return
   }
 
   if (statusBaru === statusLama) {
-    form.notice = 'Tidak ada perubahan status untuk disimpan.'
+    statusForm.notice = 'Tidak ada perubahan status untuk disimpan.'
     return
   }
 
   if (statusBaru === 'Ditolak' && !catatanAdmin) {
-    form.error = 'Catatan Admin wajib diisi jika status Ditolak.'
+    statusForm.error = 'Catatan Admin wajib diisi jika status Ditolak.'
     return
   }
 
-  const confirmMessage = getTransitionConfirmMessage(statusLama, statusBaru, item.noItem)
-  if (confirmMessage && !window.confirm(confirmMessage)) return
+  async function saveItemStatus() {
+    statusForm.isSubmitting = true
 
-  form.isSubmitting = true
+    try {
+      await setItemStatus(itemNo, statusBaru, catatanAdmin)
 
-  try {
-    await setItemStatus(item.noItem, statusBaru, catatanAdmin)
+      toast.add({
+        title: 'Status item berhasil disimpan',
+        description: `Item #${itemNo} diperbarui menjadi ${statusBaru}.`,
+        color: 'success',
+        icon: 'i-lucide-circle-check'
+      })
 
-    toast.add({
-      title: 'Status item berhasil disimpan',
-      description: `Item #${item.noItem} diperbarui menjadi ${statusBaru}.`,
-      color: 'success',
-      icon: 'i-lucide-circle-check'
-    })
-
-    form.notice = 'Tersimpan.'
-  } catch (err) {
-    form.error = err instanceof Error ? err.message : String(err)
-  } finally {
-    form.isSubmitting = false
+      statusForm.notice = 'Tersimpan.'
+    } catch (err) {
+      statusForm.error = err instanceof Error ? err.message : String(err)
+    } finally {
+      statusForm.isSubmitting = false
+    }
   }
+
+  const confirmMessage = getTransitionConfirmMessage(statusLama, statusBaru, itemNo)
+  if (confirmMessage) {
+    openConfirmDialog({
+      title: 'Konfirmasi Status Item',
+      description: confirmMessage,
+      confirmColor: statusBaru === 'Ditolak' ? 'error' : 'primary',
+      onConfirm: saveItemStatus
+    })
+    return
+  }
+
+  await saveItemStatus()
 }
 
 async function submitPengajuanStatus() {
@@ -262,24 +300,67 @@ async function submitPengajuanStatus() {
     return
   }
 
+  async function savePengajuanStatus() {
+    try {
+      pengajuanForm.isSubmitting = true
+      await setPengajuanStatus(statusBaru, catatanAdmin)
+      toast.add({
+        title: 'Status pengajuan berhasil disimpan',
+        description: `Pengajuan diperbarui menjadi ${statusBaru}.`,
+        color: 'success',
+        icon: 'i-lucide-circle-check'
+      })
+      pengajuanForm.notice = 'Tersimpan.'
+    } catch (err) {
+      pengajuanForm.error = err instanceof Error ? err.message : String(err)
+    } finally {
+      pengajuanForm.isSubmitting = false
+    }
+  }
+
   const confirmMessage = getPengajuanTransitionConfirmMessage(statusLama, statusBaru)
-  if (confirmMessage && !window.confirm(confirmMessage)) return
-
-  pengajuanForm.isSubmitting = true
-
-  try {
-    await setPengajuanStatus(statusBaru, catatanAdmin)
-    toast.add({
-      title: 'Status pengajuan berhasil disimpan',
-      description: `Pengajuan diperbarui menjadi ${statusBaru}.`,
-      color: 'success',
-      icon: 'i-lucide-circle-check'
+  if (confirmMessage) {
+    openConfirmDialog({
+      title: 'Konfirmasi Status Pengajuan',
+      description: confirmMessage,
+      confirmColor: statusBaru === 'Ditolak' ? 'error' : 'primary',
+      onConfirm: savePengajuanStatus
     })
-    pengajuanForm.notice = 'Tersimpan.'
-  } catch (err) {
-    pengajuanForm.error = err instanceof Error ? err.message : String(err)
+    return
+  }
+
+  await savePengajuanStatus()
+}
+
+function openConfirmDialog(options: ConfirmDialogOptions) {
+  confirmDialog.title = options.title || 'Konfirmasi'
+  confirmDialog.description = options.description
+  confirmDialog.confirmLabel = options.confirmLabel || 'Ya, Lanjutkan'
+  confirmDialog.confirmColor = options.confirmColor || 'primary'
+  pendingConfirmAction.value = options.onConfirm
+  showConfirmDialog.value = true
+}
+
+function cancelConfirmDialog() {
+  if (confirmDialog.isSubmitting) return
+  showConfirmDialog.value = false
+  pendingConfirmAction.value = null
+}
+
+async function confirmPendingAction() {
+  const action = pendingConfirmAction.value
+  if (!action) {
+    cancelConfirmDialog()
+    return
+  }
+
+  confirmDialog.isSubmitting = true
+  try {
+    await action()
+    showConfirmDialog.value = false
+    pendingConfirmAction.value = null
   } finally {
-    pengajuanForm.isSubmitting = false
+    confirmDialog.isSubmitting = false
   }
 }
 
@@ -755,6 +836,31 @@ function formatDateTime(value: string | undefined) {
           </div>
         </div>
       </div>
+
+      <UModal
+        v-model:open="showConfirmDialog"
+        :title="confirmDialog.title"
+        :description="confirmDialog.description"
+        :ui="{ footer: 'justify-end' }"
+      >
+        <template #footer>
+          <UButton
+            type="button"
+            label="Cancel"
+            color="neutral"
+            variant="outline"
+            :disabled="confirmDialog.isSubmitting"
+            @click="cancelConfirmDialog"
+          />
+          <UButton
+            type="button"
+            :label="confirmDialog.confirmLabel"
+            :color="confirmDialog.confirmColor"
+            :loading="confirmDialog.isSubmitting"
+            @click="confirmPendingAction"
+          />
+        </template>
+      </UModal>
     </template>
   </UDashboardPanel>
 </template>
