@@ -818,14 +818,20 @@ function handleGetDashboard(data) {
   });
 
   const itemCountById = {};
+  const itemStatusById = {};
   readObjects_(SHEETS.ITEMS).forEach(function (item) {
     const id = clean_(item['ID Pengajuan']);
     const parent = rowById[id];
     if (!parent) return;
 
     const statusItem = normalizeItemApprovalStatus_(item['Status Item'], parent['Status']);
+    const noItem = clean_(item['No Item']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     itemCountById[id] = (itemCountById[id] || 0) + 1;
+    if (noItem) {
+      itemStatusById[id] = itemStatusById[id] || {};
+      itemStatusById[id][noItem] = statusItem;
+    }
     summary.totalItems += 1;
     if (summary.hasOwnProperty(itemKey)) summary[itemKey] += 1;
   });
@@ -848,6 +854,19 @@ function handleGetDashboard(data) {
   const totalRows = rows.length;
   const start = (page - 1) * pageSize;
   const paged = rows.slice(start, start + pageSize).map(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    const itemCount = Number(row['Jumlah Item'] || itemCountById[id] || 0);
+    const itemStatuses = [];
+
+    for (let noItem = 1; noItem <= itemCount; noItem += 1) {
+      itemStatuses.push({
+        noItem: noItem,
+        status: itemStatusById[id] && itemStatusById[id][String(noItem)]
+          ? itemStatusById[id][String(noItem)]
+          : normalizeItemApprovalStatus_('', row['Status'])
+      });
+    }
+
     return {
       idPengajuan: row['ID Pengajuan'],
       timestampSubmit: toIso_(row['Timestamp Submit']),
@@ -855,6 +874,7 @@ function handleGetDashboard(data) {
       bagianCabang: row['Bagian/Cabang'],
       jumlahItem: row['Jumlah Item'],
       status: row['Status'],
+      itemStatuses: itemStatuses,
     };
   });
 

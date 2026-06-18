@@ -5,6 +5,7 @@
  */
 
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
+type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
 
 type DashboardSummary = {
   total?: number
@@ -29,6 +30,10 @@ type DashboardRow = {
   bagianCabang: string
   jumlahItem: number | string
   status: DashboardStatus | string
+  itemStatuses?: Array<{
+    noItem: number | string
+    status: DashboardItemStatus | string
+  }>
 }
 
 type DashboardResponse = {

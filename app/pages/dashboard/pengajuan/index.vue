@@ -11,17 +11,32 @@ const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
+type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
 
-type DashboardPengajuanRow = {
-  key: string
-  nomor?: number
+type DashboardPengajuanSourceRow = {
   idPengajuan: string
-  noItem: number
   timestampSubmit: string
   nama: string
   bagianCabang: string
   jumlahItem: number | string
   status: DashboardStatus | string
+  itemStatuses?: Array<{
+    noItem: number | string
+    status: DashboardItemStatus | string
+  }>
+}
+
+type DashboardPengajuanRow = {
+  key: string
+  nomor?: number
+  idPengajuan: string
+  noItem: number | string
+  timestampSubmit: string
+  nama: string
+  bagianCabang: string
+  jumlahItem: number | string
+  status: DashboardItemStatus | string
+  pengajuanStatus: DashboardStatus | string
 }
 
 type PengajuanTableRef = {
@@ -42,7 +57,7 @@ const {
 const loadError = computed(() => error.value || '')
 
 const globalFilter = ref('')
-const statusFilter = ref<'all' | DashboardStatus>('all')
+const statusFilter = ref<'all' | DashboardItemStatus>('all')
 const pengajuanTable = useTemplateRef<PengajuanTableRef>('pengajuanTable')
 const pengajuanPagination = ref({
   pageIndex: 0,
@@ -62,15 +77,6 @@ const statusFilterItems = [{
   label: 'Ditolak',
   value: 'Ditolak'
 }, {
-  label: 'Diprint',
-  value: 'Diprint'
-}, {
-  label: 'Dikirim',
-  value: 'Dikirim'
-}, {
-  label: 'Diterima',
-  value: 'Diterima'
-}, {
   label: 'Selesai',
   value: 'Selesai'
 }]
@@ -85,7 +91,8 @@ const pengajuanTableGlobalFilterOptions = {
       row.original.nama,
       row.original.bagianCabang,
       row.original.jumlahItem,
-      row.original.status
+      row.original.status,
+      row.original.pengajuanStatus
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
   }
 }
@@ -93,12 +100,11 @@ const pengajuanTableGlobalFilterOptions = {
 // Filter + search di sisi FE.
 // Setelah filter, baris di-"explode" per item (sesuai `jumlahItem`)
 // sehingga setiap noItem 1..N tampil sebagai baris sendiri.
-const filteredRows = computed<DashboardPengajuanRow[]>(() => {
+const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
   const keyword = globalFilter.value.trim().toLowerCase()
-  const source = rows.value as DashboardPengajuanRow[]
+  const source = rows.value as DashboardPengajuanSourceRow[]
 
   return [...source]
-    .filter((row) => statusFilter.value === 'all' || row.status === statusFilter.value)
     .filter((row) => {
       if (!keyword) return true
       return [
@@ -107,7 +113,8 @@ const filteredRows = computed<DashboardPengajuanRow[]>(() => {
         row.nama,
         row.bagianCabang,
         row.jumlahItem,
-        row.status
+        row.status,
+        ...getItemStatuses(row).map(item => item.status)
       ].some((value) => String(value || '').toLowerCase().includes(keyword))
     })
     .sort((a, b) => getTime(b.timestampSubmit) - getTime(a.timestampSubmit))
@@ -116,22 +123,24 @@ const filteredRows = computed<DashboardPengajuanRow[]>(() => {
 const explodedRows = computed<DashboardPengajuanRow[]>(() => {
   const out: DashboardPengajuanRow[] = []
   filteredRows.value.forEach((parent) => {
-    const total = clampItemCount(parent.jumlahItem)
-    for (let i = 1; i <= total; i += 1) {
+    for (const itemStatus of getItemStatuses(parent)) {
       out.push({
-        key: getRowKey(parent.idPengajuan, i),
+        key: getRowKey(parent.idPengajuan, itemStatus.noItem),
         idPengajuan: parent.idPengajuan,
-        noItem: i,
+        noItem: itemStatus.noItem,
         timestampSubmit: parent.timestampSubmit,
         nama: parent.nama,
         bagianCabang: parent.bagianCabang,
         jumlahItem: parent.jumlahItem,
-        status: parent.status
+        status: itemStatus.status,
+        pengajuanStatus: parent.status
       })
     }
   })
-  return out
+  return out.filter((row) => statusFilter.value === 'all' || row.status === statusFilter.value)
 })
+
+const filteredPengajuanCount = computed(() => new Set(explodedRows.value.map(row => row.idPengajuan)).size)
 
 // Tabel di-pause saat loading awal agar skeleton loading tampil utuh.
 const tableRows = computed<DashboardPengajuanRow[]>(() => isLoading.value ? [] : explodedRows.value)
@@ -260,13 +269,37 @@ function getStatusColor(status: string) {
   return colors[status] || 'neutral'
 }
 
+function getItemStatuses(row: DashboardPengajuanSourceRow) {
+  const statuses = row.itemStatuses || []
+  if (statuses.length) {
+    return [...statuses]
+      .map((item, index) => ({
+        noItem: item.noItem || index + 1,
+        status: normalizeItemStatus(item.status, row.status)
+      }))
+      .sort((a, b) => Number(a.noItem) - Number(b.noItem))
+  }
+
+  const total = clampItemCount(row.jumlahItem)
+  return Array.from({ length: total }, (_, index) => ({
+    noItem: index + 1,
+    status: normalizeItemStatus('', row.status)
+  }))
+}
+
+function normalizeItemStatus(status: string, fallbackStatus: string): DashboardItemStatus {
+  const value = String(status || fallbackStatus || '').trim()
+  if (value === 'Disetujui' || value === 'Ditolak' || value === 'Selesai') return value
+  return 'Baru'
+}
+
 function clampItemCount(value: number | string): number {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return 1
   return Math.min(Math.floor(n), 999)
 }
 
-function getRowKey(idPengajuan: string, noItem: number) {
+function getRowKey(idPengajuan: string, noItem: number | string) {
   return `${idPengajuan}::${noItem}`
 }
 </script>
@@ -373,7 +406,7 @@ function getRowKey(idPengajuan: string, noItem: number) {
 
           <div v-if="!isLoading && explodedRows.length" class="flex flex-wrap items-center justify-between gap-3 border-t border-accented px-4 py-3">
             <p class="text-xs text-muted">
-              {{ explodedRows.length }} item dari {{ filteredRows.length }} pengajuan.
+              {{ explodedRows.length }} item dari {{ filteredPengajuanCount }} pengajuan.
             </p>
             <UPagination
               :page="pengajuanCurrentPage"
