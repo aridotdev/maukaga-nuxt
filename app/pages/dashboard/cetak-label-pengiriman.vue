@@ -340,12 +340,8 @@ async function markSelectedShippingLabelsShipped() {
 
     selectedPrintKeys.value = new Set()
     await loadPrintQueue(false)
-    setPageAlert({
-      type: 'success',
-      title: `Batch ${result.data.batchId} tersimpan`,
-      description: `${result.data.count} item ditandai Dikirim.`
-    })
-    notify('Status kirim tersimpan', 'success')
+    setPageAlert(null)
+    notify(`Batch ${result.data.batchId} tersimpan`, 'success', `${result.data.count} item ditandai Dikirim.` )
   }, 'Status kirim gagal disimpan')
 
   isActionLoading.value = false
