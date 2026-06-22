@@ -231,7 +231,12 @@ async function submitItemStatus(item: DetailItem) {
   }
 
   if (statusBaru === statusLama) {
-    statusForm.notice = 'Tidak ada perubahan status untuk disimpan.'
+    toast.add({
+        title: 'Status item tidak berubah',
+        description: `Tidak ada perubahan status untuk disimpan.`,
+        color: 'info',
+        icon: 'i-lucide-info'
+      })
     return
   }
 
