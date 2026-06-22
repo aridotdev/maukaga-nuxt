@@ -13,8 +13,8 @@ const actionButtonClass = 'flex w-full items-center justify-center gap-2 rounded
   <section class="mx-auto my-auto flex w-full flex-col items-center justify-center py-10 md:py-0">
     <!-- Title & Greeting Section -->
     <div class="mb-8 max-w-2xl px-4 text-center md:mb-12">
-      <h2 class="mb-3 text-3xl font-bold tracking-tight text-[#0F172A] md:mb-4 md:text-5xl">
-        Selamat Datang di Portal Garansi
+      <h2 class="mb-3 text-3xl font-bold tracking-tight text-[#0F172A] md:mb-4 md:text-5xl leading-16">
+        Selamat Datang di Portal Kartu Garansi
       </h2>
       <p class="text-sm text-[#64748B] md:text-base">
         Pilih salah satu menu di bawah ini untuk memulai pemrosesan data, pengecekan berkas, atau pemantauan status kartu garansi dengan cepat.
