@@ -25,6 +25,24 @@ const UBadge = resolveComponent('UBadge')
 const UCheckbox = resolveComponent('UCheckbox')
 const USelect = resolveComponent('USelect')
 
+function normalizeCardTypeKey(value: unknown): CardTypeKey | '' {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'local' || normalized === 'lokal') return 'local'
+  if (normalized === 'import' || normalized === 'impor') return 'import'
+  return ''
+}
+
+function normalizeWarrantyPrintRow(row: WarrantyPrintQueueRow): WarrantyPrintQueueRow {
+  const jenisKartuKey = normalizeCardTypeKey(row.jenisKartuKey) || normalizeCardTypeKey(row.jenisKartu)
+
+  return {
+    ...row,
+    key: getPrintRowKey(row),
+    jenisKartuKey,
+    jenisKartu: jenisKartuKey === 'local' ? 'Local' : jenisKartuKey === 'import' ? 'Import' : ''
+  }
+}
+
 const router = useRouter()
 const selectedPrintKeys = ref<Set<string>>(new Set())
 const {
@@ -38,7 +56,8 @@ const {
   callApi
 } = useWarrantyPrintQueue({
   selectedKeys: selectedPrintKeys,
-  fetchQueue: (params) => callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', params || {})
+  fetchQueue: (params) => callApi<WarrantyPrintQueueResponse>('getWarrantyPrintQueue', params || {}),
+  normalize: (rows) => rows.map(normalizeWarrantyPrintRow)
 })
 
 const adminName = ref('Admin')
