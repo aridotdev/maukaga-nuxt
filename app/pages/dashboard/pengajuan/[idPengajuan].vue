@@ -113,6 +113,13 @@ const hasUnverifiedItems = computed(() => {
   return (detail.value?.items || []).some((item) => !isProductVerified(item.produkStatus))
 })
 
+const evidenceAttachmentLinks = computed(() => {
+  return (detail.value?.evidenceAttachmentUrls || []).map((url, index) => ({
+    url,
+    label: `Foto Bukti ${index + 1}`
+  }))
+})
+
 const infoFields = computed<InfoField[]>(() => {
   if (!detail.value) return []
 
@@ -569,6 +576,36 @@ function formatDateTime(value: string | undefined) {
                     target="_blank"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div v-if="evidenceAttachmentLinks.length" class="rounded-2xl border border-muted/60 bg-default p-4 shadow-sm">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h2 class="flex items-center gap-2 text-base font-semibold text-highlighted">
+                  <UIcon name="i-lucide-images" class="text-primary" />
+                  Lampiran Foto Bukti
+                </h2>
+                <UBadge
+                  color="info"
+                  variant="soft"
+                  :label="`${evidenceAttachmentLinks.length} foto`"
+                  class="w-fit font-semibold"
+                />
+              </div>
+
+              <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                <UButton
+                  v-for="link in evidenceAttachmentLinks"
+                  :key="link.url"
+                  :label="link.label"
+                  icon="i-lucide-image"
+                  trailing-icon="i-lucide-arrow-up-right"
+                  color="neutral"
+                  variant="outline"
+                  :to="link.url"
+                  target="_blank"
+                  class="justify-between rounded-xl"
+                />
               </div>
             </div>
 

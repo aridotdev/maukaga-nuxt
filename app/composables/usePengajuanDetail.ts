@@ -45,6 +45,8 @@ export type DetailPengajuan = {
   tanggalForm?: string
   fileHardCopyUrl?: string
   fileHardCopyId?: string
+  evidenceAttachmentUrls?: string[]
+  evidenceAttachmentIds?: string[]
   catatanTambahan?: string
   jumlahItem?: number | string
   status: PengajuanStatus

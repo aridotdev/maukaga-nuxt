@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
 
 definePageMeta({
   layout: 'cs'
@@ -37,6 +37,13 @@ type SubmitResponse = {
   idPengajuan?: string
 }
 
+type EvidenceAttachmentPayload = {
+  fileName: string
+  fileBase64: string
+  fileExtension: string
+  fileMimeType: string
+}
+
 type SubmissionPayload = {
   nama: string
   bagianCabang: string
@@ -54,6 +61,7 @@ type SubmissionPayload = {
   fileBase64?: string
   fileExtension?: string
   fileMimeType?: string
+  evidenceAttachments?: EvidenceAttachmentPayload[]
 }
 
 type StoredDraftReference = {
@@ -72,9 +80,12 @@ const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
 const { callApi } = useAppsScriptApi()
 const fileInput = ref<HTMLInputElement | null>(null)
+const evidenceInput = ref<HTMLInputElement | null>(null)
 
 const draftStorageKey = 'pengajuan_kartu_garansi_draft'
 const maxUploadMb = computed(() => Number(runtimeConfig.public.maxUploadMb || 10))
+const maxEvidenceFiles = 10
+const maxEvidenceFileMb = 5
 
 const resumeId = ref('')
 const currentDraftId = ref('')
@@ -82,9 +93,12 @@ const currentResumeToken = ref('')
 const resumeUrl = ref('')
 const loadedDraft = ref<DraftData | null>(null)
 const selectedFile = ref<File | null>(null)
+const selectedEvidenceFiles = ref<File[]>([])
+const evidencePreviewUrls = ref<string[]>([])
 const successId = ref('')
 const hasResumeInputError = ref(false)
 const hasFileError = ref(false)
+const evidenceError = ref('')
 const isLoadingDraft = ref(false)
 const isLoadingStoredDraft = ref(false)
 const isSubmitting = ref(false)
@@ -96,10 +110,21 @@ const fileInfoText = computed(() => {
   const error = validateFile(selectedFile.value)
   return `${selectedFile.value.name} (${formatBytes(selectedFile.value.size)})${error ? ` — ${error}` : ''}`
 })
+const evidenceInfoText = computed(() => {
+  const count = selectedEvidenceFiles.value.length
+  if (!count) return 'Belum ada foto tambahan dipilih.'
+
+  return `${count}/${maxEvidenceFiles} foto dipilih`
+})
+const canAddEvidenceFiles = computed(() => selectedEvidenceFiles.value.length < maxEvidenceFiles)
 const submitButtonText = computed(() => isSubmitting.value ? 'Mengirim...' : 'Submit Final Pengajuan')
 
 onMounted(() => {
   initializeDraftResume()
+})
+
+onBeforeUnmount(() => {
+  revokeEvidencePreviewUrls()
 })
 
 watch(resumeId, () => {
@@ -151,6 +176,7 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
     loadedDraft.value = normalizeDraftData(result.data || {}, idPengajuan)
     setDraftReference(idPengajuan, resumeToken)
     resetSelectedFile()
+    resetEvidenceFiles()
 
     if (reference.fromUrl) clearResumeParamsFromUrl()
 
@@ -295,6 +321,7 @@ async function handleSubmitFinal() {
   const payload = collectPayload()
   const validationErrors = getValidationErrors(payload)
   const fileError = validateFile(selectedFile.value)
+  const evidenceErrors = getEvidenceValidationErrors()
 
   hasFileError.value = !!fileError
 
@@ -308,6 +335,12 @@ async function handleSubmitFinal() {
     return
   }
 
+  if (evidenceErrors.length) {
+    evidenceError.value = evidenceErrors[0] || ''
+    showToast('Lampiran foto bukti belum valid', 'error', evidenceError.value)
+    return
+  }
+
   isSubmitting.value = true
 
   try {
@@ -316,6 +349,7 @@ async function handleSubmitFinal() {
     payload.fileBase64 = await fileToBase64(selectedFile.value)
     payload.fileExtension = getFileExtension(selectedFile.value.name)
     payload.fileMimeType = selectedFile.value.type || getMimeTypeFromExtension(payload.fileExtension)
+    payload.evidenceAttachments = await buildEvidenceAttachmentPayloads()
 
     const result = await callApi<SubmitResponse>('submitDraftPengajuan', payload as unknown as Record<string, unknown>)
     if (!result.success) throw new Error(result.error || 'Pengajuan gagal dikirim')
@@ -323,6 +357,7 @@ async function handleSubmitFinal() {
     const submittedId = result.data?.idPengajuan || currentDraftId.value
     clearDraftReference()
     resetSelectedFile()
+    resetEvidenceFiles()
     successId.value = submittedId
     showToast('Pengajuan berhasil dikirim', 'success', `ID Pengajuan: ${submittedId}`)
   } catch (error) {
@@ -364,16 +399,71 @@ function triggerFilePicker() {
   fileInput.value?.click()
 }
 
+function triggerEvidencePicker() {
+  if (!canAddEvidenceFiles.value) {
+    showToast(`Maksimal ${maxEvidenceFiles} foto bukti`, 'error')
+    return
+  }
+
+  evidenceInput.value?.click()
+}
+
 function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   selectedFile.value = target.files?.[0] || null
   hasFileError.value = !!validateFile(selectedFile.value)
 }
 
+function handleEvidenceFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  addEvidenceFiles(Array.from(target.files || []))
+  target.value = ''
+}
+
+function addEvidenceFiles(files: File[]) {
+  evidenceError.value = ''
+  if (!files.length) return
+
+  const availableSlots = maxEvidenceFiles - selectedEvidenceFiles.value.length
+  if (availableSlots <= 0) {
+    evidenceError.value = `Maksimal ${maxEvidenceFiles} foto bukti`
+    showToast(evidenceError.value, 'error')
+    return
+  }
+
+  const nextFiles: File[] = []
+  const errors = new Set<string>()
+
+  files.slice(0, availableSlots).forEach((file) => {
+    const error = validateEvidenceFile(file)
+    if (error) errors.add(`${file.name}: ${error}`)
+    else nextFiles.push(file)
+  })
+
+  if (files.length > availableSlots) errors.add(`Maksimal ${maxEvidenceFiles} foto bukti`)
+  if (nextFiles.length) setEvidenceFiles([...selectedEvidenceFiles.value, ...nextFiles])
+
+  if (errors.size) {
+    evidenceError.value = Array.from(errors).slice(0, 2).join(' • ')
+    showToast('Sebagian foto tidak bisa ditambahkan', 'error', evidenceError.value)
+  }
+}
+
+function removeEvidenceFile(index: number) {
+  setEvidenceFiles(selectedEvidenceFiles.value.filter((_, fileIndex) => fileIndex !== index))
+  evidenceError.value = ''
+}
+
 function resetSelectedFile() {
   selectedFile.value = null
   hasFileError.value = false
   if (fileInput.value) fileInput.value.value = ''
+}
+
+function resetEvidenceFiles() {
+  setEvidenceFiles([])
+  evidenceError.value = ''
+  if (evidenceInput.value) evidenceInput.value.value = ''
 }
 
 function validateFile(file: File | null) {
@@ -384,6 +474,55 @@ function validateFile(file: File | null) {
   if (file.size > maxUploadMb.value * 1024 * 1024) return `Ukuran file tidak boleh melebihi ${maxUploadMb.value}MB`
 
   return ''
+}
+
+function validateEvidenceFile(file: File) {
+  const ext = getFileExtension(file.name)
+  if (!['jpg', 'jpeg', 'png'].includes(ext)) return 'Format foto harus JPG/JPEG/PNG'
+  if (file.type && !['image/jpeg', 'image/png'].includes(file.type)) return 'Tipe file foto tidak valid'
+  if (file.size > maxEvidenceFileMb * 1024 * 1024) return `Ukuran foto tidak boleh melebihi ${maxEvidenceFileMb}MB`
+
+  return ''
+}
+
+function getEvidenceValidationErrors() {
+  if (selectedEvidenceFiles.value.length > maxEvidenceFiles) return [`Maksimal ${maxEvidenceFiles} foto bukti`]
+
+  return selectedEvidenceFiles.value
+    .map(validateEvidenceFile)
+    .filter(Boolean)
+}
+
+async function buildEvidenceAttachmentPayloads(): Promise<EvidenceAttachmentPayload[]> {
+  return Promise.all(selectedEvidenceFiles.value.map(async (file) => {
+    const fileExtension = getFileExtension(file.name)
+
+    return {
+      fileName: file.name,
+      fileBase64: await fileToBase64(file),
+      fileExtension,
+      fileMimeType: file.type || getMimeTypeFromExtension(fileExtension)
+    }
+  }))
+}
+
+function setEvidenceFiles(files: File[]) {
+  selectedEvidenceFiles.value = files
+  syncEvidencePreviewUrls()
+}
+
+function syncEvidencePreviewUrls() {
+  revokeEvidencePreviewUrls()
+  if (!import.meta.client) return
+
+  evidencePreviewUrls.value = selectedEvidenceFiles.value.map(file => URL.createObjectURL(file))
+}
+
+function revokeEvidencePreviewUrls() {
+  if (!import.meta.client) return
+
+  evidencePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
+  evidencePreviewUrls.value = []
 }
 
 function fileToBase64(file: File) {
@@ -588,7 +727,7 @@ function getErrorMessage(error: unknown) {
               
               <button
                 type="button"
-                class="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-white/50 px-6 py-10 transition-all hover:bg-slate-50/80 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
+                class="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-white/50 px-5 py-5 text-center transition-all hover:bg-slate-50/80 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:flex-row sm:justify-start sm:text-left"
                 :class="[
                   hasFileError ? 'border-red-400' : 
                   selectedFile ? 'border-green-400 bg-green-50/30 hover:bg-green-50/50' : 'border-slate-300'
@@ -597,30 +736,32 @@ function getErrorMessage(error: unknown) {
               >
                 <!-- Icon State -->
                 <div 
-                  class="mb-4 flex size-16 items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110"
+                  class="mb-3 flex size-12 items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110 sm:mb-0 sm:mr-4 sm:shrink-0"
                   :class="selectedFile ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'"
                 >
                   <UIcon 
                     :name="selectedFile ? 'i-lucide-file-check-2' : 'i-lucide-file-up'" 
-                    class="size-8" 
+                    class="size-6" 
                   />
                 </div>
 
                 <!-- Text State -->
-                <span class="block text-base font-bold" :class="selectedFile ? 'text-green-800' : 'text-slate-700'">
-                  {{ selectedFile ? 'Ganti File Pindai' : 'Pilih File Pindai TTD' }}
-                </span>
-                
-                <span 
-                  class="mt-2 block max-w-md text-center text-sm transition-colors" 
-                  :class="hasFileError ? 'text-red-600 font-medium' : selectedFile ? 'text-green-600' : 'text-slate-500'"
-                >
-                  {{ fileInfoText }}
-                </span>
-                
-                <span v-if="!selectedFile" class="mt-2 block rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
-                  Format: PDF, JPG, PNG (Maks. {{ maxUploadMb }}MB)
-                </span>
+                <div class="min-w-0">
+                  <span class="block text-sm font-bold sm:text-base" :class="selectedFile ? 'text-green-800' : 'text-slate-700'">
+                    {{ selectedFile ? 'Ganti File Pindai' : 'Pilih File Pindai TTD' }}
+                  </span>
+                  
+                  <span 
+                    class="mt-1 block max-w-md text-sm transition-colors" 
+                    :class="hasFileError ? 'text-red-600 font-medium' : selectedFile ? 'text-green-600' : 'text-slate-500'"
+                  >
+                    {{ fileInfoText }}
+                  </span>
+                  
+                  <span v-if="!selectedFile" class="mt-2 inline-flex rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
+                    Format: PDF, JPG, PNG (Maks. {{ maxUploadMb }}MB)
+                  </span>
+                </div>
               </button>
               
               <input
@@ -630,6 +771,88 @@ function getErrorMessage(error: unknown) {
                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 @change="handleFileChange"
               >
+
+              <div class="mt-6 border-t border-slate-200/60 pt-5">
+                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 class="flex items-center gap-2 text-base font-bold text-slate-800">
+                      <UIcon name="i-lucide-images" class="size-5 text-blue-600" />
+                      Lampiran Foto Bukti
+                      <span class="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Opsional</span>
+                    </h4>
+                    <p class="mt-1 text-sm text-slate-500">
+                      Foto unit, dus, label model, serial number, atau bukti pendukung lain.
+                    </p>
+                  </div>
+                  <span class="text-xs font-semibold text-slate-500">{{ evidenceInfoText }}</span>
+                </div>
+
+                <button
+                  type="button"
+                  class="group flex w-full cursor-pointer items-center justify-between gap-4 rounded-2xl border-2 border-dashed bg-white/50 px-4 py-4 text-left transition-all hover:bg-slate-50/80 focus:outline-none focus:ring-4 focus:ring-slate-900/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="evidenceError ? 'border-red-300' : selectedEvidenceFiles.length ? 'border-blue-300 bg-blue-50/20' : 'border-slate-300'"
+                  :disabled="!canAddEvidenceFiles"
+                  @click="triggerEvidencePicker"
+                >
+                  <span class="flex min-w-0 items-center gap-3">
+                    <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition-transform group-hover:scale-105">
+                      <UIcon name="i-lucide-image-plus" class="size-5" />
+                    </span>
+                    <span class="min-w-0">
+                      <span class="block text-sm font-bold text-slate-700">
+                        {{ canAddEvidenceFiles ? 'Tambah Foto Bukti' : 'Batas Foto Terpenuhi' }}
+                      </span>
+                      <span class="mt-0.5 block text-xs text-slate-500">
+                        JPG atau PNG, maksimal {{ maxEvidenceFileMb }}MB per foto
+                      </span>
+                    </span>
+                  </span>
+                  <UIcon name="i-lucide-plus" class="size-5 shrink-0 text-slate-400" />
+                </button>
+
+                <input
+                  ref="evidenceInput"
+                  type="file"
+                  class="hidden"
+                  accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                  multiple
+                  @change="handleEvidenceFileChange"
+                >
+
+                <p v-if="evidenceError" class="mt-2 text-sm font-medium text-red-600">
+                  {{ evidenceError }}
+                </p>
+
+                <div v-if="selectedEvidenceFiles.length" class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  <div
+                    v-for="(file, index) in selectedEvidenceFiles"
+                    :key="`${file.name}-${file.lastModified}-${index}`"
+                    class="relative rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
+                  >
+                    <div class="aspect-square overflow-hidden rounded-xl bg-slate-100">
+                      <img
+                        :src="evidencePreviewUrls[index]"
+                        :alt="file.name"
+                        class="h-full w-full object-cover"
+                      >
+                    </div>
+                    <button
+                      type="button"
+                      class="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-slate-900/80 text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                      aria-label="Hapus foto bukti"
+                      @click.stop="removeEvidenceFile(index)"
+                    >
+                      <UIcon name="i-lucide-x" class="size-4" />
+                    </button>
+                    <p class="mt-2 truncate text-xs font-semibold text-slate-700">
+                      {{ file.name }}
+                    </p>
+                    <p class="text-xs text-slate-500">
+                      {{ formatBytes(file.size) }}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- ACTIONS -->

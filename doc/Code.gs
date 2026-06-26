@@ -2,6 +2,8 @@ const APP = {
   SPREADSHEET_ID: '', // diisi manual oleh user setelah setup jika ingin memakai spreadsheet yang sudah ada
   DRIVE_FOLDER_ID: '', // diisi/di-update dari sheet Config
   MAX_UPLOAD_MB: 10,
+  MAX_EVIDENCE_FILES: 10,
+  MAX_EVIDENCE_UPLOAD_MB: 5,
   MAX_ITEMS: 10,
   APP_NAME: 'Pengajuan Kartu Garansi',
   SESSION_DURATION_HOURS: 6,
@@ -23,7 +25,7 @@ const SHEETS = {
 };
 
 const HEADERS = {
-  [SHEETS.PENGAJUAN]: ['ID Pengajuan', 'Timestamp Submit', 'Nama', 'Bagian/Cabang', 'Pemilik', 'Alasan Pengajuan', 'Tanggal Form', 'File Hard Copy URL', 'File Hard Copy ID', 'Catatan Tambahan', 'Jumlah Item', 'Status', 'Catatan Admin', 'Tanggal Update Status Terakhir', 'User Update Status', 'Riwayat Singkat', 'Resume Token', 'Draft Created At', 'Draft Updated At', 'Submitted At'],
+  [SHEETS.PENGAJUAN]: ['ID Pengajuan', 'Timestamp Submit', 'Nama', 'Bagian/Cabang', 'Pemilik', 'Alasan Pengajuan', 'Tanggal Form', 'File Hard Copy URL', 'File Hard Copy ID', 'Catatan Tambahan', 'Jumlah Item', 'Status', 'Catatan Admin', 'Tanggal Update Status Terakhir', 'User Update Status', 'Riwayat Singkat', 'Resume Token', 'Draft Created At', 'Draft Updated At', 'Submitted At', 'Lampiran Foto Bukti URLs', 'Lampiran Foto Bukti IDs'],
   [SHEETS.ITEMS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'model_normalized', 'produk_status', 'produk_sumber', 'Status Item', 'Catatan Admin Item', 'Tanggal Update Status Item', 'User Update Status Item'],
   [SHEETS.USERS]: ['Username', 'Password/PIN', 'Nama', 'Role', 'Aktif', 'Last Login'],
   [SHEETS.RECIPIENTS]: ['Nama', 'Email', 'Aktif', 'Keterangan'],
@@ -51,6 +53,8 @@ const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'];
 const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
 const VALID_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const VALID_EVIDENCE_EXTENSIONS = ['jpg', 'jpeg', 'png'];
+const VALID_EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
 function setupApp() {
   const ss = getSpreadsheet_();
@@ -66,6 +70,8 @@ function setupApp() {
     APP_NAME: APP.APP_NAME,
     DRIVE_FOLDER_ID: '',
     MAX_UPLOAD_MB: APP.MAX_UPLOAD_MB,
+    MAX_EVIDENCE_FILES: APP.MAX_EVIDENCE_FILES,
+    MAX_EVIDENCE_UPLOAD_MB: APP.MAX_EVIDENCE_UPLOAD_MB,
     MAX_ITEMS: APP.MAX_ITEMS,
     LAST_EMAIL_SENT_AT: '',
     ACTIVE_PRINT_LAYOUT_LOCAL: 'local-default',
@@ -355,13 +361,15 @@ function handleSubmitPengajuan(data) {
     const folderId = String(config.DRIVE_FOLDER_ID || APP.DRIVE_FOLDER_ID || '').trim();
     if (!folderId) throw new Error('DRIVE_FOLDER_ID belum dikonfigurasi. Jalankan setupApp() terlebih dahulu.');
 
+    const folder = DriveApp.getFolderById(folderId);
     const bytes = Utilities.base64Decode(cleaned.fileBase64);
     const blob = Utilities.newBlob(bytes, cleaned.fileMimeType, id + '_hardcopy.' + cleaned.fileExtension);
-    const file = DriveApp.getFolderById(folderId).createFile(blob);
+    const file = folder.createFile(blob);
     file.setName(id + '_hardcopy.' + cleaned.fileExtension);
+    const evidenceFiles = createEvidenceFiles_(folder, id, cleaned.evidenceAttachments);
 
     const now = new Date();
-    appendPengajuanRow_(id, cleaned, 'Baru', '', now, file.getUrl(), file.getId(), '', '', '', now, '[' + formatDateTime_(now) + '] Pengajuan dibuat');
+    appendPengajuanRow_(id, cleaned, 'Baru', '', now, file.getUrl(), file.getId(), '', '', '', now, '[' + formatDateTime_(now) + '] Pengajuan dibuat', evidenceFiles.urls, evidenceFiles.ids);
     replaceItemRows_(id, cleaned.items);
     return { success: true, data: { idPengajuan: id } };
   } finally {
@@ -574,15 +582,17 @@ function handleSubmitDraftPengajuan(data) {
     const folderId = String(config.DRIVE_FOLDER_ID || APP.DRIVE_FOLDER_ID || '').trim();
     if (!folderId) throw new Error('DRIVE_FOLDER_ID belum dikonfigurasi. Jalankan setupApp() terlebih dahulu.');
 
+    const folder = DriveApp.getFolderById(folderId);
     const bytes = Utilities.base64Decode(cleaned.fileBase64);
     const blob = Utilities.newBlob(bytes, cleaned.fileMimeType, id + '_hardcopy.' + cleaned.fileExtension);
-    const file = DriveApp.getFolderById(folderId).createFile(blob);
+    const file = folder.createFile(blob);
     file.setName(id + '_hardcopy.' + cleaned.fileExtension);
+    const evidenceFiles = createEvidenceFiles_(folder, id, cleaned.evidenceAttachments);
 
     const now = new Date();
     const oldHistory = record.row[record.col['Riwayat Singkat']] || '';
     const history = oldHistory ? oldHistory + '\n[' + formatDateTime_(now) + '] Pengajuan final dikirim' : '[' + formatDateTime_(now) + '] Pengajuan final dikirim';
-    updatePengajuanRow_(record.sheet, record.rowNumber, record.col, id, cleaned, 'Baru', '', now, file.getUrl(), file.getId(), record.row[record.col['Draft Created At']] || '', record.row[record.col['Draft Updated At']] || '', now, history);
+    updatePengajuanRow_(record.sheet, record.rowNumber, record.col, id, cleaned, 'Baru', '', now, file.getUrl(), file.getId(), record.row[record.col['Draft Created At']] || '', record.row[record.col['Draft Updated At']] || '', now, history, evidenceFiles.urls, evidenceFiles.ids);
     replaceItemRows_(id, cleaned.items);
     getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, DRAFT_STATUS, 'Baru', 'Final submit hard copy signed', 'system']);
 
@@ -916,6 +926,8 @@ function handleGetDetail(data) {
       tanggalForm: formatDateOnly_(pengajuan['Tanggal Form']),
       fileHardCopyUrl: pengajuan['File Hard Copy URL'],
       fileHardCopyId: pengajuan['File Hard Copy ID'],
+      evidenceAttachmentUrls: splitStoredLines_(pengajuan['Lampiran Foto Bukti URLs']),
+      evidenceAttachmentIds: splitStoredLines_(pengajuan['Lampiran Foto Bukti IDs']),
       catatanTambahan: pengajuan['Catatan Tambahan'],
       jumlahItem: pengajuan['Jumlah Item'],
       status: pengajuan['Status'],
@@ -2232,6 +2244,7 @@ function normalizeSubmission_(data, config, includeFile) {
     fileBase64: clean_(data.fileBase64),
     fileExtension: clean_(data.fileExtension).toLowerCase().replace(/^\./, ''),
     fileMimeType: clean_(data.fileMimeType).toLowerCase(),
+    evidenceAttachments: normalizeEvidenceAttachments_(data.evidenceAttachments, config),
   };
   ['nama', 'bagianCabang', 'pemilik', 'tanggalForm', 'alasanPengajuan'].forEach(function (field) {
     if (!cleaned[field]) throw new Error('Field wajib belum lengkap: ' + field);
@@ -2264,7 +2277,60 @@ function normalizeSubmission_(data, config, includeFile) {
   return cleaned;
 }
 
-function appendPengajuanRow_(id, cleaned, status, resumeToken, timestampSubmit, fileUrl, fileId, catatanAdmin, draftCreatedAt, draftUpdatedAt, submittedAt, riwayatSingkat) {
+function normalizeEvidenceAttachments_(attachments, config) {
+  if (!Array.isArray(attachments)) return [];
+
+  const maxFiles = Number(config.MAX_EVIDENCE_FILES || APP.MAX_EVIDENCE_FILES);
+  if (attachments.length > maxFiles) throw new Error('Jumlah lampiran foto bukti maksimal ' + maxFiles);
+
+  const maxBytes = Number(config.MAX_EVIDENCE_UPLOAD_MB || APP.MAX_EVIDENCE_UPLOAD_MB) * 1024 * 1024;
+
+  return attachments.map(function (rawAttachment, index) {
+    const attachment = rawAttachment || {};
+    const fileName = clean_(attachment.fileName || attachment.name || ('foto-bukti-' + (index + 1)));
+    const extensionFromName = clean_(fileName).split('.').pop();
+    const fileExtension = clean_(attachment.fileExtension || extensionFromName).toLowerCase().replace(/^\./, '');
+    const fileMimeType = clean_(attachment.fileMimeType || attachment.mimeType).toLowerCase();
+    const fileBase64 = clean_(attachment.fileBase64 || attachment.base64);
+
+    if (!fileBase64) throw new Error('Lampiran foto bukti #' + (index + 1) + ' belum lengkap');
+    if (VALID_EVIDENCE_EXTENSIONS.indexOf(fileExtension) === -1) throw new Error('Format lampiran foto bukti harus JPG/JPEG/PNG');
+    if (VALID_EVIDENCE_MIME_TYPES.indexOf(fileMimeType) === -1) throw new Error('MIME type lampiran foto bukti tidak valid');
+
+    const approxBytes = Math.ceil((fileBase64.length * 3) / 4);
+    if (approxBytes > maxBytes) throw new Error('Ukuran lampiran foto bukti #' + (index + 1) + ' melebihi ' + (config.MAX_EVIDENCE_UPLOAD_MB || APP.MAX_EVIDENCE_UPLOAD_MB) + 'MB');
+
+    return {
+      fileName: fileName,
+      fileBase64: fileBase64,
+      fileExtension: fileExtension,
+      fileMimeType: fileMimeType,
+    };
+  });
+}
+
+function createEvidenceFiles_(folder, id, attachments) {
+  const urls = [];
+  const ids = [];
+
+  (attachments || []).forEach(function (attachment, index) {
+    const sequence = String(index + 1).padStart(2, '0');
+    const name = id + '_bukti_' + sequence + '.' + attachment.fileExtension;
+    const bytes = Utilities.base64Decode(attachment.fileBase64);
+    const blob = Utilities.newBlob(bytes, attachment.fileMimeType, name);
+    const file = folder.createFile(blob);
+    file.setName(name);
+    urls.push(file.getUrl());
+    ids.push(file.getId());
+  });
+
+  return {
+    urls: urls.join('\n'),
+    ids: ids.join('\n'),
+  };
+}
+
+function appendPengajuanRow_(id, cleaned, status, resumeToken, timestampSubmit, fileUrl, fileId, catatanAdmin, draftCreatedAt, draftUpdatedAt, submittedAt, riwayatSingkat, evidenceFileUrls, evidenceFileIds) {
   getSheet_(SHEETS.PENGAJUAN).appendRow([
     id,
     timestampSubmit,
@@ -2286,10 +2352,12 @@ function appendPengajuanRow_(id, cleaned, status, resumeToken, timestampSubmit, 
     draftCreatedAt,
     draftUpdatedAt,
     submittedAt,
+    evidenceFileUrls || '',
+    evidenceFileIds || '',
   ]);
 }
 
-function updatePengajuanRow_(sheet, rowNumber, col, id, cleaned, status, resumeToken, timestampSubmit, fileUrl, fileId, draftCreatedAt, draftUpdatedAt, submittedAt, riwayatSingkat) {
+function updatePengajuanRow_(sheet, rowNumber, col, id, cleaned, status, resumeToken, timestampSubmit, fileUrl, fileId, draftCreatedAt, draftUpdatedAt, submittedAt, riwayatSingkat, evidenceFileUrls, evidenceFileIds) {
   const row = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
   row[col['ID Pengajuan']] = id;
   row[col['Timestamp Submit']] = timestampSubmit;
@@ -2311,6 +2379,8 @@ function updatePengajuanRow_(sheet, rowNumber, col, id, cleaned, status, resumeT
   row[col['Draft Created At']] = draftCreatedAt;
   row[col['Draft Updated At']] = draftUpdatedAt;
   row[col['Submitted At']] = submittedAt;
+  if (col['Lampiran Foto Bukti URLs'] !== undefined) row[col['Lampiran Foto Bukti URLs']] = evidenceFileUrls || '';
+  if (col['Lampiran Foto Bukti IDs'] !== undefined) row[col['Lampiran Foto Bukti IDs']] = evidenceFileIds || '';
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
 }
 
@@ -2708,6 +2778,10 @@ function normalizeRole_(value) {
   if (role === 'management' || role === 'manajemen') return 'management';
   if (role === 'qrcc') return 'qrcc';
   return '';
+}
+
+function splitStoredLines_(value) {
+  return clean_(value).split(/\r?\n/).map(clean_).filter(Boolean);
 }
 
 function clean_(value) {
