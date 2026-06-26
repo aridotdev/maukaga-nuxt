@@ -29,7 +29,7 @@ export default defineNuxtConfig({
     cookieOptions: {
       maxAge: 60 * 60 * 24 * 2, // 2 hari
       sameSite: 'lax',
-      secure: true
+      secure: import.meta.env.NODE_ENV === 'production'
     }
   },
 

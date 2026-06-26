@@ -775,7 +775,7 @@ function formatDateTime(value: string | undefined) {
                   <div class="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
                     <UIcon name="i-lucide-zoom-in" class="size-7 text-white" />
                   </div>
-                  <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                  <div class="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent p-2">
                     <span class="block truncate text-xs font-semibold text-white">{{ link.label }}</span>
                   </div>
                 </button>
