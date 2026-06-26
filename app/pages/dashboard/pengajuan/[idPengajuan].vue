@@ -63,6 +63,15 @@ type InfoField = {
   mono?: boolean
 }
 
+type EvidenceAttachmentLink = {
+  id: string
+  url: string
+  label: string
+  thumbnailUrl: string
+  previewUrl: string
+  downloadUrl: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -98,6 +107,8 @@ const confirmDialog = reactive({
   isSubmitting: false
 })
 const pendingConfirmAction = ref<(() => Promise<void>) | null>(null)
+const selectedEvidenceAttachment = ref<EvidenceAttachmentLink | null>(null)
+const showEvidencePreview = ref(false)
 
 const pengajuanStatusItems = PENGAJUAN_STATUSES.map((status) => ({
   label: status,
@@ -113,11 +124,21 @@ const hasUnverifiedItems = computed(() => {
   return (detail.value?.items || []).some((item) => !isProductVerified(item.produkStatus))
 })
 
-const evidenceAttachmentLinks = computed(() => {
-  return (detail.value?.evidenceAttachmentUrls || []).map((url, index) => ({
-    url,
-    label: `Foto Bukti ${index + 1}`
-  }))
+const evidenceAttachmentLinks = computed<EvidenceAttachmentLink[]>(() => {
+  const ids = detail.value?.evidenceAttachmentIds || []
+
+  return (detail.value?.evidenceAttachmentUrls || []).map((url, index) => {
+    const id = ids[index] || extractDriveFileId(url)
+
+    return {
+      id,
+      url,
+      label: `Foto Bukti ${index + 1}`,
+      thumbnailUrl: getEvidenceImageUrl(url, id, 480),
+      previewUrl: getEvidenceImageUrl(url, id, 1600),
+      downloadUrl: id ? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}` : url
+    }
+  })
 })
 
 const infoFields = computed<InfoField[]>(() => {
@@ -359,6 +380,11 @@ function cancelConfirmDialog() {
   pendingConfirmAction.value = null
 }
 
+function openEvidencePreview(attachment: EvidenceAttachmentLink) {
+  selectedEvidenceAttachment.value = attachment
+  showEvidencePreview.value = true
+}
+
 async function confirmPendingAction() {
   const action = pendingConfirmAction.value
   if (!action) {
@@ -465,6 +491,17 @@ function getPengajuanTransitionConfirmMessage(currentStatus: string, nextStatus:
   if (nextStatus === 'Diterima') return 'Tandai kartu garansi sudah diterima?'
   if (nextStatus === 'Selesai') return 'Tandai proses kartu garansi sudah selesai?'
   return ''
+}
+
+function getEvidenceImageUrl(url: string, fileId: string, size: number) {
+  if (!fileId) return url
+
+  return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${size}`
+}
+
+function extractDriveFileId(url: string) {
+  const match = String(url || '').match(/\/d\/([^/]+)|[?&]id=([^&]+)/)
+  return match?.[1] || match?.[2] || ''
 }
 
 function formatDateTime(value: string | undefined) {
@@ -576,36 +613,6 @@ function formatDateTime(value: string | undefined) {
                     target="_blank"
                   />
                 </div>
-              </div>
-            </div>
-
-            <div v-if="evidenceAttachmentLinks.length" class="rounded-2xl border border-muted/60 bg-default p-4 shadow-sm">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h2 class="flex items-center gap-2 text-base font-semibold text-highlighted">
-                  <UIcon name="i-lucide-images" class="text-primary" />
-                  Lampiran Foto Bukti
-                </h2>
-                <UBadge
-                  color="info"
-                  variant="soft"
-                  :label="`${evidenceAttachmentLinks.length} foto`"
-                  class="w-fit font-semibold"
-                />
-              </div>
-
-              <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                <UButton
-                  v-for="link in evidenceAttachmentLinks"
-                  :key="link.url"
-                  :label="link.label"
-                  icon="i-lucide-image"
-                  trailing-icon="i-lucide-arrow-up-right"
-                  color="neutral"
-                  variant="outline"
-                  :to="link.url"
-                  target="_blank"
-                  class="justify-between rounded-xl"
-                />
               </div>
             </div>
 
@@ -732,6 +739,50 @@ function formatDateTime(value: string | undefined) {
               </div>
             </UCard>
 
+            <!-- Lampiran Foto Bukti -->
+            <UCard v-if="evidenceAttachmentLinks.length" class="rounded-2xl">
+              <template #header>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 class="flex items-center gap-2 text-base font-semibold text-highlighted">
+                    <UIcon name="i-lucide-images" class="text-primary" />
+                    Lampiran Foto Bukti
+                  </h2>
+                  <UBadge
+                    color="info"
+                    variant="soft"
+                    :label="`${evidenceAttachmentLinks.length} foto`"
+                    class="w-fit font-semibold"
+                  />
+                </div>
+              </template>
+
+              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                <button
+                  v-for="link in evidenceAttachmentLinks"
+                  :key="link.url"
+                  type="button"
+                  class="group relative overflow-hidden rounded-xl border border-muted/60 bg-muted/20 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  @click="openEvidencePreview(link)"
+                >
+                  <div class="aspect-square overflow-hidden bg-muted/40">
+                    <img
+                      :src="link.thumbnailUrl"
+                      :alt="link.label"
+                      class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    >
+                  </div>
+                  <div class="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                    <UIcon name="i-lucide-zoom-in" class="size-7 text-white" />
+                  </div>
+                  <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                    <span class="block truncate text-xs font-semibold text-white">{{ link.label }}</span>
+                  </div>
+                </button>
+              </div>
+            </UCard>
+
+
             <!-- Riwayat Status -->
             <UCard class="rounded-2xl shadow-sm" :ui="{ body: 'p-0 sm:p-0' }">
               <template #header>
@@ -754,6 +805,7 @@ function formatDateTime(value: string | undefined) {
               </UTable>
             </UCard>
 
+           
           </div>
 
           <!-- KANAN: Form Aksi & Info Detail (Sidebar) -->
@@ -878,6 +930,46 @@ function formatDateTime(value: string | undefined) {
           </div>
         </div>
       </div>
+
+      <UModal
+        v-model:open="showEvidencePreview"
+        :title="selectedEvidenceAttachment?.label || 'Foto Bukti'"
+        fullscreen
+        :ui="{ body: 'p-0 sm:p-0', footer: 'justify-end' }"
+      >
+        <template #body>
+          <div class="flex min-h-[70vh] items-center justify-center bg-black p-4 sm:p-6">
+            <img
+              v-if="selectedEvidenceAttachment"
+              :src="selectedEvidenceAttachment.previewUrl"
+              :alt="selectedEvidenceAttachment.label"
+              class="max-h-[calc(100vh-12rem)] max-w-full rounded-lg object-contain shadow-2xl"
+            >
+          </div>
+        </template>
+
+        <template #footer>
+          <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <UButton
+              v-if="selectedEvidenceAttachment"
+              label="Unduh"
+              icon="i-lucide-download"
+              color="primary"
+              :to="selectedEvidenceAttachment.downloadUrl"
+              target="_blank"
+            />
+            <UButton
+              v-if="selectedEvidenceAttachment"
+              label="Buka File"
+              icon="i-lucide-external-link"
+              color="neutral"
+              variant="outline"
+              :to="selectedEvidenceAttachment.url"
+              target="_blank"
+            />
+          </div>
+        </template>
+      </UModal>
 
       <UModal
         v-model:open="showConfirmDialog"
