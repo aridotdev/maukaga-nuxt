@@ -26,7 +26,7 @@ const SHEETS = {
 
 const HEADERS = {
   [SHEETS.PENGAJUAN]: ['ID Pengajuan', 'Timestamp Submit', 'Nama', 'Bagian/Cabang', 'Pemilik', 'Alasan Pengajuan', 'Tanggal Form', 'File Hard Copy URL', 'File Hard Copy ID', 'Catatan Tambahan', 'Jumlah Item', 'Status', 'Catatan Admin', 'Tanggal Update Status Terakhir', 'User Update Status', 'Riwayat Singkat', 'Resume Token', 'Draft Created At', 'Draft Updated At', 'Submitted At', 'Lampiran Foto Bukti URLs', 'Lampiran Foto Bukti IDs'],
-  [SHEETS.ITEMS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'model_normalized', 'produk_status', 'produk_sumber', 'Status Item', 'Catatan Admin Item', 'Tanggal Update Status Item', 'User Update Status Item'],
+  [SHEETS.ITEMS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'model_normalized', 'produk_status', 'produk_sumber', 'Status Item', 'Catatan Admin Item', 'Tanggal Update Status Item', 'User Update Status Item', 'Keputusan Item'],
   [SHEETS.USERS]: ['Username', 'Password/PIN', 'Nama', 'Role', 'Aktif', 'Last Login'],
   [SHEETS.RECIPIENTS]: ['Nama', 'Email', 'Aktif', 'Keterangan'],
   [SHEETS.CONFIG]: ['Key', 'Value'],
@@ -50,6 +50,7 @@ const ACTIVE_PRINT_LAYOUT_KEYS = {
 const DRAFT_STATUS = 'Menunggu Upload';
 const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
 const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'];
+const ITEM_DECISION_STATUSES = ['Disetujui', 'Ditolak'];
 const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
 const VALID_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
@@ -175,6 +176,10 @@ function doPost(e) {
         return jsonResponse_(handlePreviewPengajuanLifecycleMigration(data));
       case 'migratePengajuanLifecycleFromWarrantyCards':
         return jsonResponse_(handleMigratePengajuanLifecycleFromWarrantyCards(data));
+      case 'previewItemDecisionBackfill':
+        return jsonResponse_(handlePreviewItemDecisionBackfill(data));
+      case 'backfillItemDecisions':
+        return jsonResponse_(handleBackfillItemDecisions(data));
       case 'adminLogout':
         return jsonResponse_(handleAdminLogout(data));
       default:
@@ -511,6 +516,7 @@ function handleCheckPengajuanStatus(data) {
   }
 
   const itemStatus = matchedItem ? clean_(matchedItem['Status Item']) : '';
+  const itemDecision = matchedItem ? normalizeItemDecision_(matchedItem['Keputusan Item'], matchedItem['Status Item'], parentStatus) : '';
   const status = parentStatus;
 
   return {
@@ -521,6 +527,7 @@ function handleCheckPengajuanStatus(data) {
       status: status,
       parentStatus: parentStatus,
       statusItem: itemStatus,
+      keputusanItem: itemDecision,
       noItem: matchedItem ? matchedItem['No Item'] : '',
       nomorSeri: matchedItem ? matchedItem['Nomor Seri'] : '',
       produk: matchedItem ? matchedItem['Produk'] : '',
@@ -829,21 +836,27 @@ function handleGetDashboard(data) {
 
   const itemCountById = {};
   const itemStatusById = {};
+  const itemDecisionById = {};
   readObjects_(SHEETS.ITEMS).forEach(function (item) {
     const id = clean_(item['ID Pengajuan']);
     const parent = rowById[id];
     if (!parent) return;
 
     const statusItem = normalizeItemApprovalStatus_(item['Status Item'], parent['Status']);
+    const decisionItem = normalizeItemDecision_(item['Keputusan Item'], item['Status Item'], parent['Status']);
     const noItem = clean_(item['No Item']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     itemCountById[id] = (itemCountById[id] || 0) + 1;
     if (noItem) {
       itemStatusById[id] = itemStatusById[id] || {};
+      itemDecisionById[id] = itemDecisionById[id] || {};
       itemStatusById[id][noItem] = statusItem;
+      itemDecisionById[id][noItem] = decisionItem;
     }
     summary.totalItems += 1;
-    if (summary.hasOwnProperty(itemKey)) summary[itemKey] += 1;
+    if (summary.hasOwnProperty(itemKey) && statusItem !== 'Disetujui' && statusItem !== 'Ditolak') summary[itemKey] += 1;
+    if (decisionItem === 'Disetujui') summary.itemDisetujui += 1;
+    else if (decisionItem === 'Ditolak') summary.itemDitolak += 1;
   });
 
   rows.forEach(function (row) {
@@ -852,9 +865,12 @@ function handleGetDashboard(data) {
 
     const itemCount = Number(row['Jumlah Item'] || 0);
     const statusItem = normalizeItemApprovalStatus_('', row['Status']);
+    const decisionItem = normalizeItemDecision_('', statusItem, row['Status']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     summary.totalItems += itemCount;
-    if (summary.hasOwnProperty(itemKey)) summary[itemKey] += itemCount;
+    if (summary.hasOwnProperty(itemKey) && statusItem !== 'Disetujui' && statusItem !== 'Ditolak') summary[itemKey] += itemCount;
+    if (decisionItem === 'Disetujui') summary.itemDisetujui += itemCount;
+    else if (decisionItem === 'Ditolak') summary.itemDitolak += itemCount;
   });
 
   rows.sort(function (a, b) {
@@ -873,7 +889,10 @@ function handleGetDashboard(data) {
         noItem: noItem,
         status: itemStatusById[id] && itemStatusById[id][String(noItem)]
           ? itemStatusById[id][String(noItem)]
-          : normalizeItemApprovalStatus_('', row['Status'])
+          : normalizeItemApprovalStatus_('', row['Status']),
+        keputusanItem: itemDecisionById[id] && itemDecisionById[id][String(noItem)]
+          ? itemDecisionById[id][String(noItem)]
+          : normalizeItemDecision_('', '', row['Status'])
       });
     }
 
@@ -1031,12 +1050,20 @@ function handleUpdateItemStatus(data) {
     if (itemRow === -1) throw new Error('Item pengajuan tidak ditemukan');
 
     const now = new Date();
+    const existingDecision = itemCol['Keputusan Item'] !== undefined
+      ? clean_(itemValues[itemRow - 1][itemCol['Keputusan Item']])
+      : '';
+    const decisionBaru = deriveItemDecisionAfterStatusChange_(existingDecision, statusBaru);
     itemSheet.getRange(itemRow, itemCol['Status Item'] + 1).setValue(statusBaru);
     itemSheet.getRange(itemRow, itemCol['Catatan Admin Item'] + 1).setValue(catatanAdmin);
     itemSheet.getRange(itemRow, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
     itemSheet.getRange(itemRow, itemCol['User Update Status Item'] + 1).setValue(session.username);
+    if (itemCol['Keputusan Item'] !== undefined) {
+      itemSheet.getRange(itemRow, itemCol['Keputusan Item'] + 1).setValue(decisionBaru);
+    }
 
     itemValues[itemRow - 1][itemCol['Status Item']] = statusBaru;
+    if (itemCol['Keputusan Item'] !== undefined) itemValues[itemRow - 1][itemCol['Keputusan Item']] = decisionBaru;
 
     // Reuse itemValues yang sudah dibaca di awal untuk hindari getDataRange kedua.
     const refreshedItems = itemValues.slice(1)
@@ -1076,6 +1103,29 @@ function normalizeItemApprovalStatus_(status, fallbackStatus) {
   if (ITEM_APPROVAL_STATUSES.indexOf(fallback) !== -1) return fallback;
 
   return 'Baru';
+}
+
+function normalizeItemDecision_(decision, itemStatus, parentStatus) {
+  const cleanedDecision = clean_(decision);
+  if (ITEM_DECISION_STATUSES.indexOf(cleanedDecision) !== -1) return cleanedDecision;
+
+  const status = clean_(itemStatus);
+  if (status === 'Ditolak') return 'Ditolak';
+  if (status === 'Disetujui' || status === 'Selesai') return 'Disetujui';
+
+  const parent = clean_(parentStatus);
+  if (parent === 'Ditolak') return 'Ditolak';
+  if (['Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'].indexOf(parent) !== -1) return 'Disetujui';
+
+  return '';
+}
+
+function deriveItemDecisionAfterStatusChange_(existingDecision, nextStatus) {
+  const current = clean_(existingDecision);
+  if (ITEM_DECISION_STATUSES.indexOf(current) !== -1 && nextStatus === 'Selesai') return current;
+  if (nextStatus === 'Disetujui' || nextStatus === 'Ditolak') return nextStatus;
+  if (nextStatus === 'Selesai') return 'Disetujui';
+  return '';
 }
 
 function shouldApplyItemDerivedParentStatus_(status) {
@@ -1143,7 +1193,7 @@ function getApprovedItemKeysForPengajuan_(idPengajuan) {
 
   return readObjects_(SHEETS.ITEMS)
     .filter(function (row) {
-      return clean_(row['ID Pengajuan']) === id && normalizeItemApprovalStatus_(row['Status Item'], '') === 'Disetujui';
+      return clean_(row['ID Pengajuan']) === id && normalizeItemDecision_(row['Keputusan Item'], row['Status Item'], '') === 'Disetujui';
     })
     .map(function (row) {
       return warrantyCardKey_(row['ID Pengajuan'], row['No Item']);
@@ -1154,7 +1204,7 @@ function getApprovedItemKeysByPengajuan_() {
   const map = {};
   readObjects_(SHEETS.ITEMS).forEach(function (row) {
     const id = clean_(row['ID Pengajuan']);
-    if (!id || normalizeItemApprovalStatus_(row['Status Item'], '') !== 'Disetujui') return;
+    if (!id || normalizeItemDecision_(row['Keputusan Item'], row['Status Item'], '') !== 'Disetujui') return;
     if (!map[id]) map[id] = [];
     map[id].push(warrantyCardKey_(id, row['No Item']));
   });
@@ -1261,6 +1311,135 @@ function handlePreviewPengajuanLifecycleMigration(data) {
 function handleMigratePengajuanLifecycleFromWarrantyCards(data) {
   const session = requireSession_(data.token, ['admin']);
   return { success: true, data: runPengajuanLifecycleMigration_(session.username, 'Migrasi lifecycle dari WarrantyCards') };
+}
+
+function previewItemDecisionBackfill() {
+  return buildItemDecisionBackfillPreview_();
+}
+
+function backfillItemDecisions() {
+  return runItemDecisionBackfill_('system:migration');
+}
+
+function handlePreviewItemDecisionBackfill(data) {
+  requireSession_(data.token, ['admin']);
+  return { success: true, data: buildItemDecisionBackfillPreview_() };
+}
+
+function handleBackfillItemDecisions(data) {
+  const session = requireSession_(data.token, ['admin']);
+  return { success: true, data: runItemDecisionBackfill_(session.username) };
+}
+
+function buildItemDecisionBackfillPreview_() {
+  ensureRuntimeHeaders_();
+  const changes = getItemDecisionBackfillChanges_();
+  const summary = {
+    totalItems: changes.totalItems,
+    alreadySet: changes.alreadySet,
+    willSet: changes.rows.length,
+    willSetDisetujui: 0,
+    willSetDitolak: 0,
+    unresolved: changes.unresolved.length,
+  };
+
+  changes.rows.forEach(function (row) {
+    if (row.keputusanItem === 'Disetujui') summary.willSetDisetujui += 1;
+    else if (row.keputusanItem === 'Ditolak') summary.willSetDitolak += 1;
+  });
+
+  return {
+    summary: summary,
+    changes: changes.rows,
+    unresolved: changes.unresolved,
+  };
+}
+
+function runItemDecisionBackfill_(actor) {
+  ensureRuntimeHeaders_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const changes = getItemDecisionBackfillChanges_();
+    if (!changes.rows.length) {
+      return { updated: 0, summary: buildItemDecisionBackfillPreview_().summary, changes: [] };
+    }
+
+    const sheet = getSheet_(SHEETS.ITEMS);
+    const values = sheet.getDataRange().getValues();
+    const col = indexMap_(values[0]);
+    const decisionCol = col['Keputusan Item'];
+    if (decisionCol === undefined) throw new Error('Kolom Keputusan Item belum tersedia. Jalankan setupApp atau panggil API sekali agar header dibuat.');
+
+    const rowByKey = {};
+    for (let i = 1; i < values.length; i++) {
+      rowByKey[itemDecisionBackfillKey_(values[i][col['ID Pengajuan']], values[i][col['No Item']])] = i + 1;
+    }
+
+    changes.rows.forEach(function (change) {
+      const rowNumber = rowByKey[itemDecisionBackfillKey_(change.idPengajuan, change.noItem)];
+      if (!rowNumber) return;
+      sheet.getRange(rowNumber, decisionCol + 1).setValue(change.keputusanItem);
+    });
+
+    return {
+      updated: changes.rows.length,
+      actor: clean_(actor) || 'system:migration',
+      summary: buildItemDecisionBackfillPreview_().summary,
+      changes: changes.rows,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getItemDecisionBackfillChanges_() {
+  const parentById = {};
+  readObjects_(SHEETS.PENGAJUAN).forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    if (id) parentById[id] = row;
+  });
+
+  const rows = [];
+  const unresolved = [];
+  let totalItems = 0;
+  let alreadySet = 0;
+
+  readObjects_(SHEETS.ITEMS).forEach(function (item) {
+    totalItems += 1;
+    const id = clean_(item['ID Pengajuan']);
+    const noItem = clean_(item['No Item']);
+    const existingDecision = clean_(item['Keputusan Item']);
+    if (ITEM_DECISION_STATUSES.indexOf(existingDecision) !== -1) {
+      alreadySet += 1;
+      return;
+    }
+
+    const parent = parentById[id] || {};
+    const parentStatus = clean_(parent['Status']);
+    const decision = normalizeItemDecision_('', item['Status Item'], parentStatus);
+    const preview = {
+      idPengajuan: id,
+      noItem: noItem,
+      statusPengajuan: parentStatus,
+      statusItem: clean_(item['Status Item']),
+      keputusanItem: decision,
+    };
+
+    if (decision) rows.push(preview);
+    else unresolved.push(preview);
+  });
+
+  return {
+    totalItems: totalItems,
+    alreadySet: alreadySet,
+    rows: rows,
+    unresolved: unresolved,
+  };
+}
+
+function itemDecisionBackfillKey_(idPengajuan, noItem) {
+  return clean_(idPengajuan) + '::' + clean_(noItem);
 }
 
 function buildPengajuanLifecycleMigrationPreview_() {
@@ -2446,6 +2625,7 @@ function getItemsForPengajuan_(id, fallbackStatus) {
         produkStatus: clean_(row['produk_status']) || 'needs_review',
         produkSumber: clean_(row['produk_sumber']) || '',
         statusItem: normalizeItemApprovalStatus_(row['Status Item'], defaultStatus),
+        keputusanItem: normalizeItemDecision_(row['Keputusan Item'], row['Status Item'], fallbackStatus),
         catatanAdminItem: clean_(row['Catatan Admin Item']),
         tanggalUpdateStatusItem: toIso_(row['Tanggal Update Status Item']),
         userUpdateStatusItem: clean_(row['User Update Status Item']),
@@ -2713,7 +2893,7 @@ function replaceItemRows_(id, items) {
   }
 
   const itemRows = items.map(function (item, index) {
-    return [id, index + 1, item.produk, item.model, item.nomorSeri, item.modelNormalized, item.produkStatus, item.produkSumber, 'Baru', '', '', ''];
+    return [id, index + 1, item.produk, item.model, item.nomorSeri, item.modelNormalized, item.produkStatus, item.produkSumber, 'Baru', '', '', '', ''];
   });
   if (itemRows.length) sheet.getRange(sheet.getLastRow() + 1, 1, itemRows.length, itemRows[0].length).setValues(itemRows);
 }

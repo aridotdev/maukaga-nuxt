@@ -12,6 +12,7 @@ const UButton = resolveComponent('UButton')
 
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
 type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
 
 type DashboardPengajuanSourceRow = {
   idPengajuan: string
@@ -23,6 +24,7 @@ type DashboardPengajuanSourceRow = {
   itemStatuses?: Array<{
     noItem: number | string
     status: DashboardItemStatus | string
+    keputusanItem?: DashboardItemDecision | string
   }>
 }
 
@@ -36,6 +38,7 @@ type DashboardPengajuanRow = {
   bagianCabang: string
   jumlahItem: number | string
   status: DashboardItemStatus | string
+  keputusanItem: DashboardItemDecision | string
   pengajuanStatus: DashboardStatus | string
 }
 
@@ -92,6 +95,7 @@ const pengajuanTableGlobalFilterOptions = {
       row.original.bagianCabang,
       row.original.jumlahItem,
       row.original.status,
+      row.original.keputusanItem,
       row.original.pengajuanStatus
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
   }
@@ -114,7 +118,7 @@ const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
         row.bagianCabang,
         row.jumlahItem,
         row.status,
-        ...getItemStatuses(row).map(item => item.status)
+        ...getItemStatuses(row).flatMap(item => [item.status, item.keputusanItem])
       ].some((value) => String(value || '').toLowerCase().includes(keyword))
     })
     .sort((a, b) => getTime(b.timestampSubmit) - getTime(a.timestampSubmit))
@@ -133,11 +137,12 @@ const explodedRows = computed<DashboardPengajuanRow[]>(() => {
         bagianCabang: parent.bagianCabang,
         jumlahItem: parent.jumlahItem,
         status: itemStatus.status,
+        keputusanItem: itemStatus.keputusanItem,
         pengajuanStatus: parent.status
       })
     }
   })
-  return out.filter((row) => statusFilter.value === 'all' || row.status === statusFilter.value)
+  return out.filter((row) => matchesStatusFilter(row, statusFilter.value))
 })
 
 const filteredPengajuanCount = computed(() => new Set(explodedRows.value.map(row => row.idPengajuan)).size)
@@ -188,12 +193,22 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'status',
   header: 'Status',
   meta: { class: { th: 'w-[14%]', td: 'w-[14%]' } },
-  cell: ({ row }) => h(UBadge, {
-    color: getStatusColor(row.original.status),
-    variant: 'subtle',
-    label: row.original.status,
-    class: 'font-semibold'
-  })
+  cell: ({ row }) => h('div', { class: 'flex flex-col items-start gap-1' }, [
+    h(UBadge, {
+      color: getStatusColor(row.original.status),
+      variant: 'subtle',
+      label: row.original.status,
+      class: 'font-semibold'
+    }),
+    row.original.keputusanItem && row.original.keputusanItem !== row.original.status
+      ? h(UBadge, {
+          color: getStatusColor(row.original.keputusanItem),
+          variant: 'outline',
+          label: `Keputusan: ${row.original.keputusanItem}`,
+          class: 'font-medium'
+        })
+      : null
+  ])
 }, {
   id: 'actions',
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
@@ -269,13 +284,22 @@ function getStatusColor(status: string) {
   return colors[status] || 'neutral'
 }
 
+function matchesStatusFilter(row: DashboardPengajuanRow, filter: 'all' | DashboardItemStatus) {
+  if (filter === 'all') return true
+  if (filter === 'Disetujui' || filter === 'Ditolak') {
+    return row.keputusanItem === filter || row.status === filter
+  }
+  return row.status === filter
+}
+
 function getItemStatuses(row: DashboardPengajuanSourceRow) {
   const statuses = row.itemStatuses || []
   if (statuses.length) {
     return [...statuses]
       .map((item, index) => ({
         noItem: item.noItem || index + 1,
-        status: normalizeItemStatus(item.status, row.status)
+        status: normalizeItemStatus(item.status, row.status),
+        keputusanItem: normalizeItemDecision(item.keputusanItem, item.status, row.status)
       }))
       .sort((a, b) => Number(a.noItem) - Number(b.noItem))
   }
@@ -283,7 +307,8 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
   const total = clampItemCount(row.jumlahItem)
   return Array.from({ length: total }, (_, index) => ({
     noItem: index + 1,
-    status: normalizeItemStatus('', row.status)
+    status: normalizeItemStatus('', row.status),
+    keputusanItem: normalizeItemDecision('', '', row.status)
   }))
 }
 
@@ -291,6 +316,21 @@ function normalizeItemStatus(status: string, fallbackStatus: string): DashboardI
   const value = String(status || fallbackStatus || '').trim()
   if (value === 'Disetujui' || value === 'Ditolak' || value === 'Selesai') return value
   return 'Baru'
+}
+
+function normalizeItemDecision(decision: string | undefined, status: string, fallbackStatus: string): DashboardItemDecision {
+  const value = String(decision || '').trim()
+  if (value === 'Disetujui' || value === 'Ditolak') return value
+
+  const itemStatus = String(status || '').trim()
+  if (itemStatus === 'Ditolak') return 'Ditolak'
+  if (itemStatus === 'Disetujui' || itemStatus === 'Selesai') return 'Disetujui'
+
+  const parentStatus = String(fallbackStatus || '').trim()
+  if (parentStatus === 'Ditolak') return 'Ditolak'
+  if (['Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'].includes(parentStatus)) return 'Disetujui'
+
+  return ''
 }
 
 function clampItemCount(value: number | string): number {

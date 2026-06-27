@@ -11,6 +11,7 @@ const DETAIL_TTL = 60_000
 
 export type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
 export type ItemApprovalStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+export type ItemDecisionStatus = 'Disetujui' | 'Ditolak' | ''
 
 type RiwayatStatus = {
   timestamp?: string
@@ -30,6 +31,7 @@ export type DetailItem = {
   produkStatus?: string
   produkSumber?: string
   statusItem?: ItemApprovalStatus
+  keputusanItem?: ItemDecisionStatus | string
   catatanAdminItem?: string
   tanggalUpdateStatusItem?: string
   userUpdateStatusItem?: string
@@ -89,6 +91,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
         return {
           ...it,
           statusItem: statusBaru,
+          keputusanItem: deriveItemDecision(it.keputusanItem, statusBaru),
           catatanAdminItem: catatanAdmin,
           tanggalUpdateStatusItem: new Date().toISOString()
         }
@@ -98,6 +101,13 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
       return { ...current, items }
     })
     invalidate('getDashboard')
+  }
+
+  function deriveItemDecision(existingDecision: string | undefined, nextStatus: ItemApprovalStatus): ItemDecisionStatus {
+    const current = existingDecision === 'Disetujui' || existingDecision === 'Ditolak' ? existingDecision : ''
+    if (nextStatus === 'Selesai') return current || 'Disetujui'
+    if (nextStatus === 'Disetujui' || nextStatus === 'Ditolak') return nextStatus
+    return ''
   }
 
   async function setItemStatus(

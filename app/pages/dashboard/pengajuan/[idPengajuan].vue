@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { DetailItem, ItemApprovalStatus, PengajuanStatus } from '~/composables/usePengajuanDetail'
+import type { DetailItem, ItemApprovalStatus, ItemDecisionStatus, PengajuanStatus } from '~/composables/usePengajuanDetail'
 
 definePageMeta({
   layout: 'dashboard',
@@ -446,6 +446,16 @@ function getItemStatus(item: DetailItem): ItemApprovalStatus {
   return isItemApprovalStatus(status) ? status : 'Baru'
 }
 
+function getItemDecision(item: DetailItem): ItemDecisionStatus {
+  const decision = String(item.keputusanItem || '').trim()
+  if (decision === 'Disetujui' || decision === 'Ditolak') return decision
+
+  const status = getItemStatus(item)
+  if (status === 'Ditolak') return 'Ditolak'
+  if (status === 'Disetujui' || status === 'Selesai') return 'Disetujui'
+  return ''
+}
+
 function normalizeRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] || '' : value || ''
 }
@@ -660,6 +670,13 @@ function formatDateTime(value: string | undefined) {
                           :color="getStatusColor(getItemStatus(item))"
                           variant="soft"
                           :label="getItemStatus(item)"
+                          class="font-semibold"
+                        />
+                        <UBadge
+                          v-if="getItemDecision(item) && getItemDecision(item) !== getItemStatus(item)"
+                          :color="getStatusColor(getItemDecision(item))"
+                          variant="outline"
+                          :label="`Keputusan: ${getItemDecision(item)}`"
                           class="font-semibold"
                         />
                         <UBadge

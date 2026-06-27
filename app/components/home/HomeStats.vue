@@ -35,11 +35,11 @@ const stats = computed(() => [{
   icon: 'i-lucide-file-plus',
   value: Number(summary.value.baru || 0)
 }, {
-  title: 'Disetujui',
+  title: 'Item Disetujui',
   icon: 'i-lucide-circle-check',
   value: approvedItems.value
 }, {
-  title: 'Ditolak',
+  title: 'Item Ditolak',
   icon: 'i-lucide-x-circle',
   value: rejectedItems.value
 }])
