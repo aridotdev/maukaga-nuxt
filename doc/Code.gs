@@ -890,9 +890,9 @@ function handleGetDashboard(data) {
         status: itemStatusById[id] && itemStatusById[id][String(noItem)]
           ? itemStatusById[id][String(noItem)]
           : normalizeItemApprovalStatus_('', row['Status']),
-        keputusanItem: itemDecisionById[id] && itemDecisionById[id][String(noItem)]
+        keputusanItem: itemDecisionById[id] && Object.prototype.hasOwnProperty.call(itemDecisionById[id], String(noItem))
           ? itemDecisionById[id][String(noItem)]
-          : normalizeItemDecision_('', '', row['Status'])
+          : ''
       });
     }
 

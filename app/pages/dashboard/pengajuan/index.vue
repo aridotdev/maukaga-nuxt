@@ -163,7 +163,7 @@ const pengajuanItemsPerPage = computed<number>(() =>
 const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'idPengajuan',
   header: 'ID Pengajuan',
-  meta: { class: { th: 'w-[18%]', td: 'w-[18%]' } },
+  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
   cell: ({ row }) => h('span', { class: 'font-mono text-sm font-semibold' }, row.original.idPengajuan)
 }, {
   accessorKey: 'noItem',
@@ -173,46 +173,48 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
 }, {
   accessorKey: 'timestampSubmit',
   header: 'Waktu Submit',
-  meta: { class: { th: 'w-[17%]', td: 'w-[17%]' } },
+  meta: { class: { th: 'w-[15%]', td: 'w-[15%]' } },
   cell: ({ row }) => h('span', { class: '' }, formatSubmitTime(row.original.timestampSubmit))
 }, {
   accessorKey: 'nama',
   header: 'Nama',
-  meta: { class: { th: 'w-[24%]', td: 'w-[24%]' } },
+  meta: { class: { th: 'w-[20%]', td: 'w-[20%]' } },
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'text-muted font-semibold' }, row.original.nama || '-')
   ])
 }, {
   accessorKey: 'bagianCabang',
   header: 'Cabang',
-  meta: { class: { th: 'w-[24%]', td: 'w-[24%]' } },
+  meta: { class: { th: 'w-[20%]', td: 'w-[20%]' } },
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'uppercase' }, row.original.bagianCabang || '-')
   ])
 }, {
   accessorKey: 'status',
   header: 'Status',
-  meta: { class: { th: 'w-[14%]', td: 'w-[14%]' } },
-  cell: ({ row }) => h('div', { class: 'flex flex-col items-start gap-1' }, [
-    h(UBadge, {
-      color: getStatusColor(row.original.status),
-      variant: 'subtle',
-      label: row.original.status,
-      class: 'font-semibold'
-    }),
-    row.original.keputusanItem && row.original.keputusanItem !== row.original.status
-      ? h(UBadge, {
-          color: getStatusColor(row.original.keputusanItem),
-          variant: 'outline',
-          label: `Keputusan: ${row.original.keputusanItem}`,
-          class: 'font-medium'
-        })
-      : null
-  ])
+  meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
+  cell: ({ row }) => h(UBadge, {
+    color: getStatusColor(row.original.status),
+    variant: 'subtle',
+    label: row.original.status,
+    class: 'font-semibold'
+  })
+}, {
+  accessorKey: 'keputusanItem',
+  header: 'Keputusan',
+  meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
+  cell: ({ row }) => row.original.keputusanItem
+    ? h(UBadge, {
+        color: getStatusColor(row.original.keputusanItem),
+        variant: 'outline',
+        label: row.original.keputusanItem,
+        class: 'font-semibold'
+      })
+    : h('span', { class: 'text-sm text-muted' }, '-')
 }, {
   id: 'actions',
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
-  meta: { class: { th: 'w-[14%]', td: 'w-[14%]' } },
+  meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
   cell: ({ row }) => h('div', { class: 'flex justify-end' }, [
     h(UButton, {
       label: 'Detail',
@@ -299,7 +301,7 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
       .map((item, index) => ({
         noItem: item.noItem || index + 1,
         status: normalizeItemStatus(item.status, row.status),
-        keputusanItem: normalizeItemDecision(item.keputusanItem, item.status, row.status)
+        keputusanItem: normalizeItemDecision(item.keputusanItem)
       }))
       .sort((a, b) => Number(a.noItem) - Number(b.noItem))
   }
@@ -308,7 +310,7 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
   return Array.from({ length: total }, (_, index) => ({
     noItem: index + 1,
     status: normalizeItemStatus('', row.status),
-    keputusanItem: normalizeItemDecision('', '', row.status)
+    keputusanItem: normalizeItemDecision('')
   }))
 }
 
@@ -318,18 +320,9 @@ function normalizeItemStatus(status: string, fallbackStatus: string): DashboardI
   return 'Baru'
 }
 
-function normalizeItemDecision(decision: string | undefined, status: string, fallbackStatus: string): DashboardItemDecision {
+function normalizeItemDecision(decision: string | undefined): DashboardItemDecision {
   const value = String(decision || '').trim()
   if (value === 'Disetujui' || value === 'Ditolak') return value
-
-  const itemStatus = String(status || '').trim()
-  if (itemStatus === 'Ditolak') return 'Ditolak'
-  if (itemStatus === 'Disetujui' || itemStatus === 'Selesai') return 'Disetujui'
-
-  const parentStatus = String(fallbackStatus || '').trim()
-  if (parentStatus === 'Ditolak') return 'Ditolak'
-  if (['Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'].includes(parentStatus)) return 'Disetujui'
-
   return ''
 }
 
