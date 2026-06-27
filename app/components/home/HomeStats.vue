@@ -11,16 +11,18 @@ const totalItems = computed(() => {
 const approvedItems = computed(() => {
   if (summary.value.itemDisetujui !== undefined) return Number(summary.value.itemDisetujui || 0)
   return rows.value
-    .filter((row) => row.status === 'Disetujui')
-    .reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+    .reduce((total, row) => total + countItemDecisions(row, 'Disetujui'), 0)
 })
 
 const rejectedItems = computed(() => {
   if (summary.value.itemDitolak !== undefined) return Number(summary.value.itemDitolak || 0)
   return rows.value
-    .filter((row) => row.status === 'Ditolak')
-    .reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
+    .reduce((total, row) => total + countItemDecisions(row, 'Ditolak'), 0)
 })
+
+function countItemDecisions(row: { itemStatuses?: Array<{ keputusanItem?: string }> }, decision: 'Disetujui' | 'Ditolak') {
+  return (row.itemStatuses || []).filter((item) => item.keputusanItem === decision).length
+}
 
 const stats = computed(() => [{
   title: 'Total Pengajuan',

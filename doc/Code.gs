@@ -843,7 +843,7 @@ function handleGetDashboard(data) {
     if (!parent) return;
 
     const statusItem = normalizeItemApprovalStatus_(item['Status Item'], parent['Status']);
-    const decisionItem = normalizeItemDecision_(item['Keputusan Item'], item['Status Item'], parent['Status']);
+    const decisionItem = normalizeExplicitItemDecision_(item['Keputusan Item']);
     const noItem = clean_(item['No Item']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     itemCountById[id] = (itemCountById[id] || 0) + 1;
@@ -865,7 +865,7 @@ function handleGetDashboard(data) {
 
     const itemCount = Number(row['Jumlah Item'] || 0);
     const statusItem = normalizeItemApprovalStatus_('', row['Status']);
-    const decisionItem = normalizeItemDecision_('', statusItem, row['Status']);
+    const decisionItem = normalizeExplicitItemDecision_('');
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     summary.totalItems += itemCount;
     if (summary.hasOwnProperty(itemKey) && statusItem !== 'Disetujui' && statusItem !== 'Ditolak') summary[itemKey] += itemCount;
@@ -1118,6 +1118,11 @@ function normalizeItemDecision_(decision, itemStatus, parentStatus) {
   if (['Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'].indexOf(parent) !== -1) return 'Disetujui';
 
   return '';
+}
+
+function normalizeExplicitItemDecision_(decision) {
+  const cleanedDecision = clean_(decision);
+  return ITEM_DECISION_STATUSES.indexOf(cleanedDecision) !== -1 ? cleanedDecision : '';
 }
 
 function deriveItemDecisionAfterStatusChange_(existingDecision, nextStatus) {
