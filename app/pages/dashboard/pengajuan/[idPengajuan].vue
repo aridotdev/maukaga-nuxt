@@ -32,10 +32,11 @@ type RiwayatStatus = {
   user?: string
 }
 
-type ItemStatusForm = {
-  statusBaru: ItemApprovalStatus
+type ItemDecisionForm = {
+  keputusanItem: ItemDecisionStatus
   catatanAdmin: string
   isSubmitting: boolean
+  isCompleting: boolean
   error: string
   notice: string
 }
@@ -75,6 +76,7 @@ type EvidenceAttachmentLink = {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const { isAdmin, isQrcc } = useUserProfile()
 
 const idPengajuan = computed(() => normalizeRouteParam(route.params.idPengajuan))
 
@@ -84,13 +86,14 @@ const {
   error: queryError,
   isLoading,
   load,
-  setItemStatus,
+  setItemDecision,
+  completeItem,
   setPengajuanStatus
 } = usePengajuanDetail(() => idPengajuan.value)
 
 const loadError = computed(() => queryError.value || '')
 
-const itemForms = ref<Record<string, ItemStatusForm>>({})
+const itemForms = ref<Record<string, ItemDecisionForm>>({})
 const pengajuanForm = reactive<PengajuanStatusForm>({
   statusBaru: 'Baru',
   catatanAdmin: '',
@@ -115,10 +118,18 @@ const pengajuanStatusItems = PENGAJUAN_STATUSES.map((status) => ({
   value: status
 }))
 
-const itemStatusItems = ITEM_APPROVAL_STATUSES.map((status) => ({
-  label: status,
-  value: status
-}))
+const itemDecisionItems: Array<{ label: string, value: ItemDecisionStatus }> = [{
+  label: 'Belum Diputuskan',
+  value: ''
+}, {
+  label: 'Disetujui',
+  value: 'Disetujui'
+}, {
+  label: 'Ditolak',
+  value: 'Ditolak'
+}]
+
+const canReviewItems = computed(() => isAdmin.value || isQrcc.value)
 
 const hasUnverifiedItems = computed(() => {
   return (detail.value?.items || []).some((item) => !isProductVerified(item.produkStatus))
@@ -215,14 +226,15 @@ watch(showConfirmDialog, (open) => {
 })
 
 function initItemForms(items: DetailItem[]) {
-  const nextForms: Record<string, ItemStatusForm> = {}
+  const nextForms: Record<string, ItemDecisionForm> = {}
 
   items.forEach((item) => {
     const key = getItemKey(item)
     nextForms[key] = {
-      statusBaru: getItemStatus(item),
+      keputusanItem: getItemDecision(item),
       catatanAdmin: item.catatanAdminItem || '',
       isSubmitting: false,
+      isCompleting: false,
       error: '',
       notice: ''
     }
@@ -231,7 +243,7 @@ function initItemForms(items: DetailItem[]) {
   itemForms.value = nextForms
 }
 
-async function submitItemStatus(item: DetailItem) {
+async function submitItemDecision(item: DetailItem) {
   if (!detail.value) return
 
   const key = getItemKey(item)
@@ -242,9 +254,10 @@ async function submitItemStatus(item: DetailItem) {
   statusForm.error = ''
   statusForm.notice = ''
 
-  const statusBaru = statusForm.statusBaru
+  const keputusanBaru = statusForm.keputusanItem
   const catatanAdmin = statusForm.catatanAdmin.trim()
-  const statusLama = getItemStatus(item)
+  const keputusanLama = getItemDecision(item)
+  const catatanLama = String(item.catatanAdminItem || '').trim()
   const noItem = item.noItem
 
   if (!noItem) {
@@ -253,35 +266,40 @@ async function submitItemStatus(item: DetailItem) {
   }
   const itemNo = noItem
 
-  if (!isItemApprovalStatus(statusBaru)) {
-    statusForm.error = 'Status tidak valid.'
+  if (!isItemDecisionStatus(keputusanBaru)) {
+    statusForm.error = 'Keputusan item tidak valid.'
     return
   }
 
-  if (statusBaru === statusLama) {
+  if (getItemStatus(item) === 'Selesai' && keputusanBaru !== keputusanLama) {
+    statusForm.error = 'Item sudah Selesai. Keputusan tidak bisa diubah dari halaman ini.'
+    return
+  }
+
+  if (keputusanBaru === keputusanLama && catatanAdmin === catatanLama) {
     toast.add({
-        title: 'Status item tidak berubah',
-        description: `Tidak ada perubahan status untuk disimpan.`,
+        title: 'Keputusan item tidak berubah',
+        description: 'Tidak ada perubahan untuk disimpan.',
         color: 'info',
         icon: 'i-lucide-info'
       })
     return
   }
 
-  if (statusBaru === 'Ditolak' && !catatanAdmin) {
-    statusForm.error = 'Catatan Admin wajib diisi jika status Ditolak.'
+  if (keputusanBaru === 'Ditolak' && !catatanAdmin) {
+    statusForm.error = 'Catatan Admin wajib diisi jika keputusan Ditolak.'
     return
   }
 
-  async function saveItemStatus() {
+  async function saveItemDecision() {
     statusForm.isSubmitting = true
 
     try {
-      await setItemStatus(itemNo, statusBaru, catatanAdmin)
+      await setItemDecision(itemNo, keputusanBaru, catatanAdmin)
 
       toast.add({
-        title: 'Status item berhasil disimpan',
-        description: `Item #${itemNo} diperbarui menjadi ${statusBaru}.`,
+        title: 'Keputusan item berhasil disimpan',
+        description: `Item #${itemNo} diperbarui menjadi ${getItemDecisionLabel(keputusanBaru)}.`,
         color: 'success',
         icon: 'i-lucide-circle-check'
       })
@@ -294,18 +312,76 @@ async function submitItemStatus(item: DetailItem) {
     }
   }
 
-  const confirmMessage = getTransitionConfirmMessage(statusLama, statusBaru, itemNo)
+  const confirmMessage = getDecisionConfirmMessage(keputusanLama, keputusanBaru, itemNo)
   if (confirmMessage) {
     openConfirmDialog({
-      title: 'Konfirmasi Status Item',
+      title: 'Konfirmasi Keputusan Item',
       description: confirmMessage,
-      confirmColor: statusBaru === 'Ditolak' ? 'error' : 'primary',
-      onConfirm: saveItemStatus
+      confirmColor: keputusanBaru === 'Ditolak' ? 'error' : 'primary',
+      onConfirm: saveItemDecision
     })
     return
   }
 
-  await saveItemStatus()
+  await saveItemDecision()
+}
+
+async function submitCompleteItem(item: DetailItem) {
+  const key = getItemKey(item)
+  const form = itemForms.value[key]
+  if (!form) return
+
+  form.error = ''
+  form.notice = ''
+
+  const noItem = item.noItem
+  if (!noItem) {
+    form.error = 'No Item tidak valid.'
+    return
+  }
+  const itemNo = noItem
+  const itemForm = form
+
+  if (getItemDecision(item) !== 'Disetujui') {
+    itemForm.error = 'Item harus diputuskan Disetujui sebelum bisa ditandai Selesai.'
+    return
+  }
+
+  if (getItemStatus(item) === 'Selesai') {
+    toast.add({
+      title: 'Item sudah selesai',
+      description: `Item #${itemNo} sudah berstatus Selesai.`,
+      color: 'info',
+      icon: 'i-lucide-info'
+    })
+    return
+  }
+
+  async function saveCompleteItem() {
+    itemForm.isCompleting = true
+
+    try {
+      await completeItem(itemNo, itemForm.catatanAdmin.trim())
+      toast.add({
+        title: 'Item ditandai selesai',
+        description: `Item #${itemNo} diperbarui menjadi Selesai.`,
+        color: 'success',
+        icon: 'i-lucide-circle-check'
+      })
+      itemForm.notice = 'Item selesai.'
+    } catch (err) {
+      itemForm.error = err instanceof Error ? err.message : String(err)
+    } finally {
+      itemForm.isCompleting = false
+    }
+  }
+
+  openConfirmDialog({
+    title: 'Konfirmasi Item Selesai',
+    description: `Tandai item #${itemNo} sebagai Selesai? Pastikan proses kartu garansi untuk item ini sudah selesai.`,
+    confirmColor: 'success',
+    onConfirm: saveCompleteItem
+  })
 }
 
 async function submitPengajuanStatus() {
@@ -402,26 +478,6 @@ async function confirmPendingAction() {
   }
 }
 
-function getTransitionConfirmMessage(currentStatus: ItemApprovalStatus, nextStatus: ItemApprovalStatus, noItem: number | string) {
-  if (currentStatus === 'Disetujui' && nextStatus === 'Selesai') {
-    return `Tandai item #${noItem} sebagai Selesai? Pastikan proses kartu garansi untuk item ini sudah selesai.`
-  }
-
-  if (currentStatus === 'Disetujui' && nextStatus === 'Ditolak') {
-    return `Item #${noItem} sudah disetujui. Yakin ingin mengubahnya menjadi Ditolak?`
-  }
-
-  if (currentStatus === 'Ditolak' && nextStatus === 'Disetujui') {
-    return `Item #${noItem} sebelumnya ditolak. Yakin ingin menyetujuinya?`
-  }
-
-  if (currentStatus === 'Selesai') {
-    return `Item #${noItem} sudah Selesai. Yakin ingin membuka ulang statusnya?`
-  }
-
-  return ''
-}
-
 function getItemKey(item: DetailItem) {
   return String(item.noItem || '')
 }
@@ -430,29 +486,56 @@ function getItemForm(item: DetailItem) {
   const key = getItemKey(item)
   if (!itemForms.value[key]) {
     itemForms.value[key] = {
-      statusBaru: getItemStatus(item),
+      keputusanItem: getItemDecision(item),
       catatanAdmin: item.catatanAdminItem || '',
       isSubmitting: false,
+      isCompleting: false,
       error: '',
       notice: ''
     }
   }
 
-  return itemForms.value[key] as ItemStatusForm
+  return itemForms.value[key] as ItemDecisionForm
 }
 
 function getItemStatus(item: DetailItem): ItemApprovalStatus {
-  const status = item.statusItem || detail.value?.status || 'Baru'
+  const status = item.statusItem || ''
   return isItemApprovalStatus(status) ? status : 'Baru'
 }
 
 function getItemDecision(item: DetailItem): ItemDecisionStatus {
   const decision = String(item.keputusanItem || '').trim()
   if (decision === 'Disetujui' || decision === 'Ditolak') return decision
+  return ''
+}
 
-  const status = getItemStatus(item)
-  if (status === 'Ditolak') return 'Ditolak'
-  if (status === 'Disetujui' || status === 'Selesai') return 'Disetujui'
+function getItemDecisionLabel(decision: ItemDecisionStatus) {
+  return decision || 'Belum Diputuskan'
+}
+
+function getItemDecisionColor(decision: ItemDecisionStatus): StatusColor {
+  if (decision === 'Disetujui') return 'success'
+  if (decision === 'Ditolak') return 'error'
+  return 'neutral'
+}
+
+function getDecisionConfirmMessage(currentDecision: ItemDecisionStatus, nextDecision: ItemDecisionStatus, noItem: number | string) {
+  if (currentDecision === 'Disetujui' && nextDecision === 'Ditolak') {
+    return `Item #${noItem} sudah disetujui. Yakin ingin mengubah keputusannya menjadi Ditolak?`
+  }
+
+  if (currentDecision === 'Ditolak' && nextDecision === 'Disetujui') {
+    return `Item #${noItem} sebelumnya ditolak. Yakin ingin menyetujuinya?`
+  }
+
+  if (currentDecision && !nextDecision) {
+    return `Kosongkan keputusan item #${noItem}? Status item akan kembali menjadi Baru.`
+  }
+
+  if (nextDecision === 'Ditolak') {
+    return `Tolak item #${noItem}? Pastikan catatan admin sudah menjelaskan alasannya.`
+  }
+
   return ''
 }
 
@@ -466,6 +549,10 @@ function isPengajuanStatus(status: string): status is PengajuanStatus {
 
 function isItemApprovalStatus(status: string): status is ItemApprovalStatus {
   return ITEM_APPROVAL_STATUSES.includes(status as ItemApprovalStatus)
+}
+
+function isItemDecisionStatus(status: string): status is ItemDecisionStatus {
+  return status === '' || status === 'Disetujui' || status === 'Ditolak'
 }
 
 function isProductVerified(status: string | undefined) {
@@ -669,14 +756,13 @@ function formatDateTime(value: string | undefined) {
                         <UBadge
                           :color="getStatusColor(getItemStatus(item))"
                           variant="soft"
-                          :label="getItemStatus(item)"
+                          :label="`Status: ${getItemStatus(item)}`"
                           class="font-semibold"
                         />
                         <UBadge
-                          v-if="getItemDecision(item) && getItemDecision(item) !== getItemStatus(item)"
-                          :color="getStatusColor(getItemDecision(item))"
+                          :color="getItemDecisionColor(getItemDecision(item))"
                           variant="outline"
-                          :label="`Keputusan: ${getItemDecision(item)}`"
+                          :label="`Keputusan: ${getItemDecisionLabel(getItemDecision(item))}`"
                           class="font-semibold"
                         />
                         <UBadge
@@ -722,14 +808,16 @@ function formatDateTime(value: string | undefined) {
                   />
 
                   <form
+                    v-if="canReviewItems"
                     class="mt-4 flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:gap-6"
-                    @submit.prevent="submitItemStatus(item)"
+                    @submit.prevent="submitItemDecision(item)"
                   >
-                    <UFormField label="Ubah Status Ke" :name="`status-${getItemKey(item)}`" class="w-full lg:w-32">
+                    <UFormField label="Keputusan Item" :name="`keputusan-${getItemKey(item)}`" class="w-full lg:w-44">
                       <USelect
-                        v-model="getItemForm(item).statusBaru"
-                        :items="itemStatusItems"
+                        v-model="getItemForm(item).keputusanItem"
+                        :items="itemDecisionItems"
                         class="w-full"
+                        :disabled="getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
                       />
                     </UFormField>
 
@@ -744,12 +832,24 @@ function formatDateTime(value: string | undefined) {
 
                     <UButton
                       type="submit"
-                      label="Simpan Item"
+                      label="Simpan Keputusan"
                       icon="i-lucide-check"
                       color="primary"
                       class="h-8 w-full flex-none self-start lg:mt-6 lg:w-auto"
                       :loading="getItemForm(item).isSubmitting"
-                      :disabled="getItemForm(item).isSubmitting"
+                      :disabled="getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
+                    />
+
+                    <UButton
+                      type="button"
+                      label="Tandai Selesai"
+                      icon="i-lucide-circle-check"
+                      color="success"
+                      variant="outline"
+                      class="h-8 w-full flex-none self-start lg:mt-6 lg:w-auto"
+                      :loading="getItemForm(item).isCompleting"
+                      :disabled="getItemDecision(item) !== 'Disetujui' || getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
+                      @click="submitCompleteItem(item)"
                     />
                   </form>
                 </div>

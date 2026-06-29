@@ -4,7 +4,8 @@
  * request berulang ke Apps Script dalam window TTL.
  *
  * - `getDetail(id)`: load detail
- * - `setItemStatus(noItem, status, catatan)`: update + invalidate cache
+ * - `setItemDecision(noItem, keputusan, catatan)`: update keputusan item + invalidate cache
+ * - `completeItem(noItem, catatan)`: tandai item approved sebagai selesai
  */
 
 const DETAIL_TTL = 60_000
@@ -83,48 +84,51 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 
   // Patch lokal untuk optimistic update + invalidate cache 'getDashboard'
   // sehingga list di halaman lain ikut segar.
-  function patchItem(noItem: number | string, statusBaru: ItemApprovalStatus, catatanAdmin: string) {
+  function patchItem(
+    noItem: number | string,
+    patch: Pick<DetailItem, 'statusItem' | 'keputusanItem' | 'catatanAdminItem' | 'tanggalUpdateStatusItem'>
+  ) {
     query.mutate((current) => {
       if (!current || !Array.isArray(current.items)) return current
       const items = current.items.map((it) => {
         if (String(it.noItem) !== String(noItem)) return it
-        return {
-          ...it,
-          statusItem: statusBaru,
-          keputusanItem: deriveItemDecision(it.keputusanItem, statusBaru),
-          catatanAdminItem: catatanAdmin,
-          tanggalUpdateStatusItem: new Date().toISOString()
-        }
+        return { ...it, ...patch }
       })
-      // Ringkasan status parent (sederhana): kalau semua Ditolak → Ditolak,
-      // kalau ada Disetujui → Disetujui, else 'Baru' (di-handle server sebenarnya).
       return { ...current, items }
     })
     invalidate('getDashboard')
   }
 
-  function deriveItemDecision(existingDecision: string | undefined, nextStatus: ItemApprovalStatus): ItemDecisionStatus {
-    const current = existingDecision === 'Disetujui' || existingDecision === 'Ditolak' ? existingDecision : ''
-    if (nextStatus === 'Selesai') return current || 'Disetujui'
-    if (nextStatus === 'Disetujui' || nextStatus === 'Ditolak') return nextStatus
+  function deriveItemStatusFromDecision(decision: ItemDecisionStatus): ItemApprovalStatus {
+    if (decision === 'Disetujui' || decision === 'Ditolak') return decision
+    return 'Baru'
+  }
+
+  function normalizeItemDecision(decision: string): ItemDecisionStatus {
+    if (decision === 'Disetujui' || decision === 'Ditolak') return decision
     return ''
   }
 
-  async function setItemStatus(
+  async function setItemDecision(
     noItem: number | string,
-    statusBaru: ItemApprovalStatus,
+    keputusanItem: ItemDecisionStatus,
     catatanAdmin: string
   ) {
     if (!id.value) throw new Error('ID Pengajuan tidak valid.')
 
-    // Optimistic: patch dulu.
-    patchItem(noItem, statusBaru, catatanAdmin)
+    const decision = normalizeItemDecision(keputusanItem)
+    patchItem(noItem, {
+      statusItem: deriveItemStatusFromDecision(decision),
+      keputusanItem: decision,
+      catatanAdminItem: catatanAdmin,
+      tanggalUpdateStatusItem: new Date().toISOString()
+    })
 
     try {
       await callApi<Record<string, never>>('updateItemStatus', {
         idPengajuan: id.value,
         noItem,
-        statusBaru,
+        keputusanItem: decision,
         catatanAdmin
       })
 
@@ -134,7 +138,41 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     } catch (err) {
       // Rollback dengan fetch ulang.
       toast.add({
-        title: 'Gagal memperbarui status',
+        title: 'Gagal memperbarui keputusan item',
+        description: err instanceof Error ? err.message : String(err),
+        color: 'error',
+        icon: 'i-lucide-circle-alert'
+      })
+      void query.refresh()
+      throw err
+    }
+  }
+
+  async function completeItem(noItem: number | string, catatanAdmin: string) {
+    if (!id.value) throw new Error('ID Pengajuan tidak valid.')
+
+    const currentItem = query.data.value?.items?.find((item) => String(item.noItem) === String(noItem))
+    const decision = normalizeItemDecision(String(currentItem?.keputusanItem || ''))
+
+    patchItem(noItem, {
+      statusItem: 'Selesai',
+      keputusanItem: decision,
+      catatanAdminItem: catatanAdmin,
+      tanggalUpdateStatusItem: new Date().toISOString()
+    })
+
+    try {
+      await callApi<Record<string, never>>('updateItemStatus', {
+        idPengajuan: id.value,
+        noItem,
+        statusBaru: 'Selesai',
+        catatanAdmin
+      })
+
+      void query.refresh()
+    } catch (err) {
+      toast.add({
+        title: 'Gagal menandai item selesai',
         description: err instanceof Error ? err.message : String(err),
         color: 'error',
         icon: 'i-lucide-circle-alert'
@@ -186,7 +224,8 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     load,
     refresh: query.refresh,
     invalidate: query.invalidate,
-    setItemStatus,
+    setItemDecision,
+    completeItem,
     setPengajuanStatus,
     getParams
   }

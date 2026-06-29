@@ -515,8 +515,8 @@ function handleCheckPengajuanStatus(data) {
     throw new Error('Status pengajuan tidak bisa ditampilkan.');
   }
 
-  const itemStatus = matchedItem ? clean_(matchedItem['Status Item']) : '';
   const itemDecision = matchedItem ? normalizeItemDecision_(matchedItem['Keputusan Item'], matchedItem['Status Item'], parentStatus) : '';
+  const itemStatus = matchedItem ? deriveItemStatusFromDecision_(itemDecision, matchedItem['Status Item']) : '';
   const status = parentStatus;
 
   return {
@@ -842,8 +842,8 @@ function handleGetDashboard(data) {
     const parent = rowById[id];
     if (!parent) return;
 
-    const statusItem = normalizeItemApprovalStatus_(item['Status Item'], parent['Status']);
     const decisionItem = normalizeExplicitItemDecision_(item['Keputusan Item']);
+    const statusItem = deriveItemStatusFromDecision_(decisionItem, item['Status Item']);
     const noItem = clean_(item['No Item']);
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     itemCountById[id] = (itemCountById[id] || 0) + 1;
@@ -864,8 +864,8 @@ function handleGetDashboard(data) {
     if (!id || itemCountById[id]) return;
 
     const itemCount = Number(row['Jumlah Item'] || 0);
-    const statusItem = normalizeItemApprovalStatus_('', row['Status']);
     const decisionItem = normalizeExplicitItemDecision_('');
+    const statusItem = deriveItemStatusFromDecision_(decisionItem, '');
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     summary.totalItems += itemCount;
     if (summary.hasOwnProperty(itemKey) && statusItem !== 'Disetujui' && statusItem !== 'Ditolak') summary[itemKey] += itemCount;
@@ -889,7 +889,7 @@ function handleGetDashboard(data) {
         noItem: noItem,
         status: itemStatusById[id] && itemStatusById[id][String(noItem)]
           ? itemStatusById[id][String(noItem)]
-          : normalizeItemApprovalStatus_('', row['Status']),
+          : 'Baru',
         keputusanItem: itemDecisionById[id] && Object.prototype.hasOwnProperty.call(itemDecisionById[id], String(noItem))
           ? itemDecisionById[id][String(noItem)]
           : ''
@@ -1007,12 +1007,16 @@ function handleUpdateItemStatus(data) {
   const session = requireSession_(data.token, ['admin', 'qrcc']);
   const id = clean_(data.idPengajuan);
   const noItem = clean_(data.noItem);
-  const statusBaru = clean_(data.statusBaru);
+  const requestedStatus = clean_(data.statusBaru);
+  const hasDecisionPayload = Object.prototype.hasOwnProperty.call(data, 'keputusanItem');
+  const requestedDecision = hasDecisionPayload ? clean_(data.keputusanItem) : '';
   const catatanAdmin = clean_(data.catatanAdmin);
   if (!id) throw new Error('ID Pengajuan wajib diisi');
   if (!noItem) throw new Error('No Item wajib diisi');
-  if (ITEM_APPROVAL_STATUSES.indexOf(statusBaru) === -1) throw new Error('Status item tidak valid');
-  if (statusBaru === 'Ditolak' && !catatanAdmin) throw new Error('Catatan Admin wajib diisi jika status Ditolak');
+  if (!hasDecisionPayload && requestedStatus !== 'Selesai') throw new Error('Keputusan item wajib diisi');
+  if (hasDecisionPayload && requestedDecision && ITEM_DECISION_STATUSES.indexOf(requestedDecision) === -1) throw new Error('Keputusan item tidak valid');
+  if (requestedStatus && requestedStatus !== 'Selesai') throw new Error('Status item hanya bisa diubah otomatis dari keputusan, kecuali Selesai');
+  if (requestedDecision === 'Ditolak' && !catatanAdmin) throw new Error('Catatan Admin wajib diisi jika keputusan Ditolak');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1039,48 +1043,62 @@ function handleUpdateItemStatus(data) {
     const itemCol = indexMap_(itemValues[0]);
     let itemRow = -1;
     let statusLama = '';
+    let decisionLama = '';
 
     for (let i = 1; i < itemValues.length; i++) {
       if (itemValues[i][itemCol['ID Pengajuan']] === id && String(itemValues[i][itemCol['No Item']]) === noItem) {
         itemRow = i + 1;
-        statusLama = normalizeItemApprovalStatus_(itemValues[i][itemCol['Status Item']], parentStatusLama);
+        decisionLama = itemCol['Keputusan Item'] !== undefined
+          ? normalizeExplicitItemDecision_(itemValues[i][itemCol['Keputusan Item']])
+          : '';
+        statusLama = deriveItemStatusFromDecision_(decisionLama, itemValues[i][itemCol['Status Item']]);
         break;
       }
     }
     if (itemRow === -1) throw new Error('Item pengajuan tidak ditemukan');
+    if (itemCol['Keputusan Item'] === undefined) throw new Error('Kolom Keputusan Item belum tersedia. Jalankan setupApp terlebih dahulu.');
 
     const now = new Date();
-    const existingDecision = itemCol['Keputusan Item'] !== undefined
-      ? clean_(itemValues[itemRow - 1][itemCol['Keputusan Item']])
-      : '';
-    const decisionBaru = deriveItemDecisionAfterStatusChange_(existingDecision, statusBaru);
+    const isCompletingItem = requestedStatus === 'Selesai';
+    if (statusLama === 'Selesai' && hasDecisionPayload && requestedDecision !== decisionLama) {
+      throw new Error('Item sudah Selesai. Keputusan tidak bisa diubah.');
+    }
+    if (isCompletingItem && decisionLama !== 'Disetujui') {
+      throw new Error('Item harus diputuskan Disetujui sebelum ditandai Selesai.');
+    }
+
+    const decisionBaru = isCompletingItem ? decisionLama : normalizeExplicitItemDecision_(requestedDecision);
+    const statusBaru = isCompletingItem ? 'Selesai' : deriveItemStatusFromDecision_(decisionBaru, statusLama);
     itemSheet.getRange(itemRow, itemCol['Status Item'] + 1).setValue(statusBaru);
     itemSheet.getRange(itemRow, itemCol['Catatan Admin Item'] + 1).setValue(catatanAdmin);
     itemSheet.getRange(itemRow, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
     itemSheet.getRange(itemRow, itemCol['User Update Status Item'] + 1).setValue(session.username);
-    if (itemCol['Keputusan Item'] !== undefined) {
-      itemSheet.getRange(itemRow, itemCol['Keputusan Item'] + 1).setValue(decisionBaru);
-    }
+    itemSheet.getRange(itemRow, itemCol['Keputusan Item'] + 1).setValue(decisionBaru);
 
     itemValues[itemRow - 1][itemCol['Status Item']] = statusBaru;
-    if (itemCol['Keputusan Item'] !== undefined) itemValues[itemRow - 1][itemCol['Keputusan Item']] = decisionBaru;
+    itemValues[itemRow - 1][itemCol['Keputusan Item']] = decisionBaru;
 
     // Reuse itemValues yang sudah dibaca di awal untuk hindari getDataRange kedua.
     const refreshedItems = itemValues.slice(1)
       .filter(function (row) { return row[itemCol['ID Pengajuan']] === id; })
-      .map(function (row) { return normalizeItemApprovalStatus_(row[itemCol['Status Item']], parentStatusLama); });
+      .map(function (row) {
+        return deriveItemStatusFromDecision_(row[itemCol['Keputusan Item']], row[itemCol['Status Item']]);
+      });
     const derivedParentStatus = derivePengajuanStatusFromItemStatuses_(refreshedItems);
     const parentStatusBaru = shouldApplyItemDerivedParentStatus_(parentStatusLama) ? derivedParentStatus : parentStatusLama;
-    const entry = '[' + formatDateTime_(now) + '] Item #' + noItem + ': ' + statusLama + ' → ' + statusBaru + ' oleh ' + session.username;
+    const logLabel = isCompletingItem ? 'Item #' + noItem : 'Keputusan Item #' + noItem;
+    const logBefore = isCompletingItem ? statusLama : (decisionLama || 'Belum Diputuskan');
+    const logAfter = isCompletingItem ? statusBaru : (decisionBaru || 'Belum Diputuskan');
+    const entryLog = '[' + formatDateTime_(now) + '] ' + logLabel + ': ' + logBefore + ' -> ' + logAfter + ' oleh ' + session.username;
 
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Status'] + 1).setValue(parentStatusBaru);
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Catatan Admin'] + 1).setValue(catatanAdmin);
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Tanggal Update Status Terakhir'] + 1).setValue(now);
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['User Update Status'] + 1).setValue(session.username);
-    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entry : entry);
+    pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entryLog : entryLog);
 
-    getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, statusLama, statusBaru, catatanAdmin, session.username, noItem]);
-    return { success: true, data: { status: parentStatusBaru } };
+    getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, logBefore, logAfter, catatanAdmin, session.username, noItem]);
+    return { success: true, data: { status: parentStatusBaru, statusItem: statusBaru, keputusanItem: decisionBaru } };
   } finally {
     lock.releaseLock();
   }
@@ -1106,9 +1124,10 @@ function normalizeItemApprovalStatus_(status, fallbackStatus) {
 }
 
 function normalizeItemDecision_(decision, itemStatus, parentStatus) {
-  const cleanedDecision = clean_(decision);
-  if (ITEM_DECISION_STATUSES.indexOf(cleanedDecision) !== -1) return cleanedDecision;
+  return normalizeExplicitItemDecision_(decision);
+}
 
+function inferItemDecisionForBackfill_(itemStatus, parentStatus) {
   const status = clean_(itemStatus);
   if (status === 'Ditolak') return 'Ditolak';
   if (status === 'Disetujui' || status === 'Selesai') return 'Disetujui';
@@ -1118,6 +1137,14 @@ function normalizeItemDecision_(decision, itemStatus, parentStatus) {
   if (['Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'].indexOf(parent) !== -1) return 'Disetujui';
 
   return '';
+}
+
+function deriveItemStatusFromDecision_(decision, currentStatus) {
+  const cleanDecision = normalizeExplicitItemDecision_(decision);
+  const cleanStatus = clean_(currentStatus);
+  if (cleanStatus === 'Selesai' && cleanDecision === 'Disetujui') return 'Selesai';
+  if (cleanDecision === 'Disetujui' || cleanDecision === 'Ditolak') return cleanDecision;
+  return 'Baru';
 }
 
 function normalizeExplicitItemDecision_(decision) {
@@ -1422,7 +1449,7 @@ function getItemDecisionBackfillChanges_() {
 
     const parent = parentById[id] || {};
     const parentStatus = clean_(parent['Status']);
-    const decision = normalizeItemDecision_('', item['Status Item'], parentStatus);
+    const decision = inferItemDecisionForBackfill_(item['Status Item'], parentStatus);
     const preview = {
       idPengajuan: id,
       noItem: noItem,
@@ -2616,7 +2643,6 @@ function findItemRecordBySerial_(nomorSeri) {
 }
 
 function getItemsForPengajuan_(id, fallbackStatus) {
-  const defaultStatus = normalizeItemApprovalStatus_('', fallbackStatus);
   return readObjects_(SHEETS.ITEMS)
     .filter(function (row) { return row['ID Pengajuan'] === id; })
     .sort(function (a, b) { return Number(a['No Item']) - Number(b['No Item']); })
@@ -2629,7 +2655,7 @@ function getItemsForPengajuan_(id, fallbackStatus) {
         modelNormalized: clean_(row['model_normalized']) || normalizeModelKey_(row['Model']),
         produkStatus: clean_(row['produk_status']) || 'needs_review',
         produkSumber: clean_(row['produk_sumber']) || '',
-        statusItem: normalizeItemApprovalStatus_(row['Status Item'], defaultStatus),
+        statusItem: deriveItemStatusFromDecision_(row['Keputusan Item'], row['Status Item']),
         keputusanItem: normalizeItemDecision_(row['Keputusan Item'], row['Status Item'], fallbackStatus),
         catatanAdminItem: clean_(row['Catatan Admin Item']),
         tanggalUpdateStatusItem: toIso_(row['Tanggal Update Status Item']),
@@ -2649,8 +2675,8 @@ function getApprovedWarrantyQueueItems_() {
   return readObjects_(SHEETS.ITEMS)
     .filter(function (row) {
       const pengajuan = pengajuanMap[row['ID Pengajuan']];
-      const statusItem = clean_(row['Status Item']) || (pengajuan && clean_(pengajuan['Status']));
-      return pengajuan && statusItem === 'Disetujui' && clean_(row['produk_status']) === 'verified';
+      const decisionItem = normalizeExplicitItemDecision_(row['Keputusan Item']);
+      return pengajuan && decisionItem === 'Disetujui' && clean_(row['produk_status']) === 'verified';
     })
     .map(function (row) {
       const pengajuan = pengajuanMap[row['ID Pengajuan']];
