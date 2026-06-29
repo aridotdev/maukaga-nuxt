@@ -489,7 +489,7 @@ function getErrorMessage(error: unknown) {
                 />
               </UFormField>
 
-              <UFormField name="bagianCabang" label="Bagian/Cabang" size="lg" required>
+              <UFormField name="bagianCabang" label="Cabang" size="lg" required>
                 <UInput
                   v-model="formState.bagianCabang"
                   placeholder="Contoh: Cabang Jakarta Pusat"
@@ -559,8 +559,9 @@ function getErrorMessage(error: unknown) {
                 type="button"
                 label="Tambah Item"
                 icon="i-lucide-plus"
-                color="neutral"
+                color="primary"
                 variant="subtle"
+                class="cursor-pointer"
                 :disabled="formState.products.length >= maxItems"
                 @click="addItem"
               />
@@ -638,6 +639,7 @@ function getErrorMessage(error: unknown) {
                       color="error"
                       variant="ghost"
                       size="sm"
+                      class="cursor-pointer"
                       :disabled="formState.products.length <= 1"
                       :aria-label="`Hapus item ${index + 1}`"
                       @click="removeItem(index)"
@@ -658,7 +660,7 @@ function getErrorMessage(error: unknown) {
                 icon="i-lucide-printer"
                 color="primary"
                 size="lg"
-                class="w-full justify-center sm:w-auto"
+                class="w-full justify-center sm:w-auto cursor-pointer"
                 :loading="isSavingDraft"
               />
             </div>
