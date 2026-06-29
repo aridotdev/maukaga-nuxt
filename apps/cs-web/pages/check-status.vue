@@ -14,6 +14,8 @@ type StatusData = {
   status?: string
   parentStatus?: string
   statusItem?: string
+  keputusanItem?: string
+  catatanAdminItem?: string
   noItem?: string | number
   nomorSeri?: string
   produk?: string
@@ -43,9 +45,9 @@ const hasStatusInputInteraction = ref(false)
 const statusCheckRequestId = ref(0)
 
 const showStatusResult = computed(() => resultType.value !== 'idle')
-const statusText = computed(() => statusData.value.status || '-')
-const statusTone = computed(() => statusCheckBadge(statusData.value.status))
-const statusInfoText = computed(() => statusCheckInfoText(statusData.value.status))
+const statusText = computed(() => getSearchStatus(statusData.value))
+const statusTone = computed(() => statusCheckBadge(statusText.value))
+const statusInfoText = computed(() => statusCheckInfoText(statusText.value, getRejectedItemNote(statusData.value)))
 const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
 
 function showToast(message: string, type: ToastType = 'info') {
@@ -120,6 +122,16 @@ function clearInputError() {
   hasInputError.value = false
 }
 
+function getSearchStatus(data: StatusData) {
+  if (data.searchBy === 'nomorSeri') return data.statusItem || data.keputusanItem || data.status || '-'
+  return data.status || '-'
+}
+
+function getRejectedItemNote(data: StatusData) {
+  if (data.searchBy !== 'nomorSeri') return ''
+  return String(data.catatanAdminItem || '').trim()
+}
+
 function statusCheckBadge(status?: string): StatusTone {
   const map: Record<string, StatusTone> = {
     'Menunggu Upload': {
@@ -189,7 +201,9 @@ function statusCheckBadge(status?: string): StatusTone {
   }
 }
 
-function statusCheckInfoText(status?: string) {
+function statusCheckInfoText(status?: string, rejectedItemNote = '') {
+  if (status === 'Ditolak' && rejectedItemNote) return rejectedItemNote
+
   const map: Record<string, string> = {
     Baru: 'Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin.',
     Disetujui: 'Pengajuan telah diperiksa dan disetujui. Kartu garansi akan segera dibuat dan dikirimkan.',

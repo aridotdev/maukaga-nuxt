@@ -535,6 +535,7 @@ function handleCheckPengajuanStatus(data) {
       timestampSubmit: toIso_(row[col['Timestamp Submit']]),
       jumlahItem: row[col['Jumlah Item']],
       catatanAdmin: row[col['Catatan Admin']],
+      catatanAdminItem: matchedItem ? clean_(matchedItem['Catatan Admin Item']) : '',
       tanggalUpdateStatusTerakhir: toIso_(row[col['Tanggal Update Status Terakhir']]),
       draftUpdatedAt: toIso_(row[col['Draft Updated At']]),
     },
