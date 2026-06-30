@@ -85,7 +85,7 @@ defineExpose({ print })
   grid-auto-rows: 30mm;
   align-content: start;
   justify-content: center;
-  gap: 3mm 5mm;
+  /* gap: 3mm 5mm; */
   padding: 10mm;
   background: #fff;
   color: #0f172a;
