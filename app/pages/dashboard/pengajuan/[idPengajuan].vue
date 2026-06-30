@@ -10,8 +10,10 @@ definePageMeta({
 const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
 const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
 const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
+const EMPTY_ITEM_DECISION_VALUE = '__belum_diputuskan__' as const
 
 type StatusColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+type ItemDecisionSelectValue = ItemDecisionStatus | typeof EMPTY_ITEM_DECISION_VALUE
 
 const PENGAJUAN_STATUS_COLORS = {
   Baru: 'info',
@@ -118,9 +120,9 @@ const pengajuanStatusItems = PENGAJUAN_STATUSES.map((status) => ({
   value: status
 }))
 
-const itemDecisionItems: Array<{ label: string, value: ItemDecisionStatus }> = [{
+const itemDecisionItems: Array<{ label: string, value: ItemDecisionSelectValue }> = [{
   label: 'Belum Diputuskan',
-  value: ''
+  value: EMPTY_ITEM_DECISION_VALUE
 }, {
   label: 'Disetujui',
   value: 'Disetujui'
@@ -513,6 +515,16 @@ function getItemDecisionLabel(decision: ItemDecisionStatus) {
   return decision || 'Belum Diputuskan'
 }
 
+function getItemDecisionSelectValue(decision: ItemDecisionStatus): ItemDecisionSelectValue {
+  return decision || EMPTY_ITEM_DECISION_VALUE
+}
+
+function setItemDecisionSelectValue(item: DetailItem, value: unknown) {
+  const selectedValue = typeof value === 'string' ? value : ''
+  const decision = selectedValue === EMPTY_ITEM_DECISION_VALUE ? '' : selectedValue
+  getItemForm(item).keputusanItem = isItemDecisionStatus(decision) ? decision : ''
+}
+
 function getItemDecisionColor(decision: ItemDecisionStatus): StatusColor {
   if (decision === 'Disetujui') return 'success'
   if (decision === 'Ditolak') return 'error'
@@ -814,10 +826,11 @@ function formatDateTime(value: string | undefined) {
                   >
                     <UFormField label="Keputusan Item" :name="`keputusan-${getItemKey(item)}`" class="w-full lg:w-44">
                       <USelect
-                        v-model="getItemForm(item).keputusanItem"
+                        :model-value="getItemDecisionSelectValue(getItemForm(item).keputusanItem)"
                         :items="itemDecisionItems"
                         class="w-full"
                         :disabled="getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
+                        @update:model-value="setItemDecisionSelectValue(item, $event)"
                       />
                     </UFormField>
 
