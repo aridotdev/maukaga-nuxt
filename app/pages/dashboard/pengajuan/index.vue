@@ -23,6 +23,8 @@ type DashboardPengajuanSourceRow = {
   status: DashboardStatus | string
   itemStatuses?: Array<{
     noItem: number | string
+    model?: string
+    nomorSeri?: string
     status: DashboardItemStatus | string
     keputusanItem?: DashboardItemDecision | string
   }>
@@ -35,6 +37,8 @@ type DashboardPengajuanRow = {
   noItem: number | string
   timestampSubmit: string
   nama: string
+  model: string
+  nomorSeri: string
   bagianCabang: string
   jumlahItem: number | string
   status: DashboardItemStatus | string
@@ -92,6 +96,8 @@ const pengajuanTableGlobalFilterOptions = {
       row.original.idPengajuan,
       row.original.timestampSubmit,
       row.original.nama,
+      row.original.model,
+      row.original.nomorSeri,
       row.original.bagianCabang,
       row.original.jumlahItem,
       row.original.status,
@@ -118,7 +124,12 @@ const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
         row.bagianCabang,
         row.jumlahItem,
         row.status,
-        ...getItemStatuses(row).flatMap(item => [item.status, item.keputusanItem])
+        ...getItemStatuses(row).flatMap(item => [
+          item.model,
+          item.nomorSeri,
+          item.status,
+          item.keputusanItem
+        ])
       ].some((value) => String(value || '').toLowerCase().includes(keyword))
     })
     .sort((a, b) => getTime(b.timestampSubmit) - getTime(a.timestampSubmit))
@@ -134,6 +145,8 @@ const explodedRows = computed<DashboardPengajuanRow[]>(() => {
         noItem: itemStatus.noItem,
         timestampSubmit: parent.timestampSubmit,
         nama: parent.nama,
+        model: itemStatus.model,
+        nomorSeri: itemStatus.nomorSeri,
         bagianCabang: parent.bagianCabang,
         jumlahItem: parent.jumlahItem,
         status: itemStatus.status,
@@ -182,6 +195,16 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'text-muted font-semibold' }, row.original.nama || '-')
   ])
+}, {
+  accessorKey: 'model',
+  header: 'Model',
+  meta: { class: { th: 'w-[14%]', td: 'w-[14%]' } },
+  cell: ({ row }) => h('p', { class: '' }, row.original.model || '-')
+}, {
+  accessorKey: 'nomorSeri',
+  header: 'Nomor Seri',
+  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
+  cell: ({ row }) => h('p', { class: '' }, row.original.nomorSeri || '-')
 }, {
   accessorKey: 'bagianCabang',
   header: 'Cabang',
@@ -300,6 +323,8 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
     return [...statuses]
       .map((item, index) => ({
         noItem: item.noItem || index + 1,
+        model: String(item.model || '').trim(),
+        nomorSeri: String(item.nomorSeri || '').trim(),
         status: normalizeItemStatus(item.status, row.status),
         keputusanItem: normalizeItemDecision(item.keputusanItem)
       }))
@@ -309,6 +334,8 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
   const total = clampItemCount(row.jumlahItem)
   return Array.from({ length: total }, (_, index) => ({
     noItem: index + 1,
+    model: '',
+    nomorSeri: '',
     status: normalizeItemStatus('', row.status),
     keputusanItem: normalizeItemDecision('')
   }))
@@ -399,7 +426,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
             class="w-full"
             :ui="{
               root: 'w-full',
-              base: 'w-full min-w-190 table-fixed border-separate border-spacing-0',
+              base: 'w-full min-w-240 table-fixed border-separate border-spacing-0',
               thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0',
               tr: 'transition-colors hover:bg-elevated/30',

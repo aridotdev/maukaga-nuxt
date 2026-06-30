@@ -836,6 +836,7 @@ function handleGetDashboard(data) {
   });
 
   const itemCountById = {};
+  const itemDetailById = {};
   const itemStatusById = {};
   const itemDecisionById = {};
   readObjects_(SHEETS.ITEMS).forEach(function (item) {
@@ -849,8 +850,13 @@ function handleGetDashboard(data) {
     const itemKey = 'item' + statusItem.charAt(0).toUpperCase() + statusItem.slice(1).toLowerCase();
     itemCountById[id] = (itemCountById[id] || 0) + 1;
     if (noItem) {
+      itemDetailById[id] = itemDetailById[id] || {};
       itemStatusById[id] = itemStatusById[id] || {};
       itemDecisionById[id] = itemDecisionById[id] || {};
+      itemDetailById[id][noItem] = {
+        model: item['Model'],
+        nomorSeri: item['Nomor Seri']
+      };
       itemStatusById[id][noItem] = statusItem;
       itemDecisionById[id][noItem] = decisionItem;
     }
@@ -886,8 +892,14 @@ function handleGetDashboard(data) {
     const itemStatuses = [];
 
     for (let noItem = 1; noItem <= itemCount; noItem += 1) {
+      const itemDetail = itemDetailById[id] && itemDetailById[id][String(noItem)]
+        ? itemDetailById[id][String(noItem)]
+        : {};
+
       itemStatuses.push({
         noItem: noItem,
+        model: itemDetail.model || '',
+        nomorSeri: itemDetail.nomorSeri || '',
         status: itemStatusById[id] && itemStatusById[id][String(noItem)]
           ? itemStatusById[id][String(noItem)]
           : 'Baru',

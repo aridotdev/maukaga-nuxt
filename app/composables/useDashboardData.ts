@@ -33,6 +33,8 @@ type DashboardRow = {
   status: DashboardStatus | string
   itemStatuses?: Array<{
     noItem: number | string
+    model?: string
+    nomorSeri?: string
     status: DashboardItemStatus | string
     keputusanItem?: DashboardItemDecision | string
   }>
