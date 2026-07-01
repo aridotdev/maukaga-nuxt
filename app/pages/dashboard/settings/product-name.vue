@@ -26,7 +26,10 @@ type ModelProdukResponse = {
   }>
 }
 
+const ORIGIN_UNSET_VALUE = '__origin_unset__'
+
 type OriginKey = 'local' | 'import' | ''
+type OriginSelectValue = Exclude<OriginKey, ''> | typeof ORIGIN_UNSET_VALUE
 
 type ModelProdukFormState = {
   model: string
@@ -76,9 +79,9 @@ const formState = reactive<ModelProdukFormState>({
 })
 const formError = ref('')
 
-const originOptions = [{
+const originOptions: Array<{ label: string, value: OriginSelectValue }> = [{
   label: 'Belum Ditentukan',
-  value: ''
+  value: ORIGIN_UNSET_VALUE
 }, {
   label: 'Local',
   value: 'local'
@@ -86,6 +89,13 @@ const originOptions = [{
   label: 'Import',
   value: 'import'
 }]
+
+const originSelectValue = computed<OriginSelectValue>({
+  get: () => formState.origin || ORIGIN_UNSET_VALUE,
+  set: (value) => {
+    formState.origin = value === ORIGIN_UNSET_VALUE ? '' : value
+  }
+})
 
 const pagination = ref({
   pageIndex: 0,
@@ -515,6 +525,7 @@ async function redirectIfUnauthorized(message: string) {
     </UDashboardPanel>
 
     <UModal
+      v-if="formOpen"
       v-model:open="formOpen"
       :title="editingKey ? 'Edit Model Produk' : 'Tambah Model Produk'"
       :description="editingKey ? 'Perbarui model dan nama produk' : 'Petakan model ke nama produk'"
@@ -561,7 +572,7 @@ async function redirectIfUnauthorized(message: string) {
             name="origin"
           >
             <USelect
-              v-model="formState.origin"
+              v-model="originSelectValue"
               :items="originOptions"
               :disabled="isSaving"
               class="w-full"
@@ -583,7 +594,7 @@ async function redirectIfUnauthorized(message: string) {
           label="Batal"
           color="neutral"
           variant="outline"
-          @click="close"
+          @click="close()"
         />
         <UButton
           type="submit"
