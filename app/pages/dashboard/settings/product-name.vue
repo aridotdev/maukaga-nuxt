@@ -11,6 +11,7 @@ definePageMeta({
 type ModelProdukRow = {
   model: string
   produk: string
+  origin: OriginKey
   status: string
   updatedAt: string
 }
@@ -19,14 +20,18 @@ type ModelProdukResponse = {
   rows?: Array<{
     model?: string
     produk?: string
+    origin?: string
     status?: string
     updatedAt?: string
   }>
 }
 
+type OriginKey = 'local' | 'import' | ''
+
 type ModelProdukFormState = {
   model: string
   produk: string
+  origin: OriginKey
 }
 
 const UBadge = resolveComponent('UBadge')
@@ -47,7 +52,10 @@ const modelProdukSchema = z.object({
     .string()
     .trim()
     .min(1, 'Nama Produk wajib diisi')
-    .max(120, 'Nama Produk terlalu panjang')
+    .max(120, 'Nama Produk terlalu panjang'),
+  origin: z
+    .string()
+    .refine((value) => ['', 'local', 'import'].includes(value), 'Origin tidak valid')
 })
 
 type ModelProdukSchema = z.output<typeof modelProdukSchema>
@@ -63,9 +71,21 @@ const formOpen = ref(false)
 const editingKey = ref<string | null>(null)
 const formState = reactive<ModelProdukFormState>({
   model: '',
-  produk: ''
+  produk: '',
+  origin: ''
 })
 const formError = ref('')
+
+const originOptions = [{
+  label: 'Belum Ditentukan',
+  value: ''
+}, {
+  label: 'Local',
+  value: 'local'
+}, {
+  label: 'Import',
+  value: 'import'
+}]
 
 const pagination = ref({
   pageIndex: 0,
@@ -88,6 +108,7 @@ const filteredRows = computed(() => {
     return [
       row.model,
       row.produk,
+      getOriginLabel(row.origin),
       row.status
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
   })
@@ -111,6 +132,7 @@ const globalFilterOptions = {
     return [
       row.original.model,
       row.original.produk,
+      getOriginLabel(row.original.origin),
       row.original.status
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
   }
@@ -136,6 +158,21 @@ const columns: TableColumn<ModelProdukRow>[] = [{
     }
   },
   cell: ({ row }) => h('p', { class: 'truncate text-sm' }, row.original.produk || '-')
+}, {
+  accessorKey: 'origin',
+  header: 'Origin',
+  meta: {
+    class: {
+      th: 'w-[15%]',
+      td: 'w-[15%]'
+    }
+  },
+  cell: ({ row }) => h(UBadge, {
+    color: getOriginColor(row.original.origin),
+    variant: 'subtle',
+    label: getOriginLabel(row.original.origin),
+    class: 'font-semibold'
+  })
 }, {
   accessorKey: 'status',
   header: 'Status',
@@ -222,6 +259,7 @@ function openCreate() {
   editingKey.value = null
   formState.model = ''
   formState.produk = ''
+  formState.origin = ''
   formError.value = ''
   formOpen.value = true
 }
@@ -230,6 +268,7 @@ function openEdit(row: ModelProdukRow) {
   editingKey.value = row.model
   formState.model = row.model
   formState.produk = row.produk
+  formState.origin = row.origin
   formError.value = ''
   formOpen.value = true
 }
@@ -239,6 +278,7 @@ async function submitForm(event: FormSubmitEvent<ModelProdukSchema>) {
 
   const model = normalizeModelKey(event.data.model)
   const produk = String(event.data.produk || '').trim()
+  const origin = normalizeOriginKey(event.data.origin)
 
   if (!model || !produk) {
     formError.value = 'Model dan Nama Produk wajib diisi'
@@ -258,7 +298,8 @@ async function submitForm(event: FormSubmitEvent<ModelProdukSchema>) {
   try {
     const result = await callApi<{ count: number }>('approveModelProduk', {
       model,
-      produk
+      produk,
+      origin
     })
     if (!result.success) throw new Error(result.error || 'Gagal menyimpan Model Produk')
 
@@ -293,9 +334,29 @@ function normalizeRow(row: NonNullable<ModelProdukResponse['rows']>[number]): Mo
   return {
     model: normalizeModelKey(String(row.model || '')),
     produk: String(row.produk || '').trim(),
+    origin: normalizeOriginKey(row.origin),
     status: String(row.status || 'verified').trim() || 'verified',
     updatedAt: row.updatedAt || ''
   }
+}
+
+function normalizeOriginKey(value: unknown): OriginKey {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'local' || normalized === 'lokal') return 'local'
+  if (normalized === 'import' || normalized === 'impor') return 'import'
+  return ''
+}
+
+function getOriginLabel(origin: OriginKey) {
+  if (origin === 'local') return 'Local'
+  if (origin === 'import') return 'Import'
+  return 'Belum Ditentukan'
+}
+
+function getOriginColor(origin: OriginKey) {
+  if (origin === 'local') return 'info'
+  if (origin === 'import') return 'warning'
+  return 'neutral'
 }
 
 function normalizeModelKey(value: string) {
@@ -358,7 +419,7 @@ async function redirectIfUnauthorized(message: string) {
               v-model="search"
               class="w-full max-w-sm"
               icon="i-lucide-search"
-              placeholder="Cari model atau nama produk..."
+              placeholder="Cari model, nama produk, atau origin..."
             />
 
             <div class="flex flex-wrap items-center gap-2">
@@ -396,7 +457,7 @@ async function redirectIfUnauthorized(message: string) {
               class="w-full"
               :ui="{
                 root: 'w-full',
-                base: 'w-full min-w-150 table-fixed border-separate border-spacing-0',
+                base: 'w-full min-w-170 table-fixed border-separate border-spacing-0',
                 thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
                 tbody: '[&>tr]:last:[&>td]:border-b-0',
                 tr: 'transition-colors hover:bg-elevated/30',
@@ -492,6 +553,18 @@ async function redirectIfUnauthorized(message: string) {
               autocomplete="off"
               class="w-full"
               placeholder="Nama Produk"
+            />
+          </UFormField>
+
+          <UFormField
+            label="Origin"
+            name="origin"
+          >
+            <USelect
+              v-model="formState.origin"
+              :items="originOptions"
+              :disabled="isSaving"
+              class="w-full"
             />
           </UFormField>
 

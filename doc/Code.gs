@@ -35,7 +35,7 @@ const HEADERS = {
   [SHEETS.WARRANTY_CARDS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Jenis Kartu', 'Status Cetak', 'Print Batch ID', 'Printed At', 'Printed By', 'Reprint Count', 'Last Reprint At', 'Last Reprint By', 'Catatan', 'Status Kirim', 'Shipped At', 'Shipped By', 'Ship Batch ID'],
   [SHEETS.PRINT_BATCH]: ['Batch ID', 'Tipe Batch', 'Created At', 'Created By', 'Jumlah Item', 'Catatan'],
   [SHEETS.PRINT_LAYOUTS]: ['ID', 'Type', 'Name', 'Offset X', 'Offset Y', 'Gap Product Model', 'Gap Model Serial', 'Is Builtin', 'Created At', 'Updated At', 'Updated By'],
-  [SHEETS.MODEL_PRODUK]: ['model', 'produk', 'status', 'updated_at', 'updated_by'],
+  [SHEETS.MODEL_PRODUK]: ['model', 'produk', 'origin', 'status', 'updated_at', 'updated_by'],
   [SHEETS.SHIPPING_LABELS]: ['ID Pengajuan', 'No Item', 'Produk', 'Model', 'Nomor Seri', 'Bagian/Cabang', 'Nama', 'Print Batch ID', 'Printed At', 'Status Kirim', 'Ship Batch ID', 'Shipped At', 'Shipped By', 'Created At', 'Updated At'],
 };
 
@@ -565,6 +565,7 @@ function handleGetModelProduk() {
     return {
       model: row.model,
       produk: row.produk,
+      origin: row.origin,
       status: row.status,
       updatedAt: toIso_(row.updatedAt),
     };
@@ -1661,16 +1662,18 @@ function handleApproveModelProduk(data) {
   const session = requireSession_(data.token, ['admin', 'qrcc']);
   const model = normalizeModelKey_(data.model);
   const produk = clean_(data.produk || data.kategori);
+  const hasOriginInput = data.origin !== undefined && data.origin !== null;
+  const origin = hasOriginInput ? normalizeModelOrigin_(data.origin, false) : undefined;
   if (!model) throw new Error('Model wajib dipilih');
   if (!produk) throw new Error('Nama Produk wajib diisi');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    upsertModelProduk_(model, produk, session.username);
+    upsertModelProduk_(model, produk, session.username, origin);
     const count = verifyPendingItemsByModel_(model, produk);
     CacheService.getScriptCache().remove('model_produk_map');
-    return { success: true, data: { model: model, produk: produk, count: count } };
+    return { success: true, data: { model: model, produk: produk, origin: origin || '', count: count } };
   } finally {
     lock.releaseLock();
   }
@@ -1836,6 +1839,7 @@ function handleSaveWarrantyCardTypes(data) {
   try {
     const approvedMap = mapByWarrantyKey_(getApprovedWarrantyQueueItems_());
     const state = getWarrantyCardSheetState_();
+    let originUpdated = false;
     items.forEach(function (input) {
       const id = clean_(input.idPengajuan);
       const noItem = clean_(input.noItem);
@@ -1861,10 +1865,13 @@ function handleSaveWarrantyCardTypes(data) {
         lastReprintBy: clean_(existing['Last Reprint By']),
         catatan: clean_(existing['Catatan']) || ('Jenis kartu disimpan oleh ' + session.username),
       });
+      originUpdated = updateModelProdukOriginIfMissing_(item.model, jenisKartu, session.username) || originUpdated;
       state.rows[key] = findWarrantyCardStateRow_(state.sheet, key);
     });
 
-    CacheService.getScriptCache().remove('warranty_card_state');
+    const cache = CacheService.getScriptCache();
+    cache.remove('warranty_card_state');
+    if (originUpdated) cache.remove('model_produk_map');
     return { success: true, data: { count: items.length } };
   } finally {
     lock.releaseLock();
@@ -2280,6 +2287,7 @@ function ensureModelProdukSheet_(ss) {
     rowsByModel[row.model] = [
       row.model,
       row.produk,
+      row.origin,
       row.status,
       row.updatedAt,
       row.updatedBy,
@@ -2351,9 +2359,21 @@ function normalizeModelKey_(value) {
   return clean_(value).replace(/\s+/g, ' ').toUpperCase();
 }
 
+function normalizeModelOrigin_(value, required) {
+  const raw = clean_(value).toLowerCase();
+  if (!raw) {
+    if (required) throw new Error('Origin wajib dipilih');
+    return '';
+  }
+  if (raw === 'local' || raw === 'lokal') return 'local';
+  if (raw === 'import' || raw === 'impor') return 'import';
+  throw new Error('Origin tidak valid: ' + value);
+}
+
 function normalizeModelProdukObject_(row) {
   const model = normalizeModelKey_(row.model || row['model_normalized']);
   let produk = clean_(row.produk);
+  const origin = normalizeModelOrigin_(row.origin || row.Origin || row['Jenis Kartu'], false);
   let status = clean_(row.status) || 'verified';
   let updatedAt = row.updated_at || '';
   const updatedBy = clean_(row.updated_by);
@@ -2367,6 +2387,7 @@ function normalizeModelProdukObject_(row) {
   return {
     model: model,
     produk: produk,
+    origin: origin,
     status: status,
     updatedAt: updatedAt,
     updatedBy: updatedBy,
@@ -2413,17 +2434,20 @@ function resolveItemProduk_(item, modelMap) {
   });
 }
 
-function upsertModelProduk_(model, produk, username) {
+function upsertModelProduk_(model, produk, username, origin) {
   const sheet = getSheet_(SHEETS.MODEL_PRODUK);
   const values = sheet.getDataRange().getValues();
   const headers = values[0] || HEADERS[SHEETS.MODEL_PRODUK];
   const col = indexMap_(headers);
   const now = new Date();
+  const hasOriginInput = origin !== undefined && origin !== null;
+  const normalizedOrigin = hasOriginInput ? normalizeModelOrigin_(origin, false) : '';
   for (let i = 1; i < values.length; i++) {
     if (normalizeModelKey_(values[i][col.model]) === model) {
       const row = values[i].slice(0, headers.length);
       row[col.model] = model;
       row[col.produk] = produk;
+      if (hasOriginInput) row[col.origin] = normalizedOrigin;
       row[col.status] = 'verified';
       row[col.updated_at] = now;
       row[col.updated_by] = username;
@@ -2431,7 +2455,35 @@ function upsertModelProduk_(model, produk, username) {
       return;
     }
   }
-  sheet.appendRow([model, produk, 'verified', now, username]);
+  sheet.appendRow([model, produk, normalizedOrigin, 'verified', now, username]);
+}
+
+function updateModelProdukOriginIfMissing_(model, origin, username) {
+  const normalizedModel = normalizeModelKey_(model);
+  const normalizedOrigin = normalizeModelOrigin_(origin, false);
+  if (!normalizedModel || !normalizedOrigin) return false;
+
+  const sheet = getSheet_(SHEETS.MODEL_PRODUK);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return false;
+
+  const headers = values[0] || HEADERS[SHEETS.MODEL_PRODUK];
+  const col = indexMap_(headers);
+  if (col.origin == null) return false;
+
+  for (let i = 1; i < values.length; i++) {
+    if (normalizeModelKey_(values[i][col.model]) !== normalizedModel) continue;
+    if (clean_(values[i][col.origin])) return false;
+
+    const row = values[i].slice(0, headers.length);
+    row[col.origin] = normalizedOrigin;
+    row[col.updated_at] = new Date();
+    row[col.updated_by] = username;
+    sheet.getRange(i + 1, 1, 1, headers.length).setValues([row]);
+    return true;
+  }
+
+  return false;
 }
 
 function verifyPendingItemsByModel_(model, produk) {
@@ -2685,6 +2737,7 @@ function getApprovedWarrantyQueueItems_() {
   });
 
   const cardState = getWarrantyCardSheetState_();
+  const modelMap = getModelProdukMap_();
   return readObjects_(SHEETS.ITEMS)
     .filter(function (row) {
       const pengajuan = pengajuanMap[row['ID Pengajuan']];
@@ -2695,7 +2748,10 @@ function getApprovedWarrantyQueueItems_() {
       const pengajuan = pengajuanMap[row['ID Pengajuan']];
       const key = warrantyCardKey_(row['ID Pengajuan'], row['No Item']);
       const state = cardState.rows[key] ? cardState.rows[key].data : {};
-      const jenisKartu = normalizeWarrantyCardType_(state['Jenis Kartu'], false);
+      const modelNormalized = clean_(row['model_normalized']) || normalizeModelKey_(row['Model']);
+      const master = modelMap[modelNormalized] || {};
+      const originJenisKartu = normalizeWarrantyCardType_(master.origin, false);
+      const jenisKartu = normalizeWarrantyCardType_(state['Jenis Kartu'], false) || originJenisKartu;
       return {
         key: key,
         idPengajuan: row['ID Pengajuan'],
@@ -2703,6 +2759,7 @@ function getApprovedWarrantyQueueItems_() {
         produk: row['Produk'],
         model: row['Model'],
         nomorSeri: row['Nomor Seri'],
+        origin: master.origin || '',
         jenisKartu: jenisKartu,
         jenisKartuKey: jenisKartu ? jenisKartu.toLowerCase() : '',
         statusCetak: clean_(state['Status Cetak']) || 'Belum Dicetak',
