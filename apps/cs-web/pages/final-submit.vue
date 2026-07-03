@@ -9,6 +9,12 @@ definePageMeta({
 
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
+type ApiResult<T = Record<string, unknown>> = {
+  success: boolean
+  data?: T
+  error?: string
+}
+
 type DraftItem = {
   produk?: string
   model?: string
@@ -78,7 +84,6 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
-const { callApi } = useAppsScriptApi()
 const fileInput = ref<HTMLInputElement | null>(null)
 const evidenceInput = ref<HTMLInputElement | null>(null)
 
@@ -86,6 +91,7 @@ const draftStorageKey = 'pengajuan_kartu_garansi_draft'
 const maxUploadMb = computed(() => Number(runtimeConfig.public.maxUploadMb || 10))
 const maxEvidenceFiles = 10
 const maxEvidenceFileMb = 5
+const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 
 const resumeId = ref('')
 const currentDraftId = ref('')
@@ -131,6 +137,24 @@ watch(resumeId, () => {
   hasResumeInputError.value = false
 })
 
+async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
+  if (!appsScriptApiUrl.value) {
+    throw new Error('URL Google Apps Script belum dikonfigurasi.')
+  }
+
+  const response = await fetch(appsScriptApiUrl.value, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, ...payload })
+  })
+
+  if (!response.ok) {
+    throw new Error(`Google Apps Script merespons ${response.status}.`)
+  }
+
+  return response.json() as Promise<ApiResult<T>>
+}
+
 function showToast(title: string, color: ToastColor = 'info', description?: string) {
   toast.add({ title, description, color })
 }
@@ -162,14 +186,14 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
 
   try {
     if (!resumeToken) {
-      const statusResult = await callApi<DraftStatusResponse>('checkDraftPengajuanStatus', { idPengajuan })
+      const statusResult = await callAPI<DraftStatusResponse>('checkDraftPengajuanStatus', { idPengajuan })
       if (!statusResult.success) throw new Error(statusResult.error || 'ID Pengajuan tidak bisa dilanjutkan.')
 
       resumeToken = String(statusResult.data?.resumeToken || '').trim()
       if (!resumeToken) throw new Error('Draft ditemukan, tetapi Resume Token tidak tersedia. Draft ini tidak bisa dilanjutkan.')
     }
 
-    const result = await callApi<DraftData>('getDraftPengajuan', { idPengajuan, resumeToken })
+    const result = await callAPI<DraftData>('getDraftPengajuan', { idPengajuan, resumeToken })
     if (!result.success) throw new Error(result.error || 'Draft gagal dimuat')
 
     idPengajuan = result.data?.idPengajuan || idPengajuan
@@ -351,7 +375,7 @@ async function handleSubmitFinal() {
     payload.fileMimeType = selectedFile.value.type || getMimeTypeFromExtension(payload.fileExtension)
     payload.evidenceAttachments = await buildEvidenceAttachmentPayloads()
 
-    const result = await callApi<SubmitResponse>('submitDraftPengajuan', payload as unknown as Record<string, unknown>)
+    const result = await callAPI<SubmitResponse>('submitDraftPengajuan', payload as unknown as Record<string, unknown>)
     if (!result.success) throw new Error(result.error || 'Pengajuan gagal dikirim')
 
     const submittedId = result.data?.idPengajuan || currentDraftId.value

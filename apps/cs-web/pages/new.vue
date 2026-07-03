@@ -52,6 +52,12 @@ const pengajuanSchema = z.object({
 
 type FormState = z.infer<typeof pengajuanSchema>
 
+type ApiResult<T = Record<string, unknown>> = {
+  success: boolean
+  data?: T
+  error?: string
+}
+
 type ModelProdukRow = {
   model?: string
   produk?: string
@@ -89,9 +95,9 @@ type PrintRow = {
 
 const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
-const { callApi } = useAppsScriptApi()
 const draftStorageKey = 'pengajuan_kartu_garansi_draft'
 const maxItems = computed(() => Number(runtimeConfig.public.maxItems || 10))
+const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 const maxTanggalForm = computed(() => getDateInputValue(addDays(new Date(), 7)))
 
 const formState = reactive<FormState>({
@@ -163,9 +169,27 @@ function showToast(title: string, color: ToastColor = 'info', description?: stri
   toast.add({ title, description, color })
 }
 
+async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
+  if (!appsScriptApiUrl.value) {
+    throw new Error('URL Google Apps Script belum dikonfigurasi.')
+  }
+
+  const response = await fetch(appsScriptApiUrl.value, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, ...payload })
+  })
+
+  if (!response.ok) {
+    throw new Error(`Google Apps Script merespons ${response.status}.`)
+  }
+
+  return response.json() as Promise<ApiResult<T>>
+}
+
 async function loadModelProduk() {
   try {
-    const result = await callApi<ModelProdukResponse>('getModelProduk')
+    const result = await callAPI<ModelProdukResponse>('getModelProduk')
     if (!result.success) throw new Error(result.error || 'Master model produk gagal dimuat')
 
     const map: Record<string, string> = {}
@@ -308,7 +332,7 @@ async function handleSaveDraftAndPrint() {
       payload.resumeToken = currentResumeToken.value
     }
 
-    const result = await callApi<DraftResponse>('saveDraftPengajuan', payload as unknown as Record<string, unknown>)
+    const result = await callAPI<DraftResponse>('saveDraftPengajuan', payload as unknown as Record<string, unknown>)
     if (!result.success) throw new Error(result.error || 'Draft gagal disimpan')
 
     setDraftReference(result.data?.idPengajuan || '', result.data?.resumeToken || '')
@@ -465,7 +489,7 @@ function getErrorMessage(error: unknown) {
                 />
               </UFormField>
 
-              <UFormField name="bagianCabang" label="Bagian/Cabang" size="lg" required>
+              <UFormField name="bagianCabang" label="Cabang" size="lg" required>
                 <UInput
                   v-model="formState.bagianCabang"
                   placeholder="Contoh: Cabang Jakarta Pusat"
@@ -535,8 +559,9 @@ function getErrorMessage(error: unknown) {
                 type="button"
                 label="Tambah Item"
                 icon="i-lucide-plus"
-                color="neutral"
+                color="primary"
                 variant="subtle"
+                class="cursor-pointer"
                 :disabled="formState.products.length >= maxItems"
                 @click="addItem"
               />
@@ -614,6 +639,7 @@ function getErrorMessage(error: unknown) {
                       color="error"
                       variant="ghost"
                       size="sm"
+                      class="cursor-pointer"
                       :disabled="formState.products.length <= 1"
                       :aria-label="`Hapus item ${index + 1}`"
                       @click="removeItem(index)"
@@ -634,7 +660,7 @@ function getErrorMessage(error: unknown) {
                 icon="i-lucide-printer"
                 color="primary"
                 size="lg"
-                class="w-full justify-center sm:w-auto"
+                class="w-full justify-center sm:w-auto cursor-pointer"
                 :loading="isSavingDraft"
               />
             </div>

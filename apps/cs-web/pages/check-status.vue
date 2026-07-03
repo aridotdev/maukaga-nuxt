@@ -8,6 +8,12 @@ definePageMeta({
 
 type ToastType = 'info' | 'success' | 'error'
 
+type ApiResult<T = Record<string, unknown>> = {
+  success: boolean
+  data?: T
+  error?: string
+}
+
 type StatusData = {
   idPengajuan?: string
   searchBy?: 'idPengajuan' | 'nomorSeri'
@@ -33,7 +39,8 @@ type StatusTone = {
 }
 
 const toast = useToast()
-const { callApi } = useAppsScriptApi()
+const runtimeConfig = useRuntimeConfig()
+const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 
 const searchInput = ref('')
 const resultType = ref<ResultType>('idle')
@@ -49,6 +56,24 @@ const statusText = computed(() => getSearchStatus(statusData.value))
 const statusTone = computed(() => statusCheckBadge(statusText.value))
 const statusInfoText = computed(() => statusCheckInfoText(statusText.value, getRejectedItemNote(statusData.value)))
 const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
+
+async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
+  if (!appsScriptApiUrl.value) {
+    throw new Error('URL Google Apps Script belum dikonfigurasi.')
+  }
+
+  const response = await fetch(appsScriptApiUrl.value, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, ...payload })
+  })
+
+  if (!response.ok) {
+    throw new Error(`Google Apps Script merespons ${response.status}.`)
+  }
+
+  return response.json() as Promise<ApiResult<T>>
+}
 
 function showToast(message: string, type: ToastType = 'info') {
   const iconMap: Record<ToastType, string> = {
@@ -80,7 +105,7 @@ async function handleCheckStatus() {
   showStatusCheckResult('loading', 'Memeriksa status pengajuan...')
 
   try {
-    const result = await callApi<StatusData>('checkPengajuanStatus', { keyword })
+    const result = await callAPI<StatusData>('checkPengajuanStatus', { keyword })
     if (requestId !== statusCheckRequestId.value) return
     if (!result.success) throw new Error(result.error || 'Status pengajuan atau nomor seri gagal dimuat')
 
@@ -159,7 +184,7 @@ function statusCheckBadge(status?: string): StatusTone {
       badge: 'border-red-200 bg-red-100/70 text-red-700',
       dotPing: 'bg-red-500',
       dot: 'bg-red-600',
-      icon: 'i-lucide-x-octagon',
+      icon: 'i-lucide-circle-x',
       iconColor: 'text-red-500 bg-red-100'
     },
     Diprint: {
