@@ -131,7 +131,7 @@
     </main>
 
     <!-- FOOTER -->
-    <footer class="relative z-10 mx-auto w-full max-w-7xl pb-2 text-center text-xs font-medium text-[#64748B]">
+    <footer class="flex flex-col relative z-10 mx-auto w-full max-w-7xl pb-2 text-center text-xs font-medium text-[#64748B]">
       &copy; 2026 Mau KaGa QRCC System. All rights reserved.
     </footer>
   </div>
