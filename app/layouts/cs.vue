@@ -110,12 +110,20 @@
         </div>
       </NuxtLink>
 
-      <NuxtLink
-        to="/login"
-        class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
-      >
-        Internal Portal QRCC - Cabang / CS
-      </NuxtLink>
+      <div class="flex gap-2">
+        <NuxtLink
+          to="/final-submit"
+          class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
+        >
+          Lanjutkan Draft
+        </NuxtLink>
+        <NuxtLink
+          to="/print-ulang"
+          class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
+        >
+          Print Ulang Pengajuan
+        </NuxtLink>
+      </div>
     </header>
 
     <main class="relative z-10 mx-auto flex w-full max-w-400 flex-1 flex-col py-10">

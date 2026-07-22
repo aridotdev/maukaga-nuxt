@@ -16,8 +16,3 @@ batasan :
 - tidak merusak dan merubah kode lain yang sudah ada.
 - fokus tugas ini saja
 
-
-ok, setuju dengan jalur yang paling aman. mari implementasikan :
-1. implementasikan di core app saja, cs-web dan admin-web tidak perlu saat ini.
-2. app/components/home/HomeReviewProductName.vue (line 87)
-Opsional. Kalau ingin saat approve model baru langsung pilih origin, file ini perlu ikut diubah. Kalau mau minimal, biarkan dulu; origin bisa terisi nanti saat cetak kartu pertama kali. ya aku pilih biarkan dulu.
