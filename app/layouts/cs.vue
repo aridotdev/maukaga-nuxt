@@ -1,3 +1,7 @@
+<script setup lang="ts">
+const isMobileMenuOpen = ref(false)
+</script>
+
 <template>
   <div
     class="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[linear-gradient(135deg,#DDE4E8_0%,#F0F4F8_100%)] p-6 antialiased selection:bg-slate-200 md:p-8 font-[Inter,sans-serif]"
@@ -79,7 +83,7 @@
     </div>
 
     <!-- HEADER BRANDING -->
-    <header class="relative z-10 mx-auto mt-2 flex w-full max-w-7xl flex-col items-center justify-between gap-4 md:flex-row md:gap-0">
+    <header class="relative z-10 mx-auto mt-2 flex w-full max-w-7xl items-center justify-between gap-4">
       <NuxtLink
         to="/"
         class="flex items-center gap-3 rounded-2xl outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[#0F172A]/30 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
@@ -102,7 +106,7 @@
             />
           </svg>
         </div>
-        <div>
+        <div class="hidden lg:flex flex-col items-start gap-0.5">
           <h1 class="text-lg font-bold leading-tight tracking-tight text-[#0F172A]">Mau KaGa</h1>
           <p class="text-[10px] font-medium uppercase tracking-wide text-[#64748B] md:text-xs">
             Sistem Pengajuan Kartu Garansi
@@ -110,7 +114,7 @@
         </div>
       </NuxtLink>
 
-      <div class="flex gap-2">
+      <div class="hidden gap-2 md:flex">
         <NuxtLink
           to="/final-submit"
           class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
@@ -124,7 +128,73 @@
           Print Ulang Pengajuan
         </NuxtLink>
       </div>
+
+      <button
+        type="button"
+        class="group flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/40 text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F172A]/30 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent md:hidden"
+        aria-label="Buka menu"
+        :aria-expanded="isMobileMenuOpen"
+        @click="isMobileMenuOpen = true"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5 transform-gpu transition-transform duration-300 ease-out group-hover:scale-110 group-active:scale-95"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2.5"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
     </header>
+
+    <div
+      class="fixed inset-0 z-30 bg-[#0F172A]/20 backdrop-blur-sm transition-opacity duration-300 ease-out md:hidden"
+      :class="isMobileMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+      :aria-hidden="!isMobileMenuOpen"
+      :inert="!isMobileMenuOpen"
+      @click.self="isMobileMenuOpen = false"
+    >
+      <nav
+        class="ml-auto flex h-full w-[min(78vw,20rem)] transform-gpu flex-col gap-3 border-l border-white/60 bg-white/70 px-6 pb-6 pt-8 shadow-[0_24px_48px_rgba(15,23,42,0.16)] backdrop-blur-2xl transition-all duration-300 ease-out"
+        :class="isMobileMenuOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+        aria-label="Menu mobile"
+      >
+        <button
+          type="button"
+          class="group mb-3 flex h-10 w-10 items-center justify-center self-end rounded-xl border border-white/60 bg-white/50 text-[#0F172A] shadow-sm transition-all duration-300 ease-out hover:bg-white/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F172A]/30"
+          aria-label="Tutup menu"
+          @click="isMobileMenuOpen = false"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5 transform-gpu transition-transform duration-300 ease-out group-hover:rotate-90 group-hover:scale-110 group-active:scale-95"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <NuxtLink
+          to="/final-submit"
+          class="rounded-2xl border border-white/60 bg-white/45 px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/70"
+          @click="isMobileMenuOpen = false"
+        >
+          Lanjutkan Draft
+        </NuxtLink>
+        <NuxtLink
+          to="/print-ulang"
+          class="rounded-2xl border border-white/60 bg-white/45 px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/70"
+          @click="isMobileMenuOpen = false"
+        >
+          Print Ulang Pengajuan
+        </NuxtLink>
+      </nav>
+    </div>
 
     <main class="relative z-10 mx-auto flex w-full max-w-400 flex-1 flex-col py-10">
       <slot />
