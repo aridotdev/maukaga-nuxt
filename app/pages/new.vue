@@ -438,7 +438,7 @@ function getErrorMessage(error: unknown) {
         </div>
       </div>
     </Teleport>
-    <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-5 p-0 sm:p-6 lg:gap-6 lg:p-8">
+    <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-9 p-0 sm:p-6 lg:gap-6 lg:p-8">
       <!-- Header Section -->
       <header class="flex flex-col items-start justify-between gap-2 lg:flex-row lg:items-center lg:gap-3 lg:rounded-2xl lg:border lg:border-muted lg:bg-default/45 lg:p-5 lg:shadow-sm lg:backdrop-blur-xl">
         <div class="min-w-0 flex-1">
@@ -457,7 +457,7 @@ function getErrorMessage(error: unknown) {
         <UForm
           :schema="pengajuanSchema"
           :state="formState"
-          class="flex flex-1 flex-col gap-6"
+          class="flex flex-1 flex-col gap-9 lg:gap-6"
           @submit="onDraftSubmit"
           @error="onFormError"
         >
@@ -541,7 +541,7 @@ function getErrorMessage(error: unknown) {
 
           <!-- Section 2: Daftar Produk -->
           <section class="flex flex-col lg:rounded-4xl lg:border lg:border-muted lg:bg-default/45 lg:p-8 lg:shadow-sm lg:backdrop-blur-xl">
-            <div class="mb-5 flex items-center justify-between gap-3 border-b border-muted pb-3 lg:mb-6 lg:gap-0 lg:pb-4">
+            <div class="mb-5 flex flex-col items-stretch justify-between gap-3 border-b border-muted pb-3 lg:mb-6 lg:flex-row lg:items-center lg:gap-0 lg:pb-4">
               <div class="flex min-w-0 items-center gap-3 lg:gap-4">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
                   <UIcon name="i-lucide-package" class="size-5" />
@@ -561,7 +561,7 @@ function getErrorMessage(error: unknown) {
                 icon="i-lucide-plus"
                 color="primary"
                 variant="subtle"
-                class="shrink-0 cursor-pointer"
+                class="self-end cursor-pointer lg:shrink-0"
                 :disabled="formState.products.length >= maxItems"
                 @click="addItem"
               />
