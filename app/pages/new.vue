@@ -438,14 +438,14 @@ function getErrorMessage(error: unknown) {
         </div>
       </div>
     </Teleport>
-    <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-5 p-0 sm:p-6 lg:gap-6 lg:p-8">
       <!-- Header Section -->
-      <header class="flex flex-col items-start justify-between gap-3 rounded-2xl border border-muted bg-default/45 p-4 shadow-sm backdrop-blur-xl lg:flex-row lg:items-center lg:p-5">
+      <header class="flex flex-col items-start justify-between gap-2 lg:flex-row lg:items-center lg:gap-3 lg:rounded-2xl lg:border lg:border-muted lg:bg-default/45 lg:p-5 lg:shadow-sm lg:backdrop-blur-xl">
         <div class="min-w-0 flex-1">
-          <h1 class="mb-1 text-xl font-bold text-highlighted lg:text-2xl">
+          <h1 class="mb-1 text-lg font-bold leading-snug text-highlighted lg:text-2xl">
             Form Pengajuan Kartu Garansi Baru
           </h1>
-          <p class="max-w-none truncate text-xs leading-relaxed text-muted lg:text-sm">
+          <p class="text-[11px] leading-relaxed text-muted sm:text-xs lg:text-sm">
             Lengkapi data pengajuan, simpan draft, lalu cetak hard copy untuk ditandatangani.
           </p>
         </div>
@@ -462,24 +462,24 @@ function getErrorMessage(error: unknown) {
           @error="onFormError"
         >
           <!-- Section 1: Informasi Pemohon -->
-          <section class="relative rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl lg:p-8">
-            <div class="mb-8 flex items-center justify-between border-b border-muted pb-4">
-              <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm">
+          <section class="relative lg:rounded-4xl lg:border lg:border-muted lg:bg-default/45 lg:p-8 lg:shadow-sm lg:backdrop-blur-xl">
+            <div class="mb-5 flex items-center justify-between border-b border-muted pb-3 lg:mb-8 lg:pb-4">
+              <div class="flex items-center gap-3 lg:gap-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
                   <UIcon name="i-lucide-user" class="size-5" />
                 </div>
                 <div>
-                  <p class="mb-1 text-xs font-bold uppercase tracking-wider text-dimmed">
+                  <p class="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-dimmed lg:mb-1 lg:text-xs">
                     Langkah 01
                   </p>
-                  <h2 class="text-xl font-bold text-highlighted">
+                  <h2 class="text-lg font-bold leading-tight text-highlighted lg:text-xl">
                     Informasi Pemohon
                   </h2>
                 </div>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-6">
               <UFormField name="namaPemohon" label="Nama Pemohon" size="lg" required>
                 <UInput
                   v-model="formState.namaPemohon"
@@ -540,17 +540,17 @@ function getErrorMessage(error: unknown) {
           </section>
 
           <!-- Section 2: Daftar Produk -->
-          <section class="flex flex-col rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl lg:p-8">
-            <div class="mb-6 flex items-center justify-between border-b border-muted pb-4">
-              <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm">
+          <section class="flex flex-col lg:rounded-4xl lg:border lg:border-muted lg:bg-default/45 lg:p-8 lg:shadow-sm lg:backdrop-blur-xl">
+            <div class="mb-5 flex items-center justify-between gap-3 border-b border-muted pb-3 lg:mb-6 lg:gap-0 lg:pb-4">
+              <div class="flex min-w-0 items-center gap-3 lg:gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
                   <UIcon name="i-lucide-package" class="size-5" />
                 </div>
-                <div>
-                  <p class="mb-1 text-xs font-bold uppercase tracking-wider text-dimmed">
+                <div class="min-w-0">
+                  <p class="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-dimmed lg:mb-1 lg:text-xs">
                     Langkah 02
                   </p>
-                  <h2 class="text-xl font-bold text-highlighted">
+                  <h2 class="text-lg font-bold leading-tight text-highlighted lg:text-xl">
                     Daftar Produk
                   </h2>
                 </div>
@@ -561,14 +561,14 @@ function getErrorMessage(error: unknown) {
                 icon="i-lucide-plus"
                 color="primary"
                 variant="subtle"
-                class="cursor-pointer"
+                class="shrink-0 cursor-pointer"
                 :disabled="formState.products.length >= maxItems"
                 @click="addItem"
               />
             </div>
 
             <!-- Item List -->
-            <div class="mb-8 overflow-hidden rounded-xl border border-muted bg-default/35 shadow-sm backdrop-blur-lg">
+            <div class="mb-6 md:mb-8 md:overflow-hidden md:rounded-xl md:border md:border-muted md:bg-default/35 md:shadow-sm md:backdrop-blur-lg">
               <div class="hidden grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_40px] gap-3 border-b border-muted px-4 py-3 text-xs font-semibold uppercase tracking-wider text-toned md:grid">
                 <span class="text-center">#</span>
                 <span>Model <span class="text-error">*</span></span>
@@ -577,7 +577,7 @@ function getErrorMessage(error: unknown) {
                 <span />
               </div>
 
-              <div class="flex flex-col gap-2 p-3">
+              <div class="flex flex-col gap-2 md:p-3">
                 <div
                   v-for="(product, index) in formState.products"
                   :key="index"
