@@ -1,5 +1,12 @@
 <script setup lang="ts">
 const isMobileMenuOpen = ref(false)
+const desktopNavLinkClass = [
+  'rounded-full border border-transparent bg-transparent px-4 py-1.5',
+  'text-xs font-semibold text-[#0F172A]',
+  'transition-all duration-300 ease-out',
+  'hover:border-white/60 hover:bg-white/40 hover:shadow-sm hover:backdrop-blur-sm',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F172A]/30 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent',
+].join(' ')
 </script>
 
 <template>
@@ -116,14 +123,20 @@ const isMobileMenuOpen = ref(false)
 
       <div class="hidden gap-2 md:flex">
         <NuxtLink
+          to="/check-status"
+          :class="desktopNavLinkClass"
+        >
+          Cek Status Pengajuan
+        </NuxtLink>
+        <NuxtLink
           to="/final-submit"
-          class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
+          :class="desktopNavLinkClass"
         >
           Lanjutkan Draft
         </NuxtLink>
         <NuxtLink
           to="/print-ulang"
-          class="rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
+          :class="desktopNavLinkClass"
         >
           Print Ulang Pengajuan
         </NuxtLink>
@@ -179,6 +192,13 @@ const isMobileMenuOpen = ref(false)
           </svg>
         </button>
 
+        <NuxtLink
+          to="/check-status"
+          class="rounded-2xl border border-white/60 bg-white/45 px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/70"
+          @click="isMobileMenuOpen = false"
+        >
+          Cek Status Pengajuan
+        </NuxtLink>
         <NuxtLink
           to="/final-submit"
           class="rounded-2xl border border-white/60 bg-white/45 px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/70"

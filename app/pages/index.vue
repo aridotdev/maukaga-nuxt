@@ -10,18 +10,18 @@ const actionButtonClass = 'flex max-w-lg items-center justify-center gap-2 round
 
 <template>
   <!-- LAUNCHER CENTRAL PORTAL -->
-  <section class="mx-auto flex w-full flex-col items-center justify-center lg:mt-10 lg:py-10 md:py-0 gap-20">
+  <section class="mx-auto flex w-full flex-col items-center justify-center mt-10 lg:py-10 md:py-0 gap-20">
     <!-- Title & Greeting Section -->
     <div class="mb-8 max-w-2xl px-4 text-center md:mb-12">
-      <h2 class="my-3 text-3xl font-bold tracking-tight text-[#0F172A] md:mb-4 md:text-5xl lg:leading-16">
-        Selamat Datang di Portal Kartu Garansi
-      </h2>
       <NuxtLink
         to="/login"
         class="inline-block w-fit flex-none self-center rounded-full border border-white/60 bg-white/40 px-4 py-1.5 text-xs font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm"
       >
         Internal Portal QRCC - Cabang / CS
       </NuxtLink>
+      <h2 class="my-3 text-3xl font-bold tracking-tight text-[#0F172A] md:mb-4 md:text-5xl lg:leading-16">
+        Selamat Datang di Portal Kartu Garansi
+      </h2>
       <p class="mt-4 text-sm text-[#64748B] md:text-base">
         Pusat pengelolaan dan pengajuan cetak ulang kartu garansi
       </p>
