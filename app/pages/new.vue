@@ -462,7 +462,7 @@ function getErrorMessage(error: unknown) {
           @error="onFormError"
         >
           <!-- Section 1: Informasi Pemohon -->
-          <section class="relative lg:rounded-4xl lg:border lg:border-muted lg:bg-default/45 lg:p-8 lg:shadow-sm lg:backdrop-blur-xl">
+          <section class="relative lg:rounded-4xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
             <div class="mb-5 flex items-center justify-between border-b border-muted pb-3 lg:mb-8 lg:pb-4">
               <div class="flex items-center gap-3 lg:gap-4">
                 <div class="flex h-10 w-10 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
@@ -540,7 +540,7 @@ function getErrorMessage(error: unknown) {
           </section>
 
           <!-- Section 2: Daftar Produk -->
-          <section class="flex flex-col lg:rounded-4xl lg:border lg:border-muted lg:bg-default/45 lg:p-8 lg:shadow-sm lg:backdrop-blur-xl">
+          <section class="flex flex-col lg:rounded-4xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
             <div class="mb-5 flex flex-col items-stretch justify-between gap-3 border-b border-muted pb-3 lg:mb-6 lg:flex-row lg:items-center lg:gap-0 lg:pb-4">
               <div class="flex w-full items-center justify-between gap-3 lg:gap-4">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
