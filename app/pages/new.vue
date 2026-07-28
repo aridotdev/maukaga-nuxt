@@ -485,7 +485,7 @@ function getErrorMessage(error: unknown) {
                   v-model="formState.namaPemohon"
                   placeholder="Masukkan nama Anda"
                   class="w-full"
-                  size="lg"
+                  size="lg" 
                 />
               </UFormField>
 
@@ -542,11 +542,11 @@ function getErrorMessage(error: unknown) {
           <!-- Section 2: Daftar Produk -->
           <section class="flex flex-col lg:rounded-4xl lg:border lg:border-muted lg:bg-default/45 lg:p-8 lg:shadow-sm lg:backdrop-blur-xl">
             <div class="mb-5 flex flex-col items-stretch justify-between gap-3 border-b border-muted pb-3 lg:mb-6 lg:flex-row lg:items-center lg:gap-0 lg:pb-4">
-              <div class="flex min-w-0 items-center gap-3 lg:gap-4">
+              <div class="flex w-full items-center justify-between gap-3 lg:gap-4">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
                   <UIcon name="i-lucide-package" class="size-5" />
                 </div>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                   <p class="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-dimmed lg:mb-1 lg:text-xs">
                     Langkah 02
                   </p>
@@ -554,17 +554,17 @@ function getErrorMessage(error: unknown) {
                     Daftar Produk
                   </h2>
                 </div>
+                <UButton
+                  type="button"
+                  label="Item"
+                  icon="i-lucide-plus"
+                  color="primary"
+                  variant="subtle"
+                  class="self-end cursor-pointer lg:shrink-0"
+                  :disabled="formState.products.length >= maxItems"
+                  @click="addItem"
+                />
               </div>
-              <UButton
-                type="button"
-                label="Tambah Item"
-                icon="i-lucide-plus"
-                color="primary"
-                variant="subtle"
-                class="self-end cursor-pointer lg:shrink-0"
-                :disabled="formState.products.length >= maxItems"
-                @click="addItem"
-              />
             </div>
 
             <!-- Item List -->
