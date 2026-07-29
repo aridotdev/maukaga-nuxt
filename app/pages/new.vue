@@ -559,7 +559,7 @@ function getErrorMessage(error: unknown) {
                   label="Item"
                   icon="i-lucide-plus"
                   color="primary"
-                  variant="subtle"
+                  variant="solid"
                   class="self-end cursor-pointer lg:shrink-0"
                   :disabled="formState.products.length >= maxItems"
                   @click="addItem"
