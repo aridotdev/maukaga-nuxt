@@ -249,7 +249,7 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
+  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col md:p-8">
     <div
       class="mb-8 grow rounded-3xl border border-white/60 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-all duration-500 md:p-8"
       :class="hasStatusInputInteraction ? 'bg-white/65 scale-[1.01] shadow-xl' : 'bg-white/45'"
@@ -295,77 +295,78 @@ function getErrorMessage(error: unknown) {
             />
           </div>
 
-          <!-- HASIL PENCARIAN -->
-          <Transition name="slide-fade">
-            <div v-if="showStatusResult" class="mt-8 relative overflow-hidden rounded-2xl border border-white/60 bg-white/60 p-6 text-center shadow-sm backdrop-blur-md">
-              
-              <!-- Dekorasi Background sesuai status -->
-              <div 
-                v-if="resultType === 'success'"
-                class="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-20 blur-3xl transition-colors duration-1000" 
-                :class="statusTone.dotPing"
-              />
-
-              <div class="relative z-10">
-                <template v-if="resultType === 'success'">
-                  <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="statusTone.iconColor">
-                    <UIcon :name="statusTone.icon" class="size-7" />
-                  </div>
-                  
-                  <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
-                  <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
-                    {{ statusData.idPengajuan || searchInput || '-' }}
-                  </h3>
-
-                  <div v-if="statusData.nomorSeri" class="mx-auto mb-4 grid max-w-sm gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-500">
-                    <div class="flex items-center justify-between gap-3">
-                      <span>Nomor Seri</span>
-                      <span class="break-all font-mono font-semibold text-slate-700">{{ statusData.nomorSeri }}</span>
-                    </div>
-                    <div v-if="itemProductText" class="flex items-center justify-between gap-3">
-                      <span>Produk</span>
-                      <span class="text-right font-semibold text-slate-700">{{ itemProductText }}</span>
-                    </div>
-                    <div v-if="statusData.noItem" class="flex items-center justify-between gap-3">
-                      <span>No Item</span>
-                      <span class="font-semibold text-slate-700">#{{ statusData.noItem }}</span>
-                    </div>
-                  </div>
-
-                  <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="statusTone.badge">
-                    <span class="relative flex size-2.5">
-                      <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="statusTone.dotPing" />
-                      <span class="relative inline-flex size-2.5 rounded-full" :class="statusTone.dot" />
-                    </span>
-                    <span class="text-sm font-bold tracking-wide">{{ statusText }}</span>
-                  </div>
-
-                  <div class="mx-auto max-w-sm rounded-xl bg-slate-50/80 p-4 border border-slate-100">
-                    <p class="text-sm font-medium leading-relaxed text-slate-600">
-                      {{ statusInfoText }}
-                    </p>
-                  </div>
-                </template>
-
-                <div v-else class="flex flex-col items-center justify-center py-6">
-                  <UIcon 
-                    :name="resultType === 'loading' ? 'i-lucide-loader-2' : 'i-lucide-file-warning'" 
-                    class="mb-3 size-10" 
-                    :class="[resultType === 'loading' ? 'animate-spin text-blue-500' : 'text-red-500']"
-                  />
-                  <p
-                    class="text-sm font-semibold"
-                    :class="resultType === 'loading' ? 'text-blue-700' : 'text-red-700'"
-                  >
-                    {{ resultMessage }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Transition>
         </form>
       </div>
     </div>
+
+    <!-- HASIL PENCARIAN -->
+    <Transition name="slide-fade">
+      <div v-if="showStatusResult" class="relative overflow-hidden rounded-2xl border border-white/60 bg-white/60 p-6 text-center shadow-sm backdrop-blur-md">
+
+        <!-- Dekorasi Background sesuai status -->
+        <div
+          v-if="resultType === 'success'"
+          class="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-20 blur-3xl transition-colors duration-1000"
+          :class="statusTone.dotPing"
+        />
+
+        <div class="relative z-10">
+          <template v-if="resultType === 'success'">
+            <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="statusTone.iconColor">
+              <UIcon :name="statusTone.icon" class="size-7" />
+            </div>
+
+            <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
+            <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
+              {{ statusData.idPengajuan || searchInput || '-' }}
+            </h3>
+
+            <div v-if="statusData.nomorSeri" class="mx-auto mb-4 grid max-w-sm gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-500">
+              <div class="flex items-center justify-between gap-3">
+                <span>Nomor Seri</span>
+                <span class="break-all font-mono font-semibold text-slate-700">{{ statusData.nomorSeri }}</span>
+              </div>
+              <div v-if="itemProductText" class="flex items-center justify-between gap-3">
+                <span>Produk</span>
+                <span class="text-right font-semibold text-slate-700">{{ itemProductText }}</span>
+              </div>
+              <div v-if="statusData.noItem" class="flex items-center justify-between gap-3">
+                <span>No Item</span>
+                <span class="font-semibold text-slate-700">#{{ statusData.noItem }}</span>
+              </div>
+            </div>
+
+            <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="statusTone.badge">
+              <span class="relative flex size-2.5">
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="statusTone.dotPing" />
+                <span class="relative inline-flex size-2.5 rounded-full" :class="statusTone.dot" />
+              </span>
+              <span class="text-sm font-bold tracking-wide">{{ statusText }}</span>
+            </div>
+
+            <div class="mx-auto max-w-sm rounded-xl bg-slate-50/80 p-4 border border-slate-100">
+              <p class="text-sm font-medium leading-relaxed text-slate-600">
+                {{ statusInfoText }}
+              </p>
+            </div>
+          </template>
+
+          <div v-else class="flex flex-col items-center justify-center py-6">
+            <UIcon
+              :name="resultType === 'loading' ? 'i-lucide-loader-2' : 'i-lucide-file-warning'"
+              class="mb-3 size-10"
+              :class="[resultType === 'loading' ? 'animate-spin text-blue-500' : 'text-red-500']"
+            />
+            <p
+              class="text-sm font-semibold"
+              :class="resultType === 'loading' ? 'text-blue-700' : 'text-red-700'"
+            >
+              {{ resultMessage }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </section>
 </template>
 
