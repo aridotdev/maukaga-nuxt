@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 definePageMeta({
   layout: 'cs'
@@ -57,6 +57,8 @@ const hasSearchInputError = ref(false)
 const isLoadingDraft = ref(false)
 const isLoadingStoredDraft = ref(false)
 const showPrintPreview = ref(false)
+const searchControlSize = ref<'md' | 'xl'>('xl')
+let mobileMediaQueryList: MediaQueryList | null = null
 
 const isDraftReady = computed(() => !!currentDraftId.value && !!loadedDraft.value)
 const printPayload = computed(() => loadedDraft.value || {})
@@ -88,6 +90,11 @@ const printDraft = usePrintWithFilename('Pengajuan', () => printId.value)
 
 onMounted(() => {
   initializeDraftResume()
+  initializeSearchControlSize()
+})
+
+onBeforeUnmount(() => {
+  mobileMediaQueryList?.removeEventListener('change', updateSearchControlSize)
 })
 
 watch(searchId, () => {
@@ -122,6 +129,18 @@ function initializeDraftResume() {
     searchId.value = fromUrl.idPengajuan
     void handleLoadDraft({ idPengajuan: fromUrl.idPengajuan, fromUrl: true, source: 'url' })
   }
+}
+
+function initializeSearchControlSize() {
+  if (!import.meta.client) return
+
+  mobileMediaQueryList = window.matchMedia('(max-width: 767px)')
+  updateSearchControlSize(mobileMediaQueryList)
+  mobileMediaQueryList.addEventListener('change', updateSearchControlSize)
+}
+
+function updateSearchControlSize(event: MediaQueryList | MediaQueryListEvent) {
+  searchControlSize.value = event.matches ? 'md' : 'xl'
 }
 
 async function handleLoadDraft(reference: LoadDraftReference = {}) {
@@ -254,13 +273,13 @@ function getErrorMessage(error: unknown) {
       <div v-if="!showPrintPreview" class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
 
         <!-- HEADER -->
-        <div class="mb-8">
+        <div class="flex flex-col gap-2 lg:gap-6 md:mb-12 justify-between md:items-center">
           <div class="mb-6 flex items-center justify-between">
             <div>
-              <h2 class="text-2xl font-bold tracking-tight text-slate-900">
+              <h2 class="lg:text-2xl font-bold tracking-tight text-slate-900">
                 Print Ulang Pengajuan
               </h2>
-              <p class="mt-1 text-sm text-slate-500">
+              <p class="mt-1 text-xs lg:text-sm text-slate-500">
                 Masukkan ID Pengajuan untuk memuat dan mencetak ulang form yang sudah pernah dibuat.
               </p>
             </div>
@@ -272,11 +291,11 @@ function getErrorMessage(error: unknown) {
               v-model="searchId"
               type="text"
               class="w-full"
-              size="xl"
+              :size="searchControlSize"
               color="neutral"
               variant="outline"
               :highlight="hasSearchInputError"
-              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3 font-mono uppercase shadow-sm transition-all focus:bg-white focus:ring-2' }"
+              :ui="{ base: 'lg:rounded-xl bg-white/80 font-mono uppercase shadow-sm transition-all focus:bg-white focus:ring-2 py-2.5 md:px-6 md:px-4 md:py-3' }"
               placeholder="Masukkan ID, contoh: KG-YYYYMMDD-0001"
               autocomplete="off"
               icon="i-lucide-search"
@@ -284,10 +303,10 @@ function getErrorMessage(error: unknown) {
             />
             <UButton
               type="button"
-              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold transition-all hover:bg-slate-100 md:w-auto md:shrink-0"
-              color="neutral"
-              variant="outline"
-              size="xl"
+              class="w-full justify-center lg:rounded-xl font-semibold transition-all hover:bg-slate-100 md:w-auto md:shrink-0 px-3 py-2.5 md:px-6 md:py-3.5"
+              color="success"
+              variant="solid"
+              :size="searchControlSize"
               icon="i-lucide-search"
               :label="isLoadingDraft ? 'Mencari...' : 'Cari'"
               :loading="isLoadingDraft"
