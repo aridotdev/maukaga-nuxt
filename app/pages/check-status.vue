@@ -135,7 +135,7 @@ function renderStatusCheckResult(data: StatusData) {
   const nomorSeri = String(data.nomorSeri || '').trim()
   if (!nomorSeri) {
     hasInputError.value = true
-    showStatusCheckResult('error', 'Nomor Seri tidak ditemukan. Pastikan Nomor Seri yang dimasukkan sudah benar.')
+    showStatusCheckResult('error', 'Data tidak ditemukan. Pastikan Nomor Seri yang dimasukkan sudah benar.')
     return
   }
 
@@ -281,7 +281,11 @@ function pengajuanStatusInfoTextMap(status?: string) {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
+
+  return message
+    .replace(/ID Pengajuan atau Nomor Seri/gi, 'Nomor Seri')
+    .replace(/pengajuan atau nomor seri/gi, 'nomor seri')
 }
 </script>
 
@@ -362,10 +366,6 @@ function getErrorMessage(error: unknown) {
               <div v-if="itemProductText" class="flex items-center justify-between gap-3">
                 <span>Produk</span>
                 <span class="text-right font-semibold text-slate-700">{{ itemProductText }}</span>
-              </div>
-              <div v-if="statusData.idPengajuan" class="flex items-center justify-between gap-3">
-                <span>ID Pengajuan</span>
-                <span class="break-all font-mono font-semibold text-slate-700">{{ statusData.idPengajuan }}</span>
               </div>
               <div v-if="statusData.noItem" class="flex items-center justify-between gap-3">
                 <span>No Item</span>
