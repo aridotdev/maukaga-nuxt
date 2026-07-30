@@ -501,7 +501,7 @@ function getErrorMessage(error: unknown) {
               <UFormField name="namaPemilikBarang" label="Nama Pemilik Barang" size="lg" required>
                 <UInput
                   v-model="formState.namaPemilikBarang"
-                  placeholder="Masukkan nama pemilik barang"
+                  placeholder="Masukkan nama toko atau dealer"
                   class="w-full"
                   size="lg"
                 />
