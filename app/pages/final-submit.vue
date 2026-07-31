@@ -586,10 +586,10 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
+  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col md:p-8">
     <Transition name="layout" mode="out-in">
       <!-- STATE: BERHASIL SUBMIT -->
-      <div v-if="successId" class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-12">
+      <div v-if="successId" class="mb-8 grow rounded-xl lg:rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-12">
         <div class="mx-auto max-w-xl py-8">
           <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-green-600 ring-8 ring-green-50">
             <UIcon name="i-lucide-check" class="size-10" />
@@ -618,7 +618,7 @@ function getErrorMessage(error: unknown) {
       </div>
 
       <!-- STATE: CARI DRAFT & UPLOAD -->
-      <div v-else class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
+      <div v-else class="mb-8 grow rounded-xl lg:rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
         
         <!-- STEP 1: CARI DRAFT -->
         <div class="mx-auto mb-8 max-w-xl py-6 text-center">
@@ -681,10 +681,10 @@ function getErrorMessage(error: unknown) {
 
             <!-- STEP 2: REVIEW DATA (FITUR BARU BERDASARKAN PERMINTAAN) -->
             <div>
-              <h3 class="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
+              <h3 class="mb-4 grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-lg font-bold text-slate-800 sm:flex sm:gap-2">
                 <UIcon name="i-lucide-file-text" class="size-5 text-blue-600" />
                 Ringkasan Data
-                <span class="ml-2 rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-semibold text-blue-800">{{ currentDraftId }}</span>
+                <span class="col-start-2 w-fit rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-semibold text-blue-800 sm:ml-2">{{ currentDraftId }}</span>
               </h3>
               
               <div class="grid gap-6 md:grid-cols-[1fr_2fr]">
@@ -713,7 +713,7 @@ function getErrorMessage(error: unknown) {
                     <div 
                       v-for="(item, idx) in loadedDraft?.items" 
                       :key="idx"
-                      class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                      class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
                         <p class="font-bold text-slate-800">{{ item.model || 'Model tidak diketahui' }}</p>
@@ -786,12 +786,11 @@ function getErrorMessage(error: unknown) {
               >
 
               <div class="mt-6 border-t border-slate-200/60 pt-5">
-                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between bg:items-start">
                   <div>
                     <h4 class="flex items-center gap-2 text-base font-bold text-slate-800">
                       <UIcon name="i-lucide-images" class="size-5 text-blue-600" />
                       Lampiran Foto Bukti
-                      <span class="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Opsional</span>
                     </h4>
                     <p class="mt-1 text-sm text-slate-500">
                       Foto unit, dus, label model, serial number, atau bukti pendukung lain.
