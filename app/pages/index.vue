@@ -10,7 +10,7 @@ const actionButtonClass = 'flex max-w-lg items-center justify-center gap-2 round
 
 <template>
   <!-- LAUNCHER CENTRAL PORTAL -->
-  <section class="mx-auto flex w-full flex-col items-center justify-center mt-10 lg:py-10 md:py-0 gap-20">
+  <section class="mx-auto flex w-full flex-1 flex-col items-center justify-center lg:py-10 md:py-0 gap-20">
     <!-- Title & Greeting Section -->
     <div class="mb-8 max-w-2xl px-4 text-center md:mb-12">
       <NuxtLink
