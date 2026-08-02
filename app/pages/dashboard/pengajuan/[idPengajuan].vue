@@ -7,9 +7,9 @@ definePageMeta({
   middleware: ['auth-guard', 'role-guard']
 })
 
-const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
-const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'] as const
-const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'] as const
+const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'] as const
+const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak'] as const
+const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Selesai'] as const
 const EMPTY_ITEM_DECISION_VALUE = '__belum_diputuskan__' as const
 
 type StatusColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -21,7 +21,6 @@ const PENGAJUAN_STATUS_COLORS = {
   Ditolak: 'error',
   Diprint: 'warning',
   Dikirim: 'primary',
-  Diterima: 'secondary',
   Selesai: 'neutral'
 } satisfies Record<PengajuanStatus, StatusColor>
 
@@ -38,7 +37,6 @@ type ItemDecisionForm = {
   keputusanItem: ItemDecisionStatus
   catatanAdmin: string
   isSubmitting: boolean
-  isCompleting: boolean
   error: string
   notice: string
 }
@@ -89,7 +87,6 @@ const {
   isLoading,
   load,
   setItemDecision,
-  completeItem,
   setPengajuanStatus
 } = usePengajuanDetail(() => idPengajuan.value)
 
@@ -236,7 +233,6 @@ function initItemForms(items: DetailItem[]) {
       keputusanItem: getItemDecision(item),
       catatanAdmin: item.catatanAdminItem || '',
       isSubmitting: false,
-      isCompleting: false,
       error: '',
       notice: ''
     }
@@ -270,11 +266,6 @@ async function submitItemDecision(item: DetailItem) {
 
   if (!isItemDecisionStatus(keputusanBaru)) {
     statusForm.error = 'Keputusan item tidak valid.'
-    return
-  }
-
-  if (getItemStatus(item) === 'Selesai' && keputusanBaru !== keputusanLama) {
-    statusForm.error = 'Item sudah Selesai. Keputusan tidak bisa diubah dari halaman ini.'
     return
   }
 
@@ -326,64 +317,6 @@ async function submitItemDecision(item: DetailItem) {
   }
 
   await saveItemDecision()
-}
-
-async function submitCompleteItem(item: DetailItem) {
-  const key = getItemKey(item)
-  const form = itemForms.value[key]
-  if (!form) return
-
-  form.error = ''
-  form.notice = ''
-
-  const noItem = item.noItem
-  if (!noItem) {
-    form.error = 'No Item tidak valid.'
-    return
-  }
-  const itemNo = noItem
-  const itemForm = form
-
-  if (getItemDecision(item) !== 'Disetujui') {
-    itemForm.error = 'Item harus diputuskan Disetujui sebelum bisa ditandai Selesai.'
-    return
-  }
-
-  if (getItemStatus(item) === 'Selesai') {
-    toast.add({
-      title: 'Item sudah selesai',
-      description: `Item #${itemNo} sudah berstatus Selesai.`,
-      color: 'info',
-      icon: 'i-lucide-info'
-    })
-    return
-  }
-
-  async function saveCompleteItem() {
-    itemForm.isCompleting = true
-
-    try {
-      await completeItem(itemNo, itemForm.catatanAdmin.trim())
-      toast.add({
-        title: 'Item ditandai selesai',
-        description: `Item #${itemNo} diperbarui menjadi Selesai.`,
-        color: 'success',
-        icon: 'i-lucide-circle-check'
-      })
-      itemForm.notice = 'Item selesai.'
-    } catch (err) {
-      itemForm.error = err instanceof Error ? err.message : String(err)
-    } finally {
-      itemForm.isCompleting = false
-    }
-  }
-
-  openConfirmDialog({
-    title: 'Konfirmasi Item Selesai',
-    description: `Tandai item #${itemNo} sebagai Selesai? Pastikan proses kartu garansi untuk item ini sudah selesai.`,
-    confirmColor: 'success',
-    onConfirm: saveCompleteItem
-  })
 }
 
 async function submitPengajuanStatus() {
@@ -491,7 +424,6 @@ function getItemForm(item: DetailItem) {
       keputusanItem: getItemDecision(item),
       catatanAdmin: item.catatanAdminItem || '',
       isSubmitting: false,
-      isCompleting: false,
       error: '',
       notice: ''
     }
@@ -588,8 +520,7 @@ function isBackwardPengajuanTransition(currentStatus: string, nextStatus: string
 function requiresPengajuanStatusNote(currentStatus: string, nextStatus: string) {
   return nextStatus === 'Ditolak'
     || isBackwardPengajuanTransition(currentStatus, nextStatus)
-    || (nextStatus === 'Diterima' && currentStatus !== 'Dikirim')
-    || (nextStatus === 'Selesai' && currentStatus !== 'Diterima')
+    || (nextStatus === 'Selesai' && currentStatus !== 'Dikirim')
 }
 
 function getPengajuanTransitionConfirmMessage(currentStatus: string, nextStatus: string) {
@@ -597,8 +528,7 @@ function getPengajuanTransitionConfirmMessage(currentStatus: string, nextStatus:
     return `Status akan mundur dari ${currentStatus} ke ${nextStatus}. Lanjutkan?`
   }
   if (nextStatus === 'Ditolak') return 'Tolak pengajuan ini? Pastikan catatan admin sudah menjelaskan alasannya.'
-  if (nextStatus === 'Diterima') return 'Tandai kartu garansi sudah diterima?'
-  if (nextStatus === 'Selesai') return 'Tandai proses kartu garansi sudah selesai?'
+  if (nextStatus === 'Selesai') return 'Tandai kartu garansi sudah diterima dan proses selesai?'
   return ''
 }
 
@@ -829,7 +759,7 @@ function formatDateTime(value: string | undefined) {
                         :model-value="getItemDecisionSelectValue(getItemForm(item).keputusanItem)"
                         :items="itemDecisionItems"
                         class="w-full"
-                        :disabled="getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
+                        :disabled="getItemForm(item).isSubmitting"
                         @update:model-value="setItemDecisionSelectValue(item, $event)"
                       />
                     </UFormField>
@@ -850,19 +780,7 @@ function formatDateTime(value: string | undefined) {
                       color="primary"
                       class="h-8 w-full flex-none self-start lg:mt-6 lg:w-auto"
                       :loading="getItemForm(item).isSubmitting"
-                      :disabled="getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
-                    />
-
-                    <UButton
-                      type="button"
-                      label="Tandai Selesai"
-                      icon="i-lucide-circle-check"
-                      color="success"
-                      variant="outline"
-                      class="h-8 w-full flex-none self-start lg:mt-6 lg:w-auto"
-                      :loading="getItemForm(item).isCompleting"
-                      :disabled="getItemDecision(item) !== 'Disetujui' || getItemStatus(item) === 'Selesai' || getItemForm(item).isSubmitting || getItemForm(item).isCompleting"
-                      @click="submitCompleteItem(item)"
+                      :disabled="getItemForm(item).isSubmitting"
                     />
                   </form>
                 </div>

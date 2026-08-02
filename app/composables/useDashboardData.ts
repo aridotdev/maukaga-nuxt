@@ -4,8 +4,8 @@
  * Cukup 1 call ke Apps Script, dishare ke semua komponen.
  */
 
-type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
-type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
+type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
 
 type DashboardSummary = {
@@ -16,12 +16,10 @@ type DashboardSummary = {
   ditolak?: number
   diprint?: number
   dikirim?: number
-  diterima?: number
   selesai?: number
   itemBaru?: number
   itemDisetujui?: number
   itemDitolak?: number
-  itemSelesai?: number
 }
 
 type DashboardRow = {
@@ -66,7 +64,7 @@ type UseDashboardDataOptions = {
 
 const DASHBOARD_TTL = 30_000
 const DASHBOARD_PAGE_SIZE = 100
-const VALID_STATUSES: ReadonlySet<DashboardStatus> = new Set(['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'])
+const VALID_STATUSES: ReadonlySet<DashboardStatus> = new Set(['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'])
 
 function getTime(value: string): number {
   const time = new Date(value || 0).getTime()

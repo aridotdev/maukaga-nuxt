@@ -10,8 +10,8 @@ definePageMeta({
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
-type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
-type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
+type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
 
 type DashboardPengajuanSourceRow = {
@@ -83,9 +83,6 @@ const statusFilterItems = [{
 }, {
   label: 'Ditolak',
   value: 'Ditolak'
-}, {
-  label: 'Selesai',
-  value: 'Selesai'
 }]
 
 const pengajuanTableGlobalFilterOptions = {
@@ -303,7 +300,6 @@ function getStatusColor(status: string) {
     Ditolak: 'error',
     Diprint: 'warning',
     Dikirim: 'primary',
-    Diterima: 'secondary',
     Selesai: 'neutral'
   }
   return colors[status] || 'neutral'
@@ -343,7 +339,7 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
 
 function normalizeItemStatus(status: string, fallbackStatus: string): DashboardItemStatus {
   const value = String(status || fallbackStatus || '').trim()
-  if (value === 'Disetujui' || value === 'Ditolak' || value === 'Selesai') return value
+  if (value === 'Disetujui' || value === 'Ditolak') return value
   return 'Baru'
 }
 

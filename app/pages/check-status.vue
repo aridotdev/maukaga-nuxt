@@ -220,13 +220,6 @@ function statusCheckBadge(status?: string): StatusTone {
       icon: 'i-lucide-truck',
       iconColor: 'text-sky-600 bg-sky-100'
     },
-    Diterima: {
-      badge: 'border-violet-200 bg-violet-100/70 text-violet-800',
-      dotPing: 'bg-violet-500',
-      dot: 'bg-violet-600',
-      icon: 'i-lucide-package-check',
-      iconColor: 'text-violet-600 bg-violet-100'
-    },
     Selesai: {
       badge: 'border-slate-300 bg-slate-200/70 text-slate-800',
       dotPing: 'bg-slate-500',
@@ -272,8 +265,7 @@ function pengajuanStatusInfoTextMap(status?: string) {
     Ditolak: 'Pengajuan telah diperiksa dan ditolak.',
     Diprint: 'Kartu garansi sudah dicetak dan sedang disiapkan untuk pengiriman.',
     Dikirim: 'Kartu garansi sudah dikirim ke cabang atau alamat terkait.',
-    Diterima: 'Kartu garansi sudah dikonfirmasi diterima.',
-    Selesai: 'Proses kartu garansi sudah selesai.',
+    Selesai: 'Kartu garansi sudah diterima dan proses selesai.',
     'Menunggu Upload': 'Pengajuan masih berupa draft dan belum disubmit final.'
   }
 

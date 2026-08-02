@@ -48,10 +48,10 @@ const ACTIVE_PRINT_LAYOUT_KEYS = {
   import: 'ACTIVE_PRINT_LAYOUT_IMPORT',
 };
 const DRAFT_STATUS = 'Menunggu Upload';
-const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
-const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Selesai'];
+const VALID_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'];
+const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak'];
 const ITEM_DECISION_STATUSES = ['Disetujui', 'Ditolak'];
-const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'];
+const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Selesai'];
 const VALID_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const VALID_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
 const VALID_EVIDENCE_EXTENSIONS = ['jpg', 'jpeg', 'png'];
@@ -95,6 +95,88 @@ function setupApp() {
 
   ensureEmailDigestTrigger_();
   console.log('Setup selesai. Spreadsheet ID: ' + ss.getId() + ', Drive folder ID: ' + folderId);
+}
+
+function migrateStatusSimplification() {
+  ensureRuntimeHeaders_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const now = new Date();
+    const actor = 'system:migration';
+    const statusLogSheet = getSheet_(SHEETS.STATUS_LOG);
+    const summary = {
+      itemSelesaiToDisetujui: 0,
+      pengajuanDiterimaToSelesai: 0,
+    };
+
+    const itemSheet = getSheet_(SHEETS.ITEMS);
+    const itemValues = itemSheet.getDataRange().getValues();
+    if (itemValues.length > 1) {
+      const itemCol = indexMap_(itemValues[0]);
+      const decisionCol = itemCol['Keputusan Item'];
+
+      for (let i = 1; i < itemValues.length; i++) {
+        if (clean_(itemValues[i][itemCol['Status Item']]) !== 'Selesai') continue;
+
+        const rowNumber = i + 1;
+        itemSheet.getRange(rowNumber, itemCol['Status Item'] + 1).setValue('Disetujui');
+        if (decisionCol !== undefined && !clean_(itemValues[i][decisionCol])) {
+          itemSheet.getRange(rowNumber, decisionCol + 1).setValue('Disetujui');
+        }
+        if (itemCol['Tanggal Update Status Item'] !== undefined) {
+          itemSheet.getRange(rowNumber, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
+        }
+        if (itemCol['User Update Status Item'] !== undefined) {
+          itemSheet.getRange(rowNumber, itemCol['User Update Status Item'] + 1).setValue(actor);
+        }
+
+        statusLogSheet.appendRow([
+          now,
+          itemValues[i][itemCol['ID Pengajuan']],
+          'Selesai',
+          'Disetujui',
+          'Migrasi penyederhanaan status item',
+          actor,
+          itemValues[i][itemCol['No Item']],
+        ]);
+        summary.itemSelesaiToDisetujui += 1;
+      }
+    }
+
+    const pengajuanSheet = getSheet_(SHEETS.PENGAJUAN);
+    const pengajuanValues = pengajuanSheet.getDataRange().getValues();
+    if (pengajuanValues.length > 1) {
+      const pengajuanCol = indexMap_(pengajuanValues[0]);
+
+      for (let i = 1; i < pengajuanValues.length; i++) {
+        if (clean_(pengajuanValues[i][pengajuanCol['Status']]) !== 'Diterima') continue;
+
+        appendStatusHistory_(
+          pengajuanSheet,
+          i + 1,
+          pengajuanCol,
+          pengajuanValues[i][pengajuanCol['ID Pengajuan']],
+          'Diterima',
+          'Selesai',
+          'Migrasi penyederhanaan status pengajuan',
+          actor,
+          '',
+          now,
+          'Migrasi status'
+        );
+        summary.pengajuanDiterimaToSelesai += 1;
+      }
+    }
+
+    return {
+      success: true,
+      migratedAt: now.toISOString(),
+      summary: summary,
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function doGet(e) {
@@ -820,12 +902,10 @@ function handleGetDashboard(data) {
     ditolak: 0,
     diprint: 0,
     dikirim: 0,
-    diterima: 0,
     selesai: 0,
     itemBaru: 0,
     itemDisetujui: 0,
-    itemDitolak: 0,
-    itemSelesai: 0
+    itemDitolak: 0
   };
   const rowById = {};
   rows.forEach(function (row) {
@@ -1027,9 +1107,9 @@ function handleUpdateItemStatus(data) {
   const catatanAdmin = clean_(data.catatanAdmin);
   if (!id) throw new Error('ID Pengajuan wajib diisi');
   if (!noItem) throw new Error('No Item wajib diisi');
-  if (!hasDecisionPayload && requestedStatus !== 'Selesai') throw new Error('Keputusan item wajib diisi');
+  if (!hasDecisionPayload) throw new Error('Keputusan item wajib diisi');
   if (hasDecisionPayload && requestedDecision && ITEM_DECISION_STATUSES.indexOf(requestedDecision) === -1) throw new Error('Keputusan item tidak valid');
-  if (requestedStatus && requestedStatus !== 'Selesai') throw new Error('Status item hanya bisa diubah otomatis dari keputusan, kecuali Selesai');
+  if (requestedStatus) throw new Error('Status item hanya bisa diubah otomatis dari keputusan');
   if (requestedDecision === 'Ditolak' && !catatanAdmin) throw new Error('Catatan Admin wajib diisi jika keputusan Ditolak');
 
   const lock = LockService.getScriptLock();
@@ -1073,16 +1153,8 @@ function handleUpdateItemStatus(data) {
     if (itemCol['Keputusan Item'] === undefined) throw new Error('Kolom Keputusan Item belum tersedia. Jalankan setupApp terlebih dahulu.');
 
     const now = new Date();
-    const isCompletingItem = requestedStatus === 'Selesai';
-    if (statusLama === 'Selesai' && hasDecisionPayload && requestedDecision !== decisionLama) {
-      throw new Error('Item sudah Selesai. Keputusan tidak bisa diubah.');
-    }
-    if (isCompletingItem && decisionLama !== 'Disetujui') {
-      throw new Error('Item harus diputuskan Disetujui sebelum ditandai Selesai.');
-    }
-
-    const decisionBaru = isCompletingItem ? decisionLama : normalizeExplicitItemDecision_(requestedDecision);
-    const statusBaru = isCompletingItem ? 'Selesai' : deriveItemStatusFromDecision_(decisionBaru, statusLama);
+    const decisionBaru = normalizeExplicitItemDecision_(requestedDecision);
+    const statusBaru = deriveItemStatusFromDecision_(decisionBaru, statusLama);
     itemSheet.getRange(itemRow, itemCol['Status Item'] + 1).setValue(statusBaru);
     itemSheet.getRange(itemRow, itemCol['Catatan Admin Item'] + 1).setValue(catatanAdmin);
     itemSheet.getRange(itemRow, itemCol['Tanggal Update Status Item'] + 1).setValue(now);
@@ -1100,9 +1172,9 @@ function handleUpdateItemStatus(data) {
       });
     const derivedParentStatus = derivePengajuanStatusFromItemStatuses_(refreshedItems);
     const parentStatusBaru = shouldApplyItemDerivedParentStatus_(parentStatusLama) ? derivedParentStatus : parentStatusLama;
-    const logLabel = isCompletingItem ? 'Item #' + noItem : 'Keputusan Item #' + noItem;
-    const logBefore = isCompletingItem ? statusLama : (decisionLama || 'Belum Diputuskan');
-    const logAfter = isCompletingItem ? statusBaru : (decisionBaru || 'Belum Diputuskan');
+    const logLabel = 'Keputusan Item #' + noItem;
+    const logBefore = decisionLama || 'Belum Diputuskan';
+    const logAfter = decisionBaru || 'Belum Diputuskan';
     const entryLog = '[' + formatDateTime_(now) + '] ' + logLabel + ': ' + logBefore + ' -> ' + logAfter + ' oleh ' + session.username;
 
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Status'] + 1).setValue(parentStatusBaru);
@@ -1123,7 +1195,7 @@ function derivePengajuanStatusFromItemStatuses_(statuses) {
   if (!cleanStatuses.length) return 'Baru';
   if (cleanStatuses.indexOf('Baru') !== -1) return 'Baru';
   if (cleanStatuses.every(function (status) { return status === 'Ditolak'; })) return 'Ditolak';
-  if (cleanStatuses.some(function (status) { return status === 'Disetujui' || status === 'Selesai'; })) return 'Disetujui';
+  if (cleanStatuses.some(function (status) { return status === 'Disetujui'; })) return 'Disetujui';
   return 'Baru';
 }
 
@@ -1144,19 +1216,17 @@ function normalizeItemDecision_(decision, itemStatus, parentStatus) {
 function inferItemDecisionForBackfill_(itemStatus, parentStatus) {
   const status = clean_(itemStatus);
   if (status === 'Ditolak') return 'Ditolak';
-  if (status === 'Disetujui' || status === 'Selesai') return 'Disetujui';
+  if (status === 'Disetujui') return 'Disetujui';
 
   const parent = clean_(parentStatus);
   if (parent === 'Ditolak') return 'Ditolak';
-  if (['Disetujui', 'Diprint', 'Dikirim', 'Diterima', 'Selesai'].indexOf(parent) !== -1) return 'Disetujui';
+  if (['Disetujui', 'Diprint', 'Dikirim', 'Selesai'].indexOf(parent) !== -1) return 'Disetujui';
 
   return '';
 }
 
-function deriveItemStatusFromDecision_(decision, currentStatus) {
+function deriveItemStatusFromDecision_(decision) {
   const cleanDecision = normalizeExplicitItemDecision_(decision);
-  const cleanStatus = clean_(currentStatus);
-  if (cleanStatus === 'Selesai' && cleanDecision === 'Disetujui') return 'Selesai';
   if (cleanDecision === 'Disetujui' || cleanDecision === 'Ditolak') return cleanDecision;
   return 'Baru';
 }
@@ -1164,14 +1234,6 @@ function deriveItemStatusFromDecision_(decision, currentStatus) {
 function normalizeExplicitItemDecision_(decision) {
   const cleanedDecision = clean_(decision);
   return ITEM_DECISION_STATUSES.indexOf(cleanedDecision) !== -1 ? cleanedDecision : '';
-}
-
-function deriveItemDecisionAfterStatusChange_(existingDecision, nextStatus) {
-  const current = clean_(existingDecision);
-  if (ITEM_DECISION_STATUSES.indexOf(current) !== -1 && nextStatus === 'Selesai') return current;
-  if (nextStatus === 'Disetujui' || nextStatus === 'Ditolak') return nextStatus;
-  if (nextStatus === 'Selesai') return 'Disetujui';
-  return '';
 }
 
 function shouldApplyItemDerivedParentStatus_(status) {
@@ -1204,14 +1266,9 @@ function assertStatusTransitionAllowed_(session, oldStatus, newStatus, catatanAd
     if (!note) throw new Error('Catatan Admin wajib diisi untuk transisi status mundur');
   }
 
-  if (statusBaru === 'Diterima' && statusLama !== 'Dikirim') {
-    if (session.role !== 'admin') throw new Error('Status Diterima hanya bisa dipilih setelah status Dikirim');
-    if (!note) throw new Error('Catatan Admin wajib diisi jika status Diterima dipilih bukan dari Dikirim');
-  }
-
-  if (statusBaru === 'Selesai' && statusLama !== 'Diterima') {
-    if (session.role !== 'admin') throw new Error('Status Selesai hanya bisa dipilih setelah status Diterima');
-    if (!note) throw new Error('Catatan Admin wajib diisi jika status Selesai dipilih bukan dari Diterima');
+  if (statusBaru === 'Selesai' && statusLama !== 'Dikirim') {
+    if (session.role !== 'admin') throw new Error('Status Selesai hanya bisa dipilih setelah Dikirim');
+    if (!note) throw new Error('Catatan Admin wajib diisi jika status Selesai dipilih bukan dari Dikirim');
   }
 }
 
@@ -1288,7 +1345,7 @@ function getWarrantyFulfillmentState_(idPengajuan) {
 
 function derivePengajuanLifecycleFromFulfillment_(idPengajuan, currentStatus) {
   const current = clean_(currentStatus);
-  if (['Ditolak', 'Diterima', 'Selesai'].indexOf(current) !== -1) return current;
+  if (['Ditolak', 'Selesai'].indexOf(current) !== -1) return current;
 
   const state = getWarrantyFulfillmentState_(idPengajuan);
   if (!state.approvedCount) return current;

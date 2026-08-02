@@ -5,13 +5,12 @@
  *
  * - `getDetail(id)`: load detail
  * - `setItemDecision(noItem, keputusan, catatan)`: update keputusan item + invalidate cache
- * - `completeItem(noItem, catatan)`: tandai item approved sebagai selesai
  */
 
 const DETAIL_TTL = 60_000
 
-export type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Diterima' | 'Selesai'
-export type ItemApprovalStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Selesai'
+export type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
+export type ItemApprovalStatus = 'Baru' | 'Disetujui' | 'Ditolak'
 export type ItemDecisionStatus = 'Disetujui' | 'Ditolak' | ''
 
 type RiwayatStatus = {
@@ -148,40 +147,6 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     }
   }
 
-  async function completeItem(noItem: number | string, catatanAdmin: string) {
-    if (!id.value) throw new Error('ID Pengajuan tidak valid.')
-
-    const currentItem = query.data.value?.items?.find((item) => String(item.noItem) === String(noItem))
-    const decision = normalizeItemDecision(String(currentItem?.keputusanItem || ''))
-
-    patchItem(noItem, {
-      statusItem: 'Selesai',
-      keputusanItem: decision,
-      catatanAdminItem: catatanAdmin,
-      tanggalUpdateStatusItem: new Date().toISOString()
-    })
-
-    try {
-      await callApi<Record<string, never>>('updateItemStatus', {
-        idPengajuan: id.value,
-        noItem,
-        statusBaru: 'Selesai',
-        catatanAdmin
-      })
-
-      void query.refresh()
-    } catch (err) {
-      toast.add({
-        title: 'Gagal menandai item selesai',
-        description: err instanceof Error ? err.message : String(err),
-        color: 'error',
-        icon: 'i-lucide-circle-alert'
-      })
-      void query.refresh()
-      throw err
-    }
-  }
-
   async function setPengajuanStatus(statusBaru: PengajuanStatus, catatanAdmin: string) {
     if (!id.value) throw new Error('ID Pengajuan tidak valid.')
 
@@ -225,7 +190,6 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     refresh: query.refresh,
     invalidate: query.invalidate,
     setItemDecision,
-    completeItem,
     setPengajuanStatus,
     getParams
   }
