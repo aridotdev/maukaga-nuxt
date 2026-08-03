@@ -284,7 +284,7 @@ function renderPengajuanProcess(status: string) {
       color: meta.color,
       variant: meta.isDone ? 'solid' : 'subtle',
       label: meta.label,
-      class: 'font-semibold'
+      class: 'font-normal'
     })
   ])
 }
