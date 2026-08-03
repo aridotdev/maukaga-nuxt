@@ -120,16 +120,16 @@ const savedPrintId = ref('')
 const showDraftConfirm = ref(false)
 const showNewDraftConfirm = ref(false)
 
-const finalSubmitUrl = computed(() => {
-  if (!currentDraftId.value) return '/final-submit'
+// const finalSubmitUrl = computed(() => {
+//   if (!currentDraftId.value) return '/final-submit'
 
-  return {
-    path: '/final-submit',
-    query: currentResumeToken.value
-      ? { id: currentDraftId.value, token: currentResumeToken.value }
-      : { id: currentDraftId.value }
-  }
-})
+//   return {
+//     path: '/final-submit',
+//     query: currentResumeToken.value
+//       ? { id: currentDraftId.value, token: currentResumeToken.value }
+//       : { id: currentDraftId.value }
+//   }
+// })
 const printPayload = computed(() => savedPrintPayload.value || collectPayload())
 const printId = computed(() => savedPrintId.value || currentDraftId.value || '-')
 const printTanggalForm = computed(() => formatDate(printPayload.value.tanggalForm))
@@ -805,13 +805,13 @@ function getErrorMessage(error: unknown) {
               variant="subtle"
               @click="backToForm"
             />
-            <UButton
+            <!-- <UButton
               :to="finalSubmitUrl"
               label="Final Submit"
               icon="i-lucide-upload"
               color="neutral"
               variant="outline"
-            />
+            /> -->
             <UButton
               type="button"
               label="Cetak"
