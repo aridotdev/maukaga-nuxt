@@ -20,8 +20,8 @@ const rejectedItems = computed(() => {
     .reduce((total, row) => total + countItemDecisions(row, 'Ditolak'), 0)
 })
 
-function countItemDecisions(row: { itemStatuses?: Array<{ keputusanItem?: string }> }, decision: 'Disetujui' | 'Ditolak') {
-  return (row.itemStatuses || []).filter((item) => item.keputusanItem === decision).length
+function countItemDecisions(row: { items?: Array<{ keputusanItem?: string }> }, decision: 'Disetujui' | 'Ditolak') {
+  return (row.items || []).filter((item) => item.keputusanItem === decision).length
 }
 
 const stats = computed(() => [{

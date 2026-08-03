@@ -10,7 +10,6 @@
 const DETAIL_TTL = 60_000
 
 export type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
-export type ItemApprovalStatus = 'Baru' | 'Disetujui' | 'Ditolak'
 export type ItemDecisionStatus = 'Disetujui' | 'Ditolak' | ''
 
 type RiwayatStatus = {
@@ -30,11 +29,10 @@ export type DetailItem = {
   modelNormalized?: string
   produkStatus?: string
   produkSumber?: string
-  statusItem?: ItemApprovalStatus
   keputusanItem?: ItemDecisionStatus | string
   catatanAdminItem?: string
-  tanggalUpdateStatusItem?: string
-  userUpdateStatusItem?: string
+  tanggalUpdateKeputusanItem?: string
+  userUpdateKeputusanItem?: string
 }
 
 export type DetailPengajuan = {
@@ -85,7 +83,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   // sehingga list di halaman lain ikut segar.
   function patchItem(
     noItem: number | string,
-    patch: Pick<DetailItem, 'statusItem' | 'keputusanItem' | 'catatanAdminItem' | 'tanggalUpdateStatusItem'>
+    patch: Pick<DetailItem, 'keputusanItem' | 'catatanAdminItem' | 'tanggalUpdateKeputusanItem'>
   ) {
     query.mutate((current) => {
       if (!current || !Array.isArray(current.items)) return current
@@ -96,11 +94,6 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
       return { ...current, items }
     })
     invalidate('getDashboard')
-  }
-
-  function deriveItemStatusFromDecision(decision: ItemDecisionStatus): ItemApprovalStatus {
-    if (decision === 'Disetujui' || decision === 'Ditolak') return decision
-    return 'Baru'
   }
 
   function normalizeItemDecision(decision: string): ItemDecisionStatus {
@@ -117,14 +110,13 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 
     const decision = normalizeItemDecision(keputusanItem)
     patchItem(noItem, {
-      statusItem: deriveItemStatusFromDecision(decision),
       keputusanItem: decision,
       catatanAdminItem: catatanAdmin,
-      tanggalUpdateStatusItem: new Date().toISOString()
+      tanggalUpdateKeputusanItem: new Date().toISOString()
     })
 
     try {
-      await callApi<Record<string, never>>('updateItemStatus', {
+      await callApi<Record<string, never>>('updateItemDecision', {
         idPengajuan: id.value,
         noItem,
         keputusanItem: decision,

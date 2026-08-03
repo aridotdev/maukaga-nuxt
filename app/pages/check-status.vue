@@ -19,7 +19,6 @@ type StatusData = {
   searchBy?: 'idPengajuan' | 'nomorSeri'
   status?: string
   parentStatus?: string
-  statusItem?: string
   keputusanItem?: string
   catatanAdminItem?: string
   noItem?: string | number
@@ -52,13 +51,13 @@ const hasStatusInputInteraction = ref(false)
 const statusCheckRequestId = ref(0)
 
 const showStatusResult = computed(() => resultType.value !== 'idle')
-const unitStatusText = computed(() => getUnitStatus(statusData.value))
+const unitDecisionText = computed(() => getUnitDecision(statusData.value))
 const pengajuanStatusText = computed(() => getPengajuanStatus(statusData.value))
-const unitStatusTone = computed(() => statusCheckBadge(unitStatusText.value))
+const unitDecisionTone = computed(() => statusCheckBadge(unitDecisionText.value))
 const pengajuanStatusTone = computed(() => statusCheckBadge(pengajuanStatusText.value))
-const unitStatusInfoText = computed(() => unitStatusInfoTextMap(unitStatusText.value, pengajuanStatusText.value, getRejectedItemNote(statusData.value)))
+const unitDecisionInfoText = computed(() => unitDecisionInfoTextMap(unitDecisionText.value, pengajuanStatusText.value, getRejectedItemNote(statusData.value)))
 const pengajuanStatusInfoText = computed(() => pengajuanStatusInfoTextMap(pengajuanStatusText.value))
-const showPengajuanStatus = computed(() => unitStatusText.value !== 'Ditolak' && pengajuanStatusText.value !== '-')
+const showPengajuanStatus = computed(() => unitDecisionText.value !== 'Ditolak' && pengajuanStatusText.value !== '-')
 const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
 
 async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
@@ -164,8 +163,8 @@ function clearInputError() {
   hasInputError.value = false
 }
 
-function getUnitStatus(data: StatusData) {
-  return data.statusItem || data.keputusanItem || '-'
+function getUnitDecision(data: StatusData) {
+  return data.keputusanItem || 'Menunggu Review'
 }
 
 function getPengajuanStatus(data: StatusData) {
@@ -178,6 +177,13 @@ function getRejectedItemNote(data: StatusData) {
 
 function statusCheckBadge(status?: string): StatusTone {
   const map: Record<string, StatusTone> = {
+    'Menunggu Review': {
+      badge: 'border-blue-200 bg-blue-100/70 text-blue-700',
+      dotPing: 'bg-blue-500',
+      dot: 'bg-blue-600',
+      icon: 'i-lucide-clock-3',
+      iconColor: 'text-blue-500 bg-blue-100'
+    },
     'Menunggu Upload': {
       badge: 'border-amber-200 bg-amber-100/70 text-amber-800',
       dotPing: 'bg-amber-500',
@@ -238,10 +244,10 @@ function statusCheckBadge(status?: string): StatusTone {
   }
 }
 
-function unitStatusInfoTextMap(status?: string, pengajuanStatus = '', rejectedItemNote = '') {
-  if (status === 'Ditolak' && rejectedItemNote) return rejectedItemNote
+function unitDecisionInfoTextMap(decision?: string, pengajuanStatus = '', rejectedItemNote = '') {
+  if (decision === 'Ditolak' && rejectedItemNote) return rejectedItemNote
 
-  if (status === 'Disetujui') {
+  if (decision === 'Disetujui') {
     if (pengajuanStatus && pengajuanStatus !== '-') {
       return `Unit disetujui. Kartu garansi mengikuti tahap pengajuan: ${pengajuanStatus}.`
     }
@@ -250,12 +256,12 @@ function unitStatusInfoTextMap(status?: string, pengajuanStatus = '', rejectedIt
   }
 
   const map: Record<string, string> = {
-    Baru: 'Data unit sudah masuk dan sedang menunggu pengecekan admin.',
+    'Menunggu Review': 'Unit sedang menunggu pengecekan admin.',
     Ditolak: 'Unit ditolak. Silakan cek catatan admin atau hubungi admin untuk informasi lebih lanjut.',
     Selesai: 'Proses kartu garansi untuk unit ini sudah selesai.'
   }
 
-  return map[status || ''] || 'Status unit berhasil ditemukan.'
+  return map[decision || ''] || 'Keputusan unit berhasil ditemukan.'
 }
 
 function pengajuanStatusInfoTextMap(status?: string) {
@@ -340,13 +346,13 @@ function getErrorMessage(error: unknown) {
         <div
           v-if="resultType === 'success'"
           class="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-20 blur-3xl transition-colors duration-1000"
-          :class="unitStatusTone.dotPing"
+          :class="unitDecisionTone.dotPing"
         />
 
         <div class="relative z-10">
           <template v-if="resultType === 'success'">
-            <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="unitStatusTone.iconColor">
-              <UIcon :name="unitStatusTone.icon" class="size-7" />
+            <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="unitDecisionTone.iconColor">
+              <UIcon :name="unitDecisionTone.icon" class="size-7" />
             </div>
 
             <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
@@ -365,18 +371,18 @@ function getErrorMessage(error: unknown) {
               </div>
             </div>
 
-            <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Status Unit</span>
-            <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="unitStatusTone.badge">
+            <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Keputusan Unit</span>
+            <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="unitDecisionTone.badge">
               <span class="relative flex size-2.5">
-                <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="unitStatusTone.dotPing" />
-                <span class="relative inline-flex size-2.5 rounded-full" :class="unitStatusTone.dot" />
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="unitDecisionTone.dotPing" />
+                <span class="relative inline-flex size-2.5 rounded-full" :class="unitDecisionTone.dot" />
               </span>
-              <span class="text-sm font-bold tracking-wide">{{ unitStatusText }}</span>
+              <span class="text-sm font-bold tracking-wide">{{ unitDecisionText }}</span>
             </div>
 
             <div class="mx-auto mb-4 max-w-sm rounded-xl bg-slate-50/80 p-4 border border-slate-100">
               <p class="text-sm font-medium leading-relaxed text-slate-600">
-                {{ unitStatusInfoText }}
+                {{ unitDecisionInfoText }}
               </p>
             </div>
 

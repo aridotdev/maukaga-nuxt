@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { DetailItem, ItemApprovalStatus, ItemDecisionStatus, PengajuanStatus } from '~/composables/usePengajuanDetail'
+import type { DetailItem, ItemDecisionStatus, PengajuanStatus } from '~/composables/usePengajuanDetail'
 
 definePageMeta({
   layout: 'dashboard',
@@ -8,7 +8,6 @@ definePageMeta({
 })
 
 const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'] as const
-const ITEM_APPROVAL_STATUSES = ['Baru', 'Disetujui', 'Ditolak'] as const
 const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Selesai'] as const
 const EMPTY_ITEM_DECISION_VALUE = '__belum_diputuskan__' as const
 
@@ -112,7 +111,7 @@ const pendingConfirmAction = ref<(() => Promise<void>) | null>(null)
 const selectedEvidenceAttachment = ref<EvidenceAttachmentLink | null>(null)
 const showEvidencePreview = ref(false)
 
-const pengajuanStatusItems = PENGAJUAN_STATUSES.map((status) => ({
+const pengajuanStatusOptions = PENGAJUAN_STATUSES.map((status) => ({
   label: status,
   value: status
 }))
@@ -432,11 +431,6 @@ function getItemForm(item: DetailItem) {
   return itemForms.value[key] as ItemDecisionForm
 }
 
-function getItemStatus(item: DetailItem): ItemApprovalStatus {
-  const status = item.statusItem || ''
-  return isItemApprovalStatus(status) ? status : 'Baru'
-}
-
 function getItemDecision(item: DetailItem): ItemDecisionStatus {
   const decision = String(item.keputusanItem || '').trim()
   if (decision === 'Disetujui' || decision === 'Ditolak') return decision
@@ -473,7 +467,7 @@ function getDecisionConfirmMessage(currentDecision: ItemDecisionStatus, nextDeci
   }
 
   if (currentDecision && !nextDecision) {
-    return `Kosongkan keputusan item #${noItem}? Status item akan kembali menjadi Baru.`
+    return `Kosongkan keputusan item #${noItem}? Item akan kembali ke Menunggu Review.`
   }
 
   if (nextDecision === 'Ditolak') {
@@ -489,10 +483,6 @@ function normalizeRouteParam(value: string | string[] | undefined) {
 
 function isPengajuanStatus(status: string): status is PengajuanStatus {
   return PENGAJUAN_STATUSES.includes(status as PengajuanStatus)
-}
-
-function isItemApprovalStatus(status: string): status is ItemApprovalStatus {
-  return ITEM_APPROVAL_STATUSES.includes(status as ItemApprovalStatus)
 }
 
 function isItemDecisionStatus(status: string): status is ItemDecisionStatus {
@@ -696,12 +686,6 @@ function formatDateTime(value: string | undefined) {
                       <div class="flex flex-wrap items-center gap-2">
                         <span class="font-mono text-sm font-semibold text-muted">Item #{{ item.noItem || '-' }}</span>
                         <UBadge
-                          :color="getStatusColor(getItemStatus(item))"
-                          variant="soft"
-                          :label="`Status: ${getItemStatus(item)}`"
-                          class="font-semibold"
-                        />
-                        <UBadge
                           :color="getItemDecisionColor(getItemDecision(item))"
                           variant="outline"
                           :label="`Keputusan: ${getItemDecisionLabel(getItemDecision(item))}`"
@@ -719,9 +703,9 @@ function formatDateTime(value: string | undefined) {
                       <p class="font-mono text-sm text-toned">Nomor Seri: {{ item.nomorSeri || '-' }}</p>
                     </div>
 
-                    <div v-if="item.tanggalUpdateStatusItem" class="text-xs text-muted sm:text-right">
-                      <div>Update terakhir: {{ formatDateTime(item.tanggalUpdateStatusItem) }}</div>
-                      <div>oleh {{ item.userUpdateStatusItem || '-' }}</div>
+                    <div v-if="item.tanggalUpdateKeputusanItem" class="text-xs text-muted sm:text-right">
+                      <div>Update terakhir: {{ formatDateTime(item.tanggalUpdateKeputusanItem) }}</div>
+                      <div>oleh {{ item.userUpdateKeputusanItem || '-' }}</div>
                     </div>
                   </div>
 
@@ -878,7 +862,7 @@ function formatDateTime(value: string | undefined) {
                     class="font-semibold"
                   />
                   <p class="mt-2 text-xs text-muted">
-                    Status ini adalah lifecycle utama pengajuan. Status pada daftar item tetap khusus approval item.
+                    Status ini adalah lifecycle utama pengajuan. Keputusan pada daftar item khusus untuk approval item.
                   </p>
                 </div>
 
@@ -901,7 +885,7 @@ function formatDateTime(value: string | undefined) {
                   <UFormField label="Ubah Status Pengajuan" name="status-pengajuan">
                     <USelect
                       v-model="pengajuanForm.statusBaru"
-                      :items="pengajuanStatusItems"
+                      :items="pengajuanStatusOptions"
                       class="w-full"
                     />
                   </UFormField>

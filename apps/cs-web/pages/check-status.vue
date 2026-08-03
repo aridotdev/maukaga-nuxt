@@ -19,7 +19,6 @@ type StatusData = {
   searchBy?: 'idPengajuan' | 'nomorSeri'
   status?: string
   parentStatus?: string
-  statusItem?: string
   keputusanItem?: string
   catatanAdminItem?: string
   noItem?: string | number
@@ -54,7 +53,13 @@ const statusCheckRequestId = ref(0)
 const showStatusResult = computed(() => resultType.value !== 'idle')
 const statusText = computed(() => getSearchStatus(statusData.value))
 const statusTone = computed(() => statusCheckBadge(statusText.value))
-const statusInfoText = computed(() => statusCheckInfoText(statusText.value, getRejectedItemNote(statusData.value)))
+const statusInfoText = computed(() => statusCheckInfoText(
+  statusText.value,
+  getRejectedItemNote(statusData.value),
+  statusData.value.searchBy,
+  getPengajuanStatus(statusData.value)
+))
+const statusLabel = computed(() => statusData.value.searchBy === 'nomorSeri' ? 'Keputusan Unit' : 'Status Pengajuan')
 const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
 
 async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
@@ -148,8 +153,12 @@ function clearInputError() {
 }
 
 function getSearchStatus(data: StatusData) {
-  if (data.searchBy === 'nomorSeri') return data.statusItem || data.keputusanItem || data.status || '-'
+  if (data.searchBy === 'nomorSeri') return data.keputusanItem || 'Menunggu Review'
   return data.status || '-'
+}
+
+function getPengajuanStatus(data: StatusData) {
+  return data.parentStatus || data.status || '-'
 }
 
 function getRejectedItemNote(data: StatusData) {
@@ -159,6 +168,13 @@ function getRejectedItemNote(data: StatusData) {
 
 function statusCheckBadge(status?: string): StatusTone {
   const map: Record<string, StatusTone> = {
+    'Menunggu Review': {
+      badge: 'border-blue-200 bg-blue-100/70 text-blue-700',
+      dotPing: 'bg-blue-500',
+      dot: 'bg-blue-600',
+      icon: 'i-lucide-clock-3',
+      iconColor: 'text-blue-500 bg-blue-100'
+    },
     'Menunggu Upload': {
       badge: 'border-amber-200 bg-amber-100/70 text-amber-800',
       dotPing: 'bg-amber-500',
@@ -219,8 +235,16 @@ function statusCheckBadge(status?: string): StatusTone {
   }
 }
 
-function statusCheckInfoText(status?: string, rejectedItemNote = '') {
-  if (status === 'Ditolak' && rejectedItemNote) return rejectedItemNote
+function statusCheckInfoText(status?: string, rejectedItemNote = '', searchBy?: StatusData['searchBy'], pengajuanStatus = '') {
+  if (searchBy === 'nomorSeri') {
+    if (status === 'Ditolak' && rejectedItemNote) return rejectedItemNote
+    if (status === 'Ditolak') return 'Unit ditolak. Silakan cek catatan admin atau hubungi admin untuk informasi lebih lanjut.'
+    if (status === 'Disetujui' && pengajuanStatus && pengajuanStatus !== '-') {
+      return `Unit disetujui. Kartu garansi mengikuti tahap pengajuan: ${pengajuanStatus}.`
+    }
+    if (status === 'Disetujui') return 'Unit disetujui. Kartu garansi akan diproses pada tahap pengajuan berikutnya.'
+    if (status === 'Menunggu Review') return 'Unit sedang menunggu pengecekan admin.'
+  }
 
   const map: Record<string, string> = {
     Baru: 'Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin.',
@@ -324,6 +348,7 @@ function getErrorMessage(error: unknown) {
                     </div>
                   </div>
 
+                  <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">{{ statusLabel }}</span>
                   <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="statusTone.badge">
                     <span class="relative flex size-2.5">
                       <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="statusTone.dotPing" />

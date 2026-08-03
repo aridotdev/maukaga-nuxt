@@ -33,7 +33,7 @@ const roleItems = [{
   value: 'qrcc'
 }]
 
-const statusItems = [{
+const memberStatusOptions = [{
   label: 'Semua status',
   value: 'all'
 }, {
@@ -392,7 +392,7 @@ function getErrorMessage(error: unknown) {
             />
             <USelect
               v-model="statusFilter"
-              :items="statusItems"
+              :items="memberStatusOptions"
               class="w-full sm:w-40"
             />
             <UButton

@@ -16,9 +16,15 @@ type DashboardSummary = {
   diprint?: number
   dikirim?: number
   selesai?: number
-  itemBaru?: number
   itemDisetujui?: number
   itemDitolak?: number
+}
+
+type DashboardItem = {
+  noItem: number | string
+  model?: string
+  nomorSeri?: string
+  keputusanItem?: DashboardItemDecision | string
 }
 
 type DashboardRow = {
@@ -28,12 +34,7 @@ type DashboardRow = {
   bagianCabang: string
   jumlahItem: number | string
   status: DashboardStatus | string
-  itemStatuses?: Array<{
-    noItem: number | string
-    model?: string
-    nomorSeri?: string
-    keputusanItem?: DashboardItemDecision | string
-  }>
+  items?: DashboardItem[]
 }
 
 type DashboardResponse = {

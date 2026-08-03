@@ -174,7 +174,7 @@ Catatan migrasi: di Vue/Nuxt, nilai ini sebaiknya menjadi runtime config/environ
 
 `VALID_STATUSES` di backend berisi `Baru`, `Disetujui`, `Ditolak`, `Diprint`, `Dikirim`, `Diterima`, dan `Selesai`. Status `Menunggu Upload` adalah status draft khusus dan tidak masuk daftar status final.
 
-`PengajuanItems.Status Item` tetap approval-only: `Baru`, `Disetujui`, `Ditolak`, dan `Selesai`. Status fulfillment seperti `Diprint`, `Dikirim`, dan `Diterima` tidak ditulis ke item.
+`PengajuanItems.Keputusan Item` khusus approval item: kosong berarti `Menunggu Review`, lalu `Disetujui` atau `Ditolak`. Status fulfillment seperti `Diprint`, `Dikirim`, dan `Diterima` tidak ditulis ke item.
 
 ### 6.2 Status Verifikasi Nama Produk Item
 

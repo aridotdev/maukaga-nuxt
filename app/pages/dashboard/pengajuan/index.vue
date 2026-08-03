@@ -21,7 +21,7 @@ type DashboardPengajuanSourceRow = {
   bagianCabang: string
   jumlahItem: number | string
   status: DashboardStatus | string
-  itemStatuses?: Array<{
+  items?: Array<{
     noItem: number | string
     model?: string
     nomorSeri?: string
@@ -118,7 +118,7 @@ const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
         row.bagianCabang,
         row.jumlahItem,
         row.status,
-        ...getItemStatuses(row).flatMap(item => [
+        ...getDashboardItems(row).flatMap(item => [
           item.model,
           item.nomorSeri,
           getItemDecisionLabel(item.keputusanItem)
@@ -131,18 +131,18 @@ const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
 const explodedRows = computed<DashboardPengajuanRow[]>(() => {
   const out: DashboardPengajuanRow[] = []
   filteredRows.value.forEach((parent) => {
-    for (const itemStatus of getItemStatuses(parent)) {
+    for (const item of getDashboardItems(parent)) {
       out.push({
-        key: getRowKey(parent.idPengajuan, itemStatus.noItem),
+        key: getRowKey(parent.idPengajuan, item.noItem),
         idPengajuan: parent.idPengajuan,
-        noItem: itemStatus.noItem,
+        noItem: item.noItem,
         timestampSubmit: parent.timestampSubmit,
         nama: parent.nama,
-        model: itemStatus.model,
-        nomorSeri: itemStatus.nomorSeri,
+        model: item.model,
+        nomorSeri: item.nomorSeri,
         bagianCabang: parent.bagianCabang,
         jumlahItem: parent.jumlahItem,
-        keputusanItem: itemStatus.keputusanItem,
+        keputusanItem: item.keputusanItem,
         pengajuanStatus: parent.status
       })
     }
@@ -366,10 +366,10 @@ function matchesDecisionFilter(row: DashboardPengajuanRow, filter: DashboardItem
   return row.keputusanItem === filter
 }
 
-function getItemStatuses(row: DashboardPengajuanSourceRow) {
-  const statuses = row.itemStatuses || []
-  if (statuses.length) {
-    return [...statuses]
+function getDashboardItems(row: DashboardPengajuanSourceRow) {
+  const items = row.items || []
+  if (items.length) {
+    return [...items]
       .map((item, index) => ({
         noItem: item.noItem || index + 1,
         model: String(item.model || '').trim(),
