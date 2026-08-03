@@ -342,7 +342,7 @@ function renderItemDecision(decision: string) {
 
   return h(UBadge, {
     color: getItemDecisionColor(normalizedDecision),
-    variant: normalizedDecision ? 'outline' : 'subtle',
+    variant: normalizedDecision ? 'solid' : 'subtle',
     label: getItemDecisionLabel(normalizedDecision),
     class: 'font-semibold'
   })
