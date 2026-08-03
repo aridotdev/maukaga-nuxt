@@ -11,8 +11,8 @@ const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
-type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
+type DashboardItemDecisionFilter = 'all' | 'pending' | Exclude<DashboardItemDecision, ''>
 
 type DashboardPengajuanSourceRow = {
   idPengajuan: string
@@ -25,7 +25,6 @@ type DashboardPengajuanSourceRow = {
     noItem: number | string
     model?: string
     nomorSeri?: string
-    status: DashboardItemStatus | string
     keputusanItem?: DashboardItemDecision | string
   }>
 }
@@ -41,7 +40,6 @@ type DashboardPengajuanRow = {
   nomorSeri: string
   bagianCabang: string
   jumlahItem: number | string
-  status: DashboardItemStatus | string
   keputusanItem: DashboardItemDecision | string
   pengajuanStatus: DashboardStatus | string
 }
@@ -64,19 +62,19 @@ const {
 const loadError = computed(() => error.value || '')
 
 const globalFilter = ref('')
-const statusFilter = ref<'all' | DashboardItemStatus>('all')
+const decisionFilter = ref<DashboardItemDecisionFilter>('all')
 const pengajuanTable = useTemplateRef<PengajuanTableRef>('pengajuanTable')
 const pengajuanPagination = ref({
   pageIndex: 0,
   pageSize: 15
 })
 
-const statusFilterItems = [{
-  label: 'All',
+const decisionFilterItems = [{
+  label: 'Semua',
   value: 'all'
 }, {
-  label: 'Baru',
-  value: 'Baru'
+  label: 'Menunggu Review',
+  value: 'pending'
 }, {
   label: 'Disetujui',
   value: 'Disetujui'
@@ -97,8 +95,7 @@ const pengajuanTableGlobalFilterOptions = {
       row.original.nomorSeri,
       row.original.bagianCabang,
       row.original.jumlahItem,
-      row.original.status,
-      row.original.keputusanItem,
+      getItemDecisionLabel(row.original.keputusanItem),
       row.original.pengajuanStatus
     ].some((value) => String(value || '').toLowerCase().includes(keyword))
   }
@@ -124,8 +121,7 @@ const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
         ...getItemStatuses(row).flatMap(item => [
           item.model,
           item.nomorSeri,
-          item.status,
-          item.keputusanItem
+          getItemDecisionLabel(item.keputusanItem)
         ])
       ].some((value) => String(value || '').toLowerCase().includes(keyword))
     })
@@ -146,13 +142,12 @@ const explodedRows = computed<DashboardPengajuanRow[]>(() => {
         nomorSeri: itemStatus.nomorSeri,
         bagianCabang: parent.bagianCabang,
         jumlahItem: parent.jumlahItem,
-        status: itemStatus.status,
         keputusanItem: itemStatus.keputusanItem,
         pengajuanStatus: parent.status
       })
     }
   })
-  return out.filter((row) => matchesStatusFilter(row, statusFilter.value))
+  return out.filter((row) => matchesDecisionFilter(row, decisionFilter.value))
 })
 
 const filteredPengajuanCount = computed(() => new Set(explodedRows.value.map(row => row.idPengajuan)).size)
@@ -215,27 +210,10 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
   cell: ({ row }) => renderPengajuanProcess(row.original.pengajuanStatus)
 }, {
-  accessorKey: 'status',
-  header: 'Status Item',
-  meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
-  cell: ({ row }) => h(UBadge, {
-    color: getItemStatusColor(row.original.status),
-    variant: 'subtle',
-    label: row.original.status,
-    class: 'font-semibold'
-  })
-}, {
   accessorKey: 'keputusanItem',
   header: 'Keputusan Item',
   meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
-  cell: ({ row }) => row.original.keputusanItem
-    ? h(UBadge, {
-        color: getItemStatusColor(row.original.keputusanItem),
-        variant: 'outline',
-        label: row.original.keputusanItem,
-        class: 'font-semibold'
-      })
-    : h('span', { class: 'text-sm text-muted' }, '-')
+  cell: ({ row }) => renderItemDecision(row.original.keputusanItem)
 }, {
   id: 'actions',
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
@@ -268,7 +246,7 @@ watch(error, async (msg) => {
 watch(globalFilter, () => {
   pengajuanTable.value?.tableApi?.setPageIndex(0)
 })
-watch(statusFilter, () => {
+watch(decisionFilter, () => {
   pengajuanTable.value?.tableApi?.setPageIndex(0)
 })
 
@@ -359,21 +337,33 @@ function getPengajuanProcessMeta(status: string) {
   }
 }
 
-function getItemStatusColor(status: string) {
+function renderItemDecision(decision: string) {
+  const normalizedDecision = normalizeItemDecision(decision)
+
+  return h(UBadge, {
+    color: getItemDecisionColor(normalizedDecision),
+    variant: normalizedDecision ? 'outline' : 'subtle',
+    label: getItemDecisionLabel(normalizedDecision),
+    class: 'font-semibold'
+  })
+}
+
+function getItemDecisionLabel(decision: string | undefined) {
+  return normalizeItemDecision(decision) || 'Menunggu Review'
+}
+
+function getItemDecisionColor(decision: string) {
   const colors: Record<string, string> = {
-    Baru: 'info',
     Disetujui: 'success',
     Ditolak: 'error',
   }
-  return colors[status] || 'neutral'
+  return colors[decision] || 'neutral'
 }
 
-function matchesStatusFilter(row: DashboardPengajuanRow, filter: 'all' | DashboardItemStatus) {
+function matchesDecisionFilter(row: DashboardPengajuanRow, filter: DashboardItemDecisionFilter) {
   if (filter === 'all') return true
-  if (filter === 'Disetujui' || filter === 'Ditolak') {
-    return row.keputusanItem === filter || row.status === filter
-  }
-  return row.status === filter
+  if (filter === 'pending') return !row.keputusanItem
+  return row.keputusanItem === filter
 }
 
 function getItemStatuses(row: DashboardPengajuanSourceRow) {
@@ -384,7 +374,6 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
         noItem: item.noItem || index + 1,
         model: String(item.model || '').trim(),
         nomorSeri: String(item.nomorSeri || '').trim(),
-        status: normalizeItemStatus(item.status, row.status),
         keputusanItem: normalizeItemDecision(item.keputusanItem)
       }))
       .sort((a, b) => Number(a.noItem) - Number(b.noItem))
@@ -395,18 +384,8 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
     noItem: index + 1,
     model: '',
     nomorSeri: '',
-    status: normalizeItemStatus('', row.status),
     keputusanItem: normalizeItemDecision('')
   }))
-}
-
-function normalizeItemStatus(status: string, fallbackStatus: string): DashboardItemStatus {
-  const value = String(status || '').trim()
-  if (value === 'Disetujui' || value === 'Ditolak') return value
-  const parent = String(fallbackStatus || '').trim()
-  if (parent === 'Ditolak') return 'Ditolak'
-  if (['Disetujui', 'Diprint', 'Dikirim', 'Selesai'].includes(parent)) return 'Disetujui'
-  return 'Baru'
 }
 
 function normalizeItemDecision(decision: string | undefined): DashboardItemDecision {
@@ -465,8 +444,8 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
               </p>
 
               <USelect
-                v-model="statusFilter"
-                :items="statusFilterItems"
+                v-model="decisionFilter"
+                :items="decisionFilterItems"
                 class="w-full sm:w-40"
                 :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
               />
@@ -488,7 +467,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
             class="w-full"
             :ui="{
               root: 'w-full',
-              base: 'w-full min-w-270 table-fixed border-separate border-spacing-0',
+              base: 'w-full min-w-250 table-fixed border-separate border-spacing-0',
               thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0',
               tr: 'transition-colors hover:bg-elevated/30',

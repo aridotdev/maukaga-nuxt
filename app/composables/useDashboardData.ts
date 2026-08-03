@@ -5,7 +5,6 @@
  */
 
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
-type DashboardItemStatus = 'Baru' | 'Disetujui' | 'Ditolak'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
 
 type DashboardSummary = {
@@ -33,7 +32,6 @@ type DashboardRow = {
     noItem: number | string
     model?: string
     nomorSeri?: string
-    status: DashboardItemStatus | string
     keputusanItem?: DashboardItemDecision | string
   }>
 }
