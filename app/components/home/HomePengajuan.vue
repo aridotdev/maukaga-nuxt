@@ -57,14 +57,9 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   cell: ({ row }) => h('div', { class: 'text-center font-medium text-toned' }, row.original.jumlahItem || 0)
 }, {
   accessorKey: 'status',
-  header: 'Status',
-  meta: { class: { th: 'w-[14%]', td: 'w-[14%]' } },
-  cell: ({ row }) => h(UBadge, {
-    color: getStatusColor(row.original.status),
-    variant: 'subtle',
-    label: row.original.status,
-    class: 'font-semibold'
-  })
+  header: 'Proses Kartu',
+  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
+  cell: ({ row }) => renderPengajuanProcess(row.original.status)
 }, {
   id: 'actions',
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
@@ -111,16 +106,65 @@ function formatSubmitTime(value: string) {
   }).format(new Date(value))
 }
 
-function getStatusColor(status: string) {
-  const colors: Record<string, string> = {
-    Baru: 'info',
-    Disetujui: 'success',
-    Ditolak: 'error',
-    Diprint: 'warning',
-    Dikirim: 'primary',
-    Selesai: 'neutral'
+function renderPengajuanProcess(status: string) {
+  const meta = getPengajuanProcessMeta(status)
+
+  return h('div', { class: 'min-w-0' }, [
+    h(UBadge, {
+      color: meta.color,
+      variant: meta.isDone ? 'solid' : 'subtle',
+      label: meta.label,
+      class: 'font-semibold'
+    })
+  ])
+}
+
+function getPengajuanProcessMeta(status: string) {
+  const value = String(status || '').trim()
+  const meta: Record<string, {
+    label: string
+    description: string
+    color: string
+    isDone?: boolean
+  }> = {
+    Baru: {
+      label: 'Baru',
+      description: 'Belum selesai',
+      color: 'info'
+    },
+    Disetujui: {
+      label: 'Disetujui',
+      description: 'Menunggu cetak',
+      color: 'primary'
+    },
+    Ditolak: {
+      label: 'Ditolak',
+      description: 'Tidak diproses',
+      color: 'error'
+    },
+    Diprint: {
+      label: 'Diprint',
+      description: 'Menunggu kirim',
+      color: 'warning'
+    },
+    Dikirim: {
+      label: 'Dikirim',
+      description: 'Menunggu diterima',
+      color: 'primary'
+    },
+    Selesai: {
+      label: 'Selesai',
+      description: 'Proses selesai',
+      color: 'success',
+      isDone: true
+    }
   }
-  return colors[status] || 'neutral'
+
+  return meta[value] || {
+    label: value || '-',
+    description: 'Belum selesai',
+    color: 'neutral'
+  }
 }
 </script>
 

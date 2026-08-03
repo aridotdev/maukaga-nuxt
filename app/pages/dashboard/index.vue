@@ -14,6 +14,10 @@ const range = shallowRef<Range>({
   end: new Date()
 })
 const period = ref<Period>('daily')
+
+function openNotifications() {
+  isNotificationsSlideoverOpen.value = true
+}
 </script>
 
 <template>
@@ -30,7 +34,7 @@ const period = ref<Period>('daily')
               color="neutral"
               variant="ghost"
               square
-              @click="isNotificationsSlideoverOpen = true"
+              @click="openNotifications"
             >
               <UChip color="error" inset>
                 <UIcon name="i-lucide-bell" class="size-5 shrink-0" />

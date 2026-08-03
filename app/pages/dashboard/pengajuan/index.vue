@@ -210,22 +210,27 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
     h('p', { class: 'uppercase' }, row.original.bagianCabang || '-')
   ])
 }, {
+  accessorKey: 'pengajuanStatus',
+  header: 'Proses Kartu',
+  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
+  cell: ({ row }) => renderPengajuanProcess(row.original.pengajuanStatus)
+}, {
   accessorKey: 'status',
-  header: 'Status',
+  header: 'Status Item',
   meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
   cell: ({ row }) => h(UBadge, {
-    color: getStatusColor(row.original.status),
+    color: getItemStatusColor(row.original.status),
     variant: 'subtle',
     label: row.original.status,
     class: 'font-semibold'
   })
 }, {
   accessorKey: 'keputusanItem',
-  header: 'Keputusan',
+  header: 'Keputusan Item',
   meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
   cell: ({ row }) => row.original.keputusanItem
     ? h(UBadge, {
-        color: getStatusColor(row.original.keputusanItem),
+        color: getItemStatusColor(row.original.keputusanItem),
         variant: 'outline',
         label: row.original.keputusanItem,
         class: 'font-semibold'
@@ -293,14 +298,72 @@ function formatSubmitTime(value: string) {
   }).format(new Date(value))
 }
 
-function getStatusColor(status: string) {
+function renderPengajuanProcess(status: string) {
+  const meta = getPengajuanProcessMeta(status)
+
+  return h('div', { class: 'min-w-0' }, [
+    h(UBadge, {
+      color: meta.color,
+      variant: meta.isDone ? 'solid' : 'subtle',
+      label: meta.label,
+      class: 'font-semibold'
+    })
+  ])
+}
+
+function getPengajuanProcessMeta(status: string) {
+  const value = String(status || '').trim()
+  const meta: Record<string, {
+    label: string
+    description: string
+    color: string
+    isDone?: boolean
+  }> = {
+    Baru: {
+      label: 'Baru',
+      description: 'Belum selesai',
+      color: 'info'
+    },
+    Disetujui: {
+      label: 'Disetujui',
+      description: 'Menunggu cetak',
+      color: 'primary'
+    },
+    Ditolak: {
+      label: 'Ditolak',
+      description: 'Tidak diproses',
+      color: 'error'
+    },
+    Diprint: {
+      label: 'Diprint',
+      description: 'Menunggu kirim',
+      color: 'warning'
+    },
+    Dikirim: {
+      label: 'Dikirim',
+      description: 'Menunggu diterima',
+      color: 'primary'
+    },
+    Selesai: {
+      label: 'Selesai',
+      description: 'Proses selesai',
+      color: 'success',
+      isDone: true
+    }
+  }
+
+  return meta[value] || {
+    label: value || '-',
+    description: 'Belum selesai',
+    color: 'neutral'
+  }
+}
+
+function getItemStatusColor(status: string) {
   const colors: Record<string, string> = {
     Baru: 'info',
     Disetujui: 'success',
     Ditolak: 'error',
-    Diprint: 'warning',
-    Dikirim: 'primary',
-    Selesai: 'neutral'
   }
   return colors[status] || 'neutral'
 }
@@ -338,8 +401,11 @@ function getItemStatuses(row: DashboardPengajuanSourceRow) {
 }
 
 function normalizeItemStatus(status: string, fallbackStatus: string): DashboardItemStatus {
-  const value = String(status || fallbackStatus || '').trim()
+  const value = String(status || '').trim()
   if (value === 'Disetujui' || value === 'Ditolak') return value
+  const parent = String(fallbackStatus || '').trim()
+  if (parent === 'Ditolak') return 'Ditolak'
+  if (['Disetujui', 'Diprint', 'Dikirim', 'Selesai'].includes(parent)) return 'Disetujui'
   return 'Baru'
 }
 
@@ -422,7 +488,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
             class="w-full"
             :ui="{
               root: 'w-full',
-              base: 'w-full min-w-240 table-fixed border-separate border-spacing-0',
+              base: 'w-full min-w-270 table-fixed border-separate border-spacing-0',
               thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0',
               tr: 'transition-colors hover:bg-elevated/30',
