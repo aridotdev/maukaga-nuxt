@@ -51,15 +51,13 @@ const hasStatusInputInteraction = ref(false)
 const statusCheckRequestId = ref(0)
 
 const showStatusResult = computed(() => resultType.value !== 'idle')
-const statusText = computed(() => getSearchStatus(statusData.value))
-const statusTone = computed(() => statusCheckBadge(statusText.value))
-const statusInfoText = computed(() => statusCheckInfoText(
-  statusText.value,
-  getRejectedItemNote(statusData.value),
-  statusData.value.searchBy,
-  getPengajuanStatus(statusData.value)
-))
-const statusLabel = computed(() => statusData.value.searchBy === 'nomorSeri' ? 'Keputusan Unit' : 'Status Pengajuan')
+const unitDecisionText = computed(() => getUnitDecision(statusData.value))
+const pengajuanStatusText = computed(() => getPengajuanStatus(statusData.value))
+const unitDecisionTone = computed(() => statusCheckBadge(unitDecisionText.value))
+const pengajuanStatusTone = computed(() => statusCheckBadge(pengajuanStatusText.value))
+const unitDecisionInfoText = computed(() => unitDecisionInfoTextMap(unitDecisionText.value, pengajuanStatusText.value, getRejectedItemNote(statusData.value)))
+const pengajuanStatusInfoText = computed(() => pengajuanStatusInfoTextMap(pengajuanStatusText.value))
+const showPengajuanStatus = computed(() => unitDecisionText.value !== 'Ditolak' && pengajuanStatusText.value !== '-')
 const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
 
 async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
@@ -102,17 +100,17 @@ async function handleCheckStatus() {
 
   if (!keyword) {
     hasInputError.value = true
-    showToast('Masukkan ID Pengajuan atau Nomor Seri terlebih dahulu.', 'error')
+    showToast('Masukkan Nomor Seri terlebih dahulu.', 'error')
     return
   }
 
   setStatusCheckLoading(true)
-  showStatusCheckResult('loading', 'Memeriksa status pengajuan...')
+  showStatusCheckResult('loading', 'Memeriksa status nomor seri...')
 
   try {
     const result = await callAPI<StatusData>('checkPengajuanStatus', { keyword })
     if (requestId !== statusCheckRequestId.value) return
-    if (!result.success) throw new Error(result.error || 'Status pengajuan atau nomor seri gagal dimuat')
+    if (!result.success) throw new Error(result.error || 'Status nomor seri gagal dimuat')
 
     renderStatusCheckResult(result.data || {})
   } catch (error) {
@@ -127,7 +125,20 @@ async function handleCheckStatus() {
 }
 
 function renderStatusCheckResult(data: StatusData) {
-  statusData.value = data
+  if (data.searchBy && data.searchBy !== 'nomorSeri') {
+    hasInputError.value = true
+    showStatusCheckResult('error', 'Gunakan Nomor Seri untuk mengecek status unit.')
+    return
+  }
+
+  const nomorSeri = String(data.nomorSeri || '').trim()
+  if (!nomorSeri) {
+    hasInputError.value = true
+    showStatusCheckResult('error', 'Data tidak ditemukan. Pastikan Nomor Seri yang dimasukkan sudah benar.')
+    return
+  }
+
+  statusData.value = { ...data, nomorSeri }
   resultMessage.value = ''
   resultType.value = 'success'
 }
@@ -152,9 +163,8 @@ function clearInputError() {
   hasInputError.value = false
 }
 
-function getSearchStatus(data: StatusData) {
-  if (data.searchBy === 'nomorSeri') return data.keputusanItem || 'Menunggu Review'
-  return data.status || '-'
+function getUnitDecision(data: StatusData) {
+  return data.keputusanItem || 'Menunggu Review'
 }
 
 function getPengajuanStatus(data: StatusData) {
@@ -162,7 +172,6 @@ function getPengajuanStatus(data: StatusData) {
 }
 
 function getRejectedItemNote(data: StatusData) {
-  if (data.searchBy !== 'nomorSeri') return ''
   return String(data.catatanAdminItem || '').trim()
 }
 
@@ -235,37 +244,51 @@ function statusCheckBadge(status?: string): StatusTone {
   }
 }
 
-function statusCheckInfoText(status?: string, rejectedItemNote = '', searchBy?: StatusData['searchBy'], pengajuanStatus = '') {
-  if (searchBy === 'nomorSeri') {
-    if (status === 'Ditolak' && rejectedItemNote) return rejectedItemNote
-    if (status === 'Ditolak') return 'Unit ditolak. Silakan cek catatan admin atau hubungi admin untuk informasi lebih lanjut.'
-    if (status === 'Disetujui' && pengajuanStatus && pengajuanStatus !== '-') {
+function unitDecisionInfoTextMap(decision?: string, pengajuanStatus = '', rejectedItemNote = '') {
+  if (decision === 'Ditolak' && rejectedItemNote) return rejectedItemNote
+
+  if (decision === 'Disetujui') {
+    if (pengajuanStatus && pengajuanStatus !== '-') {
       return `Unit disetujui. Kartu garansi mengikuti tahap pengajuan: ${pengajuanStatus}.`
     }
-    if (status === 'Disetujui') return 'Unit disetujui. Kartu garansi akan diproses pada tahap pengajuan berikutnya.'
-    if (status === 'Menunggu Review') return 'Unit sedang menunggu pengecekan admin.'
+
+    return 'Unit disetujui. Kartu garansi akan diproses pada tahap pengajuan berikutnya.'
   }
 
   const map: Record<string, string> = {
+    'Menunggu Review': 'Unit sedang menunggu pengecekan admin.',
+    Ditolak: 'Unit ditolak. Silakan cek catatan admin atau hubungi admin untuk informasi lebih lanjut.',
+    Selesai: 'Proses kartu garansi untuk unit ini sudah selesai.'
+  }
+
+  return map[decision || ''] || 'Keputusan unit berhasil ditemukan.'
+}
+
+function pengajuanStatusInfoTextMap(status?: string) {
+  const map: Record<string, string> = {
     Baru: 'Pengajuan sudah diterima dan sedang menunggu proses pengecekan admin.',
     Disetujui: 'Pengajuan telah diperiksa dan disetujui. Kartu garansi akan segera dibuat dan dikirimkan.',
-    Ditolak: 'Pengajuan telah diperiksa dan ditolak, silakan hubungi admin untuk informasi lebih lanjut.',
+    Ditolak: 'Pengajuan telah diperiksa dan ditolak.',
     Diprint: 'Kartu garansi sudah dicetak dan sedang disiapkan untuk pengiriman.',
     Dikirim: 'Kartu garansi sudah dikirim ke cabang atau alamat terkait.',
     Selesai: 'Kartu garansi sudah diterima dan proses selesai.',
-    'Menunggu Upload': 'Pengajuan masih berupa draft. Lanjutkan draft untuk upload hard copy bertanda tangan dan submit final.'
+    'Menunggu Upload': 'Pengajuan masih berupa draft dan belum disubmit final.'
   }
 
-  return map[status || ''] || 'Status pengajuan berhasil ditemukan.'
+  return map[status || ''] || 'Tahap pengajuan berhasil ditemukan.'
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
+
+  return message
+    .replace(/ID Pengajuan atau Nomor Seri/gi, 'Nomor Seri')
+    .replace(/pengajuan atau nomor seri/gi, 'nomor seri')
 }
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
+  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col md:p-8">
     <div
       class="mb-8 grow rounded-3xl border border-white/60 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-all duration-500 md:p-8"
       :class="hasStatusInputInteraction ? 'bg-white/65 scale-[1.01] shadow-xl' : 'bg-white/45'"
@@ -275,10 +298,10 @@ function getErrorMessage(error: unknown) {
           <UIcon name="i-lucide-radar" class="size-8" />
         </div>
         <h2 class="mb-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-          Lacak Status Pengajuan
+          Cek Status Garansi Unit
         </h2>
         <p class="mb-8 text-sm text-slate-500">
-          Masukkan ID Pengajuan atau Nomor Seri untuk melihat progres dokumen terbaru secara real-time.
+          Masukkan Nomor Seri unit untuk melihat status pengecekan dan tahap kartu garansi.
         </p>
 
         <form class="space-y-6" @submit.prevent="handleCheckStatus">
@@ -292,7 +315,7 @@ function getErrorMessage(error: unknown) {
               variant="outline"
               :highlight="hasInputError"
               :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3.5 font-mono shadow-inner transition-colors focus:bg-white' }"
-              placeholder="Contoh: KG-YYYYMMDD-XXXX atau SN123456"
+              placeholder="Contoh: SN123456"
               autocomplete="off"
               @focusin="hasStatusInputInteraction = true"
               @focusout="hasStatusInputInteraction = false"
@@ -311,78 +334,88 @@ function getErrorMessage(error: unknown) {
             />
           </div>
 
-          <!-- HASIL PENCARIAN -->
-          <Transition name="slide-fade">
-            <div v-if="showStatusResult" class="mt-8 relative overflow-hidden rounded-2xl border border-white/60 bg-white/60 p-6 text-center shadow-sm backdrop-blur-md">
-              
-              <!-- Dekorasi Background sesuai status -->
-              <div 
-                v-if="resultType === 'success'"
-                class="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-20 blur-3xl transition-colors duration-1000" 
-                :class="statusTone.dotPing"
-              />
-
-              <div class="relative z-10">
-                <template v-if="resultType === 'success'">
-                  <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="statusTone.iconColor">
-                    <UIcon :name="statusTone.icon" class="size-7" />
-                  </div>
-                  
-                  <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
-                  <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
-                    {{ statusData.idPengajuan || searchInput || '-' }}
-                  </h3>
-
-                  <div v-if="statusData.nomorSeri" class="mx-auto mb-4 grid max-w-sm gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-500">
-                    <div class="flex items-center justify-between gap-3">
-                      <span>Nomor Seri</span>
-                      <span class="break-all font-mono font-semibold text-slate-700">{{ statusData.nomorSeri }}</span>
-                    </div>
-                    <div v-if="itemProductText" class="flex items-center justify-between gap-3">
-                      <span>Produk</span>
-                      <span class="text-right font-semibold text-slate-700">{{ itemProductText }}</span>
-                    </div>
-                    <div v-if="statusData.noItem" class="flex items-center justify-between gap-3">
-                      <span>No Item</span>
-                      <span class="font-semibold text-slate-700">#{{ statusData.noItem }}</span>
-                    </div>
-                  </div>
-
-                  <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">{{ statusLabel }}</span>
-                  <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="statusTone.badge">
-                    <span class="relative flex size-2.5">
-                      <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="statusTone.dotPing" />
-                      <span class="relative inline-flex size-2.5 rounded-full" :class="statusTone.dot" />
-                    </span>
-                    <span class="text-sm font-bold tracking-wide">{{ statusText }}</span>
-                  </div>
-
-                  <div class="mx-auto max-w-sm rounded-xl bg-slate-50/80 p-4 border border-slate-100">
-                    <p class="text-sm font-medium leading-relaxed text-slate-600">
-                      {{ statusInfoText }}
-                    </p>
-                  </div>
-                </template>
-
-                <div v-else class="flex flex-col items-center justify-center py-6">
-                  <UIcon 
-                    :name="resultType === 'loading' ? 'i-lucide-loader-2' : 'i-lucide-file-warning'" 
-                    class="mb-3 size-10" 
-                    :class="[resultType === 'loading' ? 'animate-spin text-blue-500' : 'text-red-500']"
-                  />
-                  <p
-                    class="text-sm font-semibold"
-                    :class="resultType === 'loading' ? 'text-blue-700' : 'text-red-700'"
-                  >
-                    {{ resultMessage }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Transition>
         </form>
       </div>
     </div>
+
+    <!-- HASIL PENCARIAN -->
+    <Transition name="slide-fade">
+      <div v-if="showStatusResult" class="relative overflow-hidden rounded-2xl border border-white/60 bg-white/60 p-6 text-center shadow-sm backdrop-blur-md">
+
+        <!-- Dekorasi Background sesuai status -->
+        <div
+          v-if="resultType === 'success'"
+          class="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-20 blur-3xl transition-colors duration-1000"
+          :class="unitDecisionTone.dotPing"
+        />
+
+        <div class="relative z-10">
+          <template v-if="resultType === 'success'">
+            <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full" :class="unitDecisionTone.iconColor">
+              <UIcon :name="unitDecisionTone.icon" class="size-7" />
+            </div>
+
+            <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Hasil Pencarian</span>
+            <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
+              {{ statusData.nomorSeri || searchInput || '-' }}
+            </h3>
+
+            <div class="mx-auto mb-4 grid max-w-sm gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-500">
+              <div v-if="itemProductText" class="flex items-center justify-between gap-3">
+                <span>Produk</span>
+                <span class="text-right font-semibold text-slate-700">{{ itemProductText }}</span>
+              </div>
+              <div v-if="statusData.noItem" class="flex items-center justify-between gap-3">
+                <span>No Item</span>
+                <span class="font-semibold text-slate-700">#{{ statusData.noItem }}</span>
+              </div>
+            </div>
+
+            <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Keputusan Unit</span>
+            <div class="mb-5 inline-flex items-center justify-center gap-2.5 rounded-full border px-5 py-2 shadow-sm backdrop-blur-sm" :class="unitDecisionTone.badge">
+              <span class="relative flex size-2.5">
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" :class="unitDecisionTone.dotPing" />
+                <span class="relative inline-flex size-2.5 rounded-full" :class="unitDecisionTone.dot" />
+              </span>
+              <span class="text-sm font-bold tracking-wide">{{ unitDecisionText }}</span>
+            </div>
+
+            <div class="mx-auto mb-4 max-w-sm rounded-xl bg-slate-50/80 p-4 border border-slate-100">
+              <p class="text-sm font-medium leading-relaxed text-slate-600">
+                {{ unitDecisionInfoText }}
+              </p>
+            </div>
+
+            <div v-if="showPengajuanStatus" class="mx-auto max-w-sm rounded-xl border border-slate-100 bg-white/70 p-4 text-left shadow-sm">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Tahap Pengajuan</span>
+                <span class="inline-flex items-center justify-center gap-2 rounded-full border px-3 py-1 text-xs font-bold" :class="pengajuanStatusTone.badge">
+                  <span class="relative inline-flex size-2 rounded-full" :class="pengajuanStatusTone.dot" />
+                  {{ pengajuanStatusText }}
+                </span>
+              </div>
+              <p class="text-sm font-medium leading-relaxed text-slate-600">
+                {{ pengajuanStatusInfoText }}
+              </p>
+            </div>
+          </template>
+
+          <div v-else class="flex flex-col items-center justify-center py-6">
+            <UIcon
+              :name="resultType === 'loading' ? 'i-lucide-loader-2' : 'i-lucide-file-warning'"
+              class="mb-3 size-10"
+              :class="[resultType === 'loading' ? 'animate-spin text-blue-500' : 'text-red-500']"
+            />
+            <p
+              class="text-sm font-semibold"
+              :class="resultType === 'loading' ? 'text-blue-700' : 'text-red-700'"
+            >
+              {{ resultMessage }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </section>
 </template>
 

@@ -438,9 +438,9 @@ function getErrorMessage(error: unknown) {
         </div>
       </div>
     </Teleport>
-    <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-9 p-0 sm:p-6 lg:gap-6 lg:p-8">
+    <div class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-9 p-0 sm:p-6 lg:gap-6 lg:p-8">
       <!-- Header Section -->
-      <header class="flex flex-col items-start justify-between gap-2 lg:flex-row lg:items-center lg:gap-3 lg:rounded-2xl lg:border lg:border-muted lg:bg-default/45 lg:p-5 lg:shadow-sm lg:backdrop-blur-xl">
+      <header class="flex flex-col items-start justify-between gap-2 lg:flex-row lg:items-center lg:gap-3 lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
         <div class="min-w-0 flex-1">
           <h1 class="mb-1 text-lg font-bold leading-snug text-highlighted lg:text-2xl">
             Form Pengajuan Kartu Garansi Baru
@@ -455,6 +455,7 @@ function getErrorMessage(error: unknown) {
       <div class="flex flex-col gap-6 lg:flex-row">
         <!-- Left Column: Form Areas -->
         <UForm
+          v-show="!showPrintPreview"
           :schema="pengajuanSchema"
           :state="formState"
           class="flex flex-1 flex-col gap-9 lg:gap-6"
@@ -462,7 +463,7 @@ function getErrorMessage(error: unknown) {
           @error="onFormError"
         >
           <!-- Section 1: Informasi Pemohon -->
-          <section class="relative lg:rounded-4xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+          <section class="relative lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
             <div class="mb-5 flex items-center justify-between border-b border-muted pb-3 lg:mb-8 lg:pb-4">
               <div class="flex items-center gap-3 lg:gap-4">
                 <div class="flex h-10 w-10 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
@@ -667,10 +668,16 @@ function getErrorMessage(error: unknown) {
           </section>
         </UForm>
 
+        <div
+          v-show="showPrintPreview"
+          id="print-preview-slot"
+          class="flex flex-1"
+        />
+
         <!-- Right Column: Sidebar / Status Tracker -->
         <aside class="flex w-full flex-col gap-6 lg:w-80">
           <!-- Status Tracker Panel -->
-          <div class="rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl">
+          <div class="lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
             <div class="mb-6 flex items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-muted bg-default/60 text-highlighted shadow-sm">
                 <UIcon name="i-lucide-file-text" class="size-5" />
@@ -689,36 +696,60 @@ function getErrorMessage(error: unknown) {
               <!-- Connecting Line -->
               <div class="absolute bottom-8 left-5.5 top-8 z-0 w-0.5 border-l border-muted bg-muted" />
 
-              <div class="relative z-10 flex gap-4 rounded-2xl border border-inverted bg-inverted p-4 text-inverted shadow-sm">
-                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-default/30 bg-default/20 text-sm font-bold backdrop-blur-sm">
+              <div
+                class="relative z-10 flex gap-4 rounded-2xl p-4 shadow-sm"
+                :class="showPrintPreview ? 'border border-muted bg-default/40 backdrop-blur-sm transition-colors hover:bg-default/60' : 'border border-inverted bg-inverted text-inverted'"
+              >
+                <div
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold backdrop-blur-sm"
+                  :class="showPrintPreview ? 'border border-muted bg-default text-highlighted shadow-sm' : 'border border-default/30 bg-default/20'"
+                >
                   01
                 </div>
                 <div>
-                  <h4 class="mb-1 text-sm font-bold text-inverted">
+                  <h4
+                    class="mb-1 text-sm font-bold"
+                    :class="showPrintPreview ? 'text-highlighted' : 'text-inverted'"
+                  >
                     Lengkapi data
                   </h4>
-                  <p class="text-xs leading-relaxed text-inverted/80">
+                  <p
+                    class="text-xs leading-relaxed"
+                    :class="showPrintPreview ? 'text-muted' : 'text-inverted/80'"
+                  >
                     Isi data pemohon, alasan, dan daftar produk secara detail.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                class="relative z-10 flex gap-4 rounded-2xl p-4 shadow-sm"
+                :class="showPrintPreview ? 'border border-inverted bg-inverted text-inverted' : 'border border-muted bg-default/40 backdrop-blur-sm transition-colors hover:bg-default/60'"
+              >
+                <div
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold backdrop-blur-sm"
+                  :class="showPrintPreview ? 'border border-default/30 bg-default/20' : 'border border-muted bg-default text-highlighted shadow-sm'"
+                >
+                  02
+                </div>
+                <div>
+                  <h4
+                    class="mb-1 text-sm font-bold"
+                    :class="showPrintPreview ? 'text-inverted' : 'text-highlighted'"
+                  >
+                    Cetak draft
+                  </h4>
+                  <p
+                    class="text-xs leading-relaxed"
+                    :class="showPrintPreview ? 'text-inverted/80' : 'text-muted'"
+                  >
+                    Simpan draft, cetak form fisik, lalu minta tanda tangan basah.
                   </p>
                 </div>
               </div>
 
               <div class="relative z-10 flex gap-4 rounded-2xl border border-muted bg-default/40 p-4 shadow-sm backdrop-blur-sm transition-colors hover:bg-default/60">
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted bg-default text-sm font-bold text-highlighted shadow-sm">
-                  02
-                </div>
-                <div>
-                  <h4 class="mb-1 text-sm font-bold text-highlighted">
-                    Cetak draft
-                  </h4>
-                  <p class="text-xs leading-relaxed text-muted">
-                    Simpan draft, cetak form fisik, lalu minta tanda tangan basah.
-                  </p>
-                </div>
-              </div>
-
-              <div class="relative z-10 flex gap-4 rounded-2xl border border-dashed border-muted bg-muted/20 p-4 opacity-80 backdrop-blur-sm">
-                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-dimmed">
                   03
                 </div>
                 <div>
@@ -784,11 +815,12 @@ function getErrorMessage(error: unknown) {
       </template>
     </UModal>
 
-    <section
-      v-show="showPrintPreview"
-      id="section-print"
-      class="mx-auto max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
-    >
+    <Teleport to="#print-preview-slot">
+      <section
+        v-if="showPrintPreview"
+        id="section-print"
+        class="mx-auto w-full max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
+      >
       <div class="no-print mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-900">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -960,7 +992,8 @@ function getErrorMessage(error: unknown) {
         <p>1. Untuk permintaan Kartu Garansi mohon diisi nama jelasnya.</p>
         <p>2. Untuk permintaan melalui cabang, kolom diketahui harus diisi oleh kepala service.</p>
       </div>
-    </section>
+      </section>
+    </Teleport>
   </div>
 </template>
 

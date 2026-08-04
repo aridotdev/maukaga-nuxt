@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 definePageMeta({
   layout: 'cs'
@@ -57,6 +57,8 @@ const hasSearchInputError = ref(false)
 const isLoadingDraft = ref(false)
 const isLoadingStoredDraft = ref(false)
 const showPrintPreview = ref(false)
+const searchControlSize = ref<'md' | 'xl'>('xl')
+let mobileMediaQueryList: MediaQueryList | null = null
 
 const isDraftReady = computed(() => !!currentDraftId.value && !!loadedDraft.value)
 const printPayload = computed(() => loadedDraft.value || {})
@@ -88,6 +90,11 @@ const printDraft = usePrintWithFilename('Pengajuan', () => printId.value)
 
 onMounted(() => {
   initializeDraftResume()
+  initializeSearchControlSize()
+})
+
+onBeforeUnmount(() => {
+  mobileMediaQueryList?.removeEventListener('change', updateSearchControlSize)
 })
 
 watch(searchId, () => {
@@ -122,6 +129,18 @@ function initializeDraftResume() {
     searchId.value = fromUrl.idPengajuan
     void handleLoadDraft({ idPengajuan: fromUrl.idPengajuan, fromUrl: true, source: 'url' })
   }
+}
+
+function initializeSearchControlSize() {
+  if (!import.meta.client) return
+
+  mobileMediaQueryList = window.matchMedia('(max-width: 767px)')
+  updateSearchControlSize(mobileMediaQueryList)
+  mobileMediaQueryList.addEventListener('change', updateSearchControlSize)
+}
+
+function updateSearchControlSize(event: MediaQueryList | MediaQueryListEvent) {
+  searchControlSize.value = event.matches ? 'md' : 'xl'
 }
 
 async function handleLoadDraft(reference: LoadDraftReference = {}) {
@@ -248,131 +267,138 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
+  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col md:p-8">
     <Transition name="layout" mode="out-in">
       <!-- STATE: FORM CARI -->
-      <div v-if="!showPrintPreview" class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
-
-        <!-- HEADER -->
-        <div class="mb-8">
-          <div class="mb-6 flex items-center justify-between">
-            <div>
-              <h2 class="text-2xl font-bold tracking-tight text-slate-900">
-                Print Ulang Pengajuan
-              </h2>
-              <p class="mt-1 text-sm text-slate-500">
-                Masukkan ID Pengajuan untuk memuat dan mencetak ulang form yang sudah pernah dibuat.
-              </p>
+      <div v-if="!showPrintPreview" class="flex grow flex-col">
+        <div class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl transition-all duration-500 md:p-8">
+          <div class="mx-auto max-w-xl py-6 text-center">
+            <div class="mb-4 inline-flex items-center justify-center rounded-2xl bg-blue-100 p-3 text-blue-600">
+              <UIcon name="i-lucide-printer-check" class="size-8" />
             </div>
-            <!-- Lencana Status Aktif -->
-          </div>
+            <h2 class="mb-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              Print Ulang Pengajuan
+            </h2>
+            <p class="mb-8 text-sm text-slate-500">
+              Masukkan ID Pengajuan untuk memuat dan mencetak ulang form yang sudah pernah dibuat.
+            </p>
 
-          <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:gap-4">
-            <UInput
-              v-model="searchId"
-              type="text"
-              class="w-full"
-              size="xl"
-              color="neutral"
-              variant="outline"
-              :highlight="hasSearchInputError"
-              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3 font-mono uppercase shadow-sm transition-all focus:bg-white focus:ring-2' }"
-              placeholder="Masukkan ID, contoh: KG-YYYYMMDD-0001"
-              autocomplete="off"
-              icon="i-lucide-search"
-              @keyup.enter="handleLoadDraft({ source: 'manual' })"
-            />
-            <UButton
-              type="button"
-              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold transition-all hover:bg-slate-100 md:w-auto md:shrink-0"
-              color="neutral"
-              variant="outline"
-              size="xl"
-              icon="i-lucide-search"
-              :label="isLoadingDraft ? 'Mencari...' : 'Cari'"
-              :loading="isLoadingDraft"
-              :disabled="isLoadingDraft || isLoadingStoredDraft"
-              @click="handleLoadDraft({ source: 'manual' })"
-            />
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+              <UInput
+                v-model="searchId"
+                type="text"
+                class="w-full md:flex-1"
+                :size="searchControlSize"
+                color="neutral"
+                variant="outline"
+                :highlight="hasSearchInputError"
+                :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3.5 font-mono uppercase shadow-inner transition-colors focus:bg-white' }"
+                placeholder="Contoh: KG-YYYYMMDD-0001"
+                autocomplete="off"
+                @keyup.enter="handleLoadDraft({ source: 'manual' })"
+              />
+              <UButton
+                type="button"
+                class="w-full justify-center rounded-xl px-8 py-3.5 font-semibold shadow-md transition-all active:scale-95 md:w-auto"
+                color="primary"
+                variant="solid"
+                :size="searchControlSize"
+                icon="i-lucide-search"
+                :label="isLoadingDraft ? 'Mencari...' : 'Cari Pengajuan'"
+                :loading="isLoadingDraft"
+                :disabled="isLoadingDraft || isLoadingStoredDraft"
+                @click="handleLoadDraft({ source: 'manual' })"
+              />
+            </div>
           </div>
         </div>
 
-        <Transition name="slide-up">
-          <div v-if="isDraftReady" class="space-y-8">
+        <!-- HASIL PENCARIAN -->
+        <Transition name="slide-fade">
+          <div v-if="isDraftReady" class="relative overflow-hidden rounded-2xl border border-white/60 bg-white/60 p-6 text-center shadow-sm backdrop-blur-md">
+            <div class="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-blue-500 opacity-20 blur-3xl transition-colors duration-1000" />
 
-            <hr class="border-slate-200/60">
+            <div class="relative z-10">
+              <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <UIcon name="i-lucide-file-check-2" class="size-7" />
+              </div>
 
-            <!-- RINGKASAN DATA -->
-            <div>
-              <h3 class="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
-                <UIcon name="i-lucide-file-text" class="size-5 text-blue-600" />
-                Ringkasan Data
-                <span class="ml-2 rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-semibold text-blue-800">{{ currentDraftId }}</span>
+              <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Pengajuan Dimuat</span>
+              <h3 class="mb-4 break-all font-mono text-2xl font-black text-slate-800">
+                {{ currentDraftId || '-' }}
               </h3>
 
-              <div class="grid gap-6 md:grid-cols-[1fr_2fr]">
-                <!-- Info Pemohon -->
-                <div class="rounded-2xl border border-slate-200 bg-white/50 p-5">
-                  <dl class="space-y-4 text-sm">
-                    <div>
-                      <dt class="text-xs font-medium text-slate-500">Nama Pemohon</dt>
-                      <dd class="mt-0.5 font-semibold text-slate-900">{{ loadedDraft?.nama || '-' }}</dd>
-                    </div>
-                    <div>
-                      <dt class="text-xs font-medium text-slate-500">Cabang / Bagian</dt>
-                      <dd class="mt-0.5 font-medium text-slate-900">{{ loadedDraft?.bagianCabang || '-' }}</dd>
-                    </div>
-                    <div>
-                      <dt class="text-xs font-medium text-slate-500">Pemilik</dt>
-                      <dd class="mt-0.5 font-medium text-slate-900">{{ loadedDraft?.pemilik || '-' }}</dd>
-                    </div>
-                    <div>
-                      <dt class="text-xs font-medium text-slate-500">Tgl. Form</dt>
-                      <dd class="mt-0.5 font-medium text-slate-900">{{ loadedDraft?.tanggalForm || '-' }}</dd>
-                    </div>
-                  </dl>
+              <div class="mx-auto mb-4 grid max-w-xl gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-500 sm:grid-cols-2">
+                <div class="flex items-center justify-between gap-3">
+                  <span>Nama</span>
+                  <span class="text-right font-semibold text-slate-700">{{ loadedDraft?.nama || '-' }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>Bagian/Cabang</span>
+                  <span class="text-right font-semibold text-slate-700">{{ loadedDraft?.bagianCabang || '-' }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>Pemilik</span>
+                  <span class="text-right font-semibold text-slate-700">{{ loadedDraft?.pemilik || '-' }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>Tgl. Form</span>
+                  <span class="text-right font-semibold text-slate-700">{{ loadedDraft?.tanggalForm || '-' }}</span>
+                </div>
+                <div v-if="loadedDraft?.status" class="flex items-center justify-between gap-3 sm:col-span-2">
+                  <span>Status</span>
+                  <span class="text-right font-semibold text-slate-700">{{ loadedDraft.status }}</span>
+                </div>
+              </div>
+
+              <div class="mx-auto mb-4 max-w-xl rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+                <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-400">Alasan Pengajuan</span>
+                <p class="text-sm font-medium leading-relaxed text-slate-600">
+                  {{ loadedDraft?.alasanPengajuan || '-' }}
+                </p>
+              </div>
+
+              <div class="mx-auto mb-6 max-w-2xl rounded-xl border border-slate-100 bg-white/70 p-4 text-left shadow-sm">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Item Produk</span>
+                  <span class="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                    {{ loadedDraft?.items?.length || 0 }} item
+                  </span>
                 </div>
 
-                <!-- List Produk -->
-                <div class="rounded-2xl border border-slate-200 bg-white/50 p-5">
-                  <p class="mb-3 text-xs font-medium text-slate-500">Item Produk ({{ loadedDraft?.items?.length || 0 }})</p>
-                  <div class="max-h-55 space-y-3 overflow-y-auto pr-2">
-                    <div
-                      v-for="(item, idx) in loadedDraft?.items"
-                      :key="idx"
-                      class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p class="font-bold text-slate-800">{{ item.model || 'Model tidak diketahui' }}</p>
-                        <p class="mt-0.5 text-xs text-slate-500">{{ item.produk || 'Produk' }}</p>
-                      </div>
-                      <div class="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100">
-                        <UIcon name="i-lucide-barcode" class="size-4 text-slate-400" />
-                        <span class="font-mono text-sm font-semibold text-slate-700">
-                          {{ item.nomorSeri || 'N/A' }}
-                        </span>
-                      </div>
+                <div class="max-h-55 space-y-3 overflow-y-auto pr-2">
+                  <div
+                    v-for="(item, idx) in loadedDraft?.items"
+                    :key="idx"
+                    class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div class="min-w-0">
+                      <p class="truncate font-bold text-slate-800">{{ item.model || 'Model tidak diketahui' }}</p>
+                      <p class="mt-0.5 truncate text-xs text-slate-500">{{ item.produk || 'Produk' }}</p>
+                    </div>
+                    <div class="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-100 bg-white px-2.5 py-1.5">
+                      <UIcon name="i-lucide-barcode" class="size-4 shrink-0 text-slate-400" />
+                      <span class="break-all font-mono text-sm font-semibold text-slate-700">
+                        {{ item.nomorSeri || 'N/A' }}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- ACTION REVIEW -->
-            <div class="flex flex-col-reverse justify-end gap-3 border-t border-slate-200/60 pt-6 sm:flex-row">
-              
-              <UButton
-                type="button"
-                class="w-full justify-center rounded-xl px-8 py-3.5 font-bold shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:w-auto"
-                color="primary"
-                variant="solid"
-                size="lg"
-                icon="i-lucide-printer"
-                label="Review & Cetak Ulang"
-                @click="handleReviewPrint"
-              />
+              <div class="flex flex-col-reverse justify-center gap-3 sm:flex-row">
+                <UButton
+                  type="button"
+                  class="w-full justify-center rounded-xl px-8 py-3.5 font-bold shadow-lg shadow-blue-600/20 transition-all active:scale-95 sm:w-auto"
+                  color="primary"
+                  variant="solid"
+                  size="lg"
+                  icon="i-lucide-printer"
+                  label="Review & Cetak Ulang"
+                  @click="handleReviewPrint"
+                />
+              </div>
             </div>
-
           </div>
         </Transition>
       </div>
@@ -381,13 +407,14 @@ function getErrorMessage(error: unknown) {
       <section
         v-else
         id="section-print"
-        class="mx-auto max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
+        class="mx-auto max-h-[297mm] max-w-[210mm] bg-white p-6 text-sm text-slate-900"
       >
-        <div class="no-print mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-900">
+        <div class="no-print mb-6 rounded-2xl border border-white/60 bg-white/60 p-4 text-slate-900 shadow-sm backdrop-blur-md">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 class="text-lg font-bold">
-                Preview Cetak Ulang Form {{ printId }}
+              <span class="mb-1 block text-xs font-bold uppercase tracking-widest text-slate-400">Preview Cetak</span>
+              <h2 class="break-all font-mono text-lg font-bold text-slate-900">
+                {{ printId }}
               </h2>
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
@@ -567,26 +594,19 @@ function getErrorMessage(error: unknown) {
   transform: scale(0.98) translateY(-10px);
 }
 
-.slide-up-enter-active,
-.slide-up-leave-active {
+.slide-fade-enter-active {
   transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.2);
 }
-.slide-up-enter-from {
-  opacity: 0;
-  transform: translateY(20px);
+.slide-fade-leave-active {
+  transition: all 0.3s ease-in;
 }
-.slide-up-leave-to {
+.slide-fade-enter-from {
   opacity: 0;
   transform: translateY(-20px);
 }
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
+.slide-fade-leave-to {
   opacity: 0;
+  transform: translateY(10px);
 }
 </style>
 

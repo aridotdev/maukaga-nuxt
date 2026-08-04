@@ -586,8 +586,10 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col md:p-8">
-    <Transition name="layout" mode="out-in">
+  <section class="mx-auto flex min-h-full w-full max-w-350 flex-col md:p-8">
+    <div class="flex flex-col gap-6 lg:flex-row">
+      <div class="min-w-0 flex-1">
+        <Transition name="layout" mode="out-in">
       <!-- STATE: BERHASIL SUBMIT -->
       <div v-if="successId" class="mb-8 grow rounded-xl lg:rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-12">
         <div class="mx-auto max-w-xl py-8">
@@ -626,7 +628,7 @@ function getErrorMessage(error: unknown) {
             <UIcon name="i-lucide-upload-cloud" class="size-8" />
           </div>
           <h2 class="mb-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Penyelesaian Draft
+            Final Submit Pengajuan Kartu Garansi
           </h2>
           <p class="mb-8 text-sm text-slate-500">
             Lanjutkan draft terakhir Anda untuk mengunggah dokumen fisik.
@@ -897,7 +899,76 @@ function getErrorMessage(error: unknown) {
         </Transition>
 
       </div>
-    </Transition>
+        </Transition>
+      </div>
+
+      <!-- Right Column: Sidebar / Status Tracker -->
+      <aside class="flex w-full flex-col gap-6 lg:w-80">
+        <!-- Status Tracker Panel -->
+        <div class="lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+          <div class="mb-6 flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-muted bg-default/60 text-highlighted shadow-sm">
+              <UIcon name="i-lucide-file-text" class="size-5" />
+            </div>
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider text-dimmed">
+                Alur Berkas
+              </p>
+              <h3 class="text-base font-bold text-highlighted">
+                Proses Pengajuan
+              </h3>
+            </div>
+          </div>
+
+          <div class="relative flex flex-col gap-3">
+            <!-- Connecting Line -->
+            <div class="absolute bottom-8 left-5.5 top-8 z-0 w-0.5 border-l border-muted bg-muted" />
+
+            <div class="relative z-10 flex gap-4 rounded-2xl border border-muted bg-default/40 p-4 shadow-sm backdrop-blur-sm transition-colors hover:bg-default/60">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted bg-default text-sm font-bold text-highlighted shadow-sm">
+                01
+              </div>
+              <div>
+                <h4 class="mb-1 text-sm font-bold text-highlighted">
+                  Lengkapi data
+                </h4>
+                <p class="text-xs leading-relaxed text-muted">
+                  Isi data pemohon, alasan, dan daftar produk secara detail.
+                </p>
+              </div>
+            </div>
+
+            <div class="relative z-10 flex gap-4 rounded-2xl border border-muted bg-default/40 p-4 shadow-sm backdrop-blur-sm transition-colors hover:bg-default/60">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted bg-default text-sm font-bold text-highlighted shadow-sm">
+                02
+              </div>
+              <div>
+                <h4 class="mb-1 text-sm font-bold text-highlighted">
+                  Cetak draft
+                </h4>
+                <p class="text-xs leading-relaxed text-muted">
+                  Simpan draft, cetak form fisik, lalu minta tanda tangan basah.
+                </p>
+              </div>
+            </div>
+
+            <div class="relative z-10 flex gap-4 rounded-2xl border border-inverted bg-inverted p-4 text-inverted shadow-sm">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-default/30 bg-default/20 text-sm font-bold backdrop-blur-sm">
+                03
+              </div>
+              <div>
+                <h4 class="mb-1 text-sm font-bold text-inverted">
+                  Final submit
+                </h4>
+                <p class="text-xs leading-relaxed text-inverted/80">
+                  Upload scan/foto hard copy bertanda tangan melalui halaman Final Submit.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
   </section>
 </template>
 

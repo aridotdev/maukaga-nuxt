@@ -586,10 +586,12 @@ function getErrorMessage(error: unknown) {
 </script>
 
 <template>
-  <section class="mx-auto flex min-h-full w-full max-w-4xl flex-col p-4 md:p-8">
-    <Transition name="layout" mode="out-in">
+  <section class="mx-auto flex min-h-full w-full max-w-350 flex-col md:p-8">
+    <div class="flex flex-col gap-6 lg:flex-row">
+      <div class="min-w-0 flex-1">
+        <Transition name="layout" mode="out-in">
       <!-- STATE: BERHASIL SUBMIT -->
-      <div v-if="successId" class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-12">
+      <div v-if="successId" class="mb-8 grow rounded-xl lg:rounded-3xl border border-white/60 bg-white/45 p-6 text-center shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-12">
         <div class="mx-auto max-w-xl py-8">
           <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-green-600 ring-8 ring-green-50">
             <UIcon name="i-lucide-check" class="size-10" />
@@ -618,71 +620,60 @@ function getErrorMessage(error: unknown) {
       </div>
 
       <!-- STATE: CARI DRAFT & UPLOAD -->
-      <div v-else class="mb-8 grow rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
+      <div v-else class="mb-8 grow rounded-xl lg:rounded-3xl border border-white/60 bg-white/45 p-6 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-2xl md:p-8">
         
         <!-- STEP 1: CARI DRAFT -->
-        <div class="mb-8">
-          <div class="mb-6 flex items-center justify-between">
-            <div>
-              <h2 class="text-2xl font-bold tracking-tight text-slate-900">
-                Penyelesaian Draft
-              </h2>
-              <p class="mt-1 text-sm text-slate-500">
-                Lanjutkan draft terakhir Anda untuk mengunggah dokumen fisik.
-              </p>
-            </div>
-            <!-- Lencana Status Aktif -->
-            <Transition name="fade">
-              <div v-if="isDraftReady" class="hidden items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 md:flex">
-                <span class="relative flex size-2.5">
-                  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"/>
-                  <span class="relative inline-flex size-2.5 rounded-full bg-green-500"/>
-                </span>
-                <span class="text-xs font-semibold text-green-700">Draft Ditemukan</span>
-              </div>
-            </Transition>
+        <div class="mx-auto mb-8 max-w-xl py-6 text-center">
+          <div class="mb-4 inline-flex items-center justify-center rounded-2xl bg-blue-100 p-3 text-blue-600">
+            <UIcon name="i-lucide-upload-cloud" class="size-8" />
           </div>
+          <h2 class="mb-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            Final Submit Pengajuan Kartu Garansi
+          </h2>
+          <p class="mb-8 text-sm text-slate-500">
+            Lanjutkan draft terakhir Anda untuk mengunggah dokumen fisik.
+          </p>
 
-          <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:gap-4">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
             <UInput
               v-model="resumeId"
               type="text"
-              class="w-full"
+              class="w-full md:flex-1"
               size="xl"
               color="neutral"
               variant="outline"
               :highlight="hasResumeInputError"
-              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3 font-mono uppercase shadow-sm transition-all focus:bg-white focus:ring-2' }"
-              placeholder="Masukkan ID, contoh: KG-YYYYMMDD-0001"
+              :ui="{ base: 'rounded-xl bg-white/80 px-4 py-3.5 font-mono uppercase shadow-inner transition-colors focus:bg-white' }"
+              placeholder="Contoh: KG-YYYYMMDD-0001"
               autocomplete="off"
-              icon="i-lucide-search"
               @keyup.enter="handleLoadDraft({ source: 'manual' })"
             />
             <UButton
               type="button"
-              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold transition-all hover:bg-slate-100 md:w-auto md:shrink-0"
-              color="neutral"
-              variant="outline"
+              class="w-full justify-center rounded-xl px-8 py-3.5 font-semibold shadow-md transition-all active:scale-95 md:w-auto"
+              color="primary"
+              variant="solid"
               size="xl"
-              icon="i-lucide-download"
-              :label="isLoadingDraft ? 'Mencari...' : 'Muat ID'"
+              icon="i-lucide-search"
+              :label="isLoadingDraft ? 'Mencari...' : 'Muat Draft'"
               :loading="isLoadingDraft"
               :disabled="isLoadingDraft || isLoadingStoredDraft"
               @click="handleLoadDraft({ source: 'manual' })"
             />
-            <UButton
-              type="button"
-              class="w-full justify-center rounded-xl px-6 py-3.5 font-semibold shadow-md shadow-blue-900/10 transition-all hover:-translate-y-0.5 hover:shadow-lg md:w-auto md:shrink-0"
-              color="neutral"
-              variant="solid"
-              size="xl"
-              icon="i-lucide-history"
-              :label="isLoadingStoredDraft ? 'Memuat...' : 'Draft Terakhir'"
-              :loading="isLoadingStoredDraft"
-              :disabled="isLoadingDraft || isLoadingStoredDraft"
-              @click="handleLoadStoredDraft"
-            />
           </div>
+
+          <UButton
+            type="button"
+            class="mt-3 w-full justify-center rounded-xl px-8 py-3.5 font-semibold transition-all active:scale-95"
+            color="neutral"
+            variant="outline"
+            size="xl"
+            icon="i-lucide-history"
+            :label="isLoadingStoredDraft ? 'Memuat...' : 'Draft Terakhir'"
+            :loading="isLoadingStoredDraft"
+            :disabled="isLoadingDraft || isLoadingStoredDraft"
+            @click="handleLoadStoredDraft"
+          />
         </div>
 
         <Transition name="slide-up">
@@ -692,10 +683,10 @@ function getErrorMessage(error: unknown) {
 
             <!-- STEP 2: REVIEW DATA (FITUR BARU BERDASARKAN PERMINTAAN) -->
             <div>
-              <h3 class="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
+              <h3 class="mb-4 grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-lg font-bold text-slate-800 sm:flex sm:gap-2">
                 <UIcon name="i-lucide-file-text" class="size-5 text-blue-600" />
                 Ringkasan Data
-                <span class="ml-2 rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-semibold text-blue-800">{{ currentDraftId }}</span>
+                <span class="col-start-2 w-fit rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-semibold text-blue-800 sm:ml-2">{{ currentDraftId }}</span>
               </h3>
               
               <div class="grid gap-6 md:grid-cols-[1fr_2fr]">
@@ -724,7 +715,7 @@ function getErrorMessage(error: unknown) {
                     <div 
                       v-for="(item, idx) in loadedDraft?.items" 
                       :key="idx"
-                      class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                      class="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
                         <p class="font-bold text-slate-800">{{ item.model || 'Model tidak diketahui' }}</p>
@@ -797,12 +788,11 @@ function getErrorMessage(error: unknown) {
               >
 
               <div class="mt-6 border-t border-slate-200/60 pt-5">
-                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between bg:items-start">
                   <div>
                     <h4 class="flex items-center gap-2 text-base font-bold text-slate-800">
                       <UIcon name="i-lucide-images" class="size-5 text-blue-600" />
                       Lampiran Foto Bukti
-                      <span class="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Opsional</span>
                     </h4>
                     <p class="mt-1 text-sm text-slate-500">
                       Foto unit, dus, label model, serial number, atau bukti pendukung lain.
@@ -909,7 +899,76 @@ function getErrorMessage(error: unknown) {
         </Transition>
 
       </div>
-    </Transition>
+        </Transition>
+      </div>
+
+      <!-- Right Column: Sidebar / Status Tracker -->
+      <aside class="flex w-full flex-col gap-6 lg:w-80">
+        <!-- Status Tracker Panel -->
+        <div class="lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+          <div class="mb-6 flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-muted bg-default/60 text-highlighted shadow-sm">
+              <UIcon name="i-lucide-file-text" class="size-5" />
+            </div>
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider text-dimmed">
+                Alur Berkas
+              </p>
+              <h3 class="text-base font-bold text-highlighted">
+                Proses Pengajuan
+              </h3>
+            </div>
+          </div>
+
+          <div class="relative flex flex-col gap-3">
+            <!-- Connecting Line -->
+            <div class="absolute bottom-8 left-5.5 top-8 z-0 w-0.5 border-l border-muted bg-muted" />
+
+            <div class="relative z-10 flex gap-4 rounded-2xl border border-muted bg-default/40 p-4 shadow-sm backdrop-blur-sm transition-colors hover:bg-default/60">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted bg-default text-sm font-bold text-highlighted shadow-sm">
+                01
+              </div>
+              <div>
+                <h4 class="mb-1 text-sm font-bold text-highlighted">
+                  Lengkapi data
+                </h4>
+                <p class="text-xs leading-relaxed text-muted">
+                  Isi data pemohon, alasan, dan daftar produk secara detail.
+                </p>
+              </div>
+            </div>
+
+            <div class="relative z-10 flex gap-4 rounded-2xl border border-muted bg-default/40 p-4 shadow-sm backdrop-blur-sm transition-colors hover:bg-default/60">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted bg-default text-sm font-bold text-highlighted shadow-sm">
+                02
+              </div>
+              <div>
+                <h4 class="mb-1 text-sm font-bold text-highlighted">
+                  Cetak draft
+                </h4>
+                <p class="text-xs leading-relaxed text-muted">
+                  Simpan draft, cetak form fisik, lalu minta tanda tangan basah.
+                </p>
+              </div>
+            </div>
+
+            <div class="relative z-10 flex gap-4 rounded-2xl border border-inverted bg-inverted p-4 text-inverted shadow-sm">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-default/30 bg-default/20 text-sm font-bold backdrop-blur-sm">
+                03
+              </div>
+              <div>
+                <h4 class="mb-1 text-sm font-bold text-inverted">
+                  Final submit
+                </h4>
+                <p class="text-xs leading-relaxed text-inverted/80">
+                  Upload scan/foto hard copy bertanda tangan melalui halaman Final Submit.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
   </section>
 </template>
 

@@ -15,7 +15,8 @@ const managedFiles = [
   ['app/pages/final-submit.vue', 'apps/cs-web/pages/final-submit.vue'],
   ['app/pages/print-ulang.vue', 'apps/cs-web/pages/print-ulang.vue'],
   ['public/favicon.ico', 'apps/cs-web/public/favicon.ico'],
-  ['public/robots.txt', 'apps/cs-web/public/robots.txt']
+  ['public/robots.txt', 'apps/cs-web/public/robots.txt'],
+  ['app/layouts/cs.vue', 'apps/cs-web/layouts/cs.vue'],
 ]
 
 const forbiddenCsWebPaths = [

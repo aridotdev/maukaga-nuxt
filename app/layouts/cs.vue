@@ -132,7 +132,7 @@ const desktopNavLinkClass = [
           to="/final-submit"
           :class="desktopNavLinkClass"
         >
-          Lanjutkan Draft
+          Final Submit
         </NuxtLink>
         <NuxtLink
           to="/print-ulang"
@@ -204,7 +204,7 @@ const desktopNavLinkClass = [
           class="rounded-2xl border border-white/60 bg-white/45 px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/70"
           @click="isMobileMenuOpen = false"
         >
-          Lanjutkan Draft
+          Final Submit
         </NuxtLink>
         <NuxtLink
           to="/print-ulang"

@@ -120,16 +120,16 @@ const savedPrintId = ref('')
 const showDraftConfirm = ref(false)
 const showNewDraftConfirm = ref(false)
 
-const finalSubmitUrl = computed(() => {
-  if (!currentDraftId.value) return '/final-submit'
+// const finalSubmitUrl = computed(() => {
+//   if (!currentDraftId.value) return '/final-submit'
 
-  return {
-    path: '/final-submit',
-    query: currentResumeToken.value
-      ? { id: currentDraftId.value, token: currentResumeToken.value }
-      : { id: currentDraftId.value }
-  }
-})
+//   return {
+//     path: '/final-submit',
+//     query: currentResumeToken.value
+//       ? { id: currentDraftId.value, token: currentResumeToken.value }
+//       : { id: currentDraftId.value }
+//   }
+// })
 const printPayload = computed(() => savedPrintPayload.value || collectPayload())
 const printId = computed(() => savedPrintId.value || currentDraftId.value || '-')
 const printTanggalForm = computed(() => formatDate(printPayload.value.tanggalForm))
@@ -438,14 +438,14 @@ function getErrorMessage(error: unknown) {
         </div>
       </div>
     </Teleport>
-    <div v-show="!showPrintPreview" class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div class="new-page-form relative mx-auto flex w-full max-w-350 flex-col gap-9 p-0 sm:p-6 lg:gap-6 lg:p-8">
       <!-- Header Section -->
-      <header class="flex flex-col items-start justify-between gap-3 rounded-2xl border border-muted bg-default/45 p-4 shadow-sm backdrop-blur-xl lg:flex-row lg:items-center lg:p-5">
+      <header class="flex flex-col items-start justify-between gap-2 lg:flex-row lg:items-center lg:gap-3 lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
         <div class="min-w-0 flex-1">
-          <h1 class="mb-1 text-xl font-bold text-highlighted lg:text-2xl">
+          <h1 class="mb-1 text-lg font-bold leading-snug text-highlighted lg:text-2xl">
             Form Pengajuan Kartu Garansi Baru
           </h1>
-          <p class="max-w-none truncate text-xs leading-relaxed text-muted lg:text-sm">
+          <p class="text-[11px] leading-relaxed text-muted sm:text-xs lg:text-sm">
             Lengkapi data pengajuan, simpan draft, lalu cetak hard copy untuk ditandatangani.
           </p>
         </div>
@@ -455,37 +455,38 @@ function getErrorMessage(error: unknown) {
       <div class="flex flex-col gap-6 lg:flex-row">
         <!-- Left Column: Form Areas -->
         <UForm
+          v-show="!showPrintPreview"
           :schema="pengajuanSchema"
           :state="formState"
-          class="flex flex-1 flex-col gap-6"
+          class="flex flex-1 flex-col gap-9 lg:gap-6"
           @submit="onDraftSubmit"
           @error="onFormError"
         >
           <!-- Section 1: Informasi Pemohon -->
-          <section class="relative rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl lg:p-8">
-            <div class="mb-8 flex items-center justify-between border-b border-muted pb-4">
-              <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm">
+          <section class="relative lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+            <div class="mb-5 flex items-center justify-between border-b border-muted pb-3 lg:mb-8 lg:pb-4">
+              <div class="flex items-center gap-3 lg:gap-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
                   <UIcon name="i-lucide-user" class="size-5" />
                 </div>
                 <div>
-                  <p class="mb-1 text-xs font-bold uppercase tracking-wider text-dimmed">
+                  <p class="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-dimmed lg:mb-1 lg:text-xs">
                     Langkah 01
                   </p>
-                  <h2 class="text-xl font-bold text-highlighted">
+                  <h2 class="text-lg font-bold leading-tight text-highlighted lg:text-xl">
                     Informasi Pemohon
                   </h2>
                 </div>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-6">
               <UFormField name="namaPemohon" label="Nama Pemohon" size="lg" required>
                 <UInput
                   v-model="formState.namaPemohon"
                   placeholder="Masukkan nama Anda"
                   class="w-full"
-                  size="lg"
+                  size="lg" 
                 />
               </UFormField>
 
@@ -501,7 +502,7 @@ function getErrorMessage(error: unknown) {
               <UFormField name="namaPemilikBarang" label="Nama Pemilik Barang" size="lg" required>
                 <UInput
                   v-model="formState.namaPemilikBarang"
-                  placeholder="Masukkan nama pemilik barang"
+                  placeholder="Masukkan nama toko atau dealer"
                   class="w-full"
                   size="lg"
                 />
@@ -540,35 +541,35 @@ function getErrorMessage(error: unknown) {
           </section>
 
           <!-- Section 2: Daftar Produk -->
-          <section class="flex flex-col rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl lg:p-8">
-            <div class="mb-6 flex items-center justify-between border-b border-muted pb-4">
-              <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm">
+          <section class="flex flex-col lg:rounded-4xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+            <div class="mb-5 flex flex-col items-stretch justify-between gap-3 border-b border-muted pb-3 lg:mb-6 lg:flex-row lg:items-center lg:gap-0 lg:pb-4">
+              <div class="flex w-full items-center justify-between gap-3 lg:gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-muted bg-default/60 text-highlighted shadow-sm lg:h-12 lg:w-12">
                   <UIcon name="i-lucide-package" class="size-5" />
                 </div>
-                <div>
-                  <p class="mb-1 text-xs font-bold uppercase tracking-wider text-dimmed">
+                <div class="min-w-0 flex-1">
+                  <p class="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-dimmed lg:mb-1 lg:text-xs">
                     Langkah 02
                   </p>
-                  <h2 class="text-xl font-bold text-highlighted">
+                  <h2 class="text-lg font-bold leading-tight text-highlighted lg:text-xl">
                     Daftar Produk
                   </h2>
                 </div>
+                <UButton
+                  type="button"
+                  label="Item"
+                  icon="i-lucide-plus"
+                  color="primary"
+                  variant="solid"
+                  class="self-end cursor-pointer lg:shrink-0"
+                  :disabled="formState.products.length >= maxItems"
+                  @click="addItem"
+                />
               </div>
-              <UButton
-                type="button"
-                label="Tambah Item"
-                icon="i-lucide-plus"
-                color="primary"
-                variant="subtle"
-                class="cursor-pointer"
-                :disabled="formState.products.length >= maxItems"
-                @click="addItem"
-              />
             </div>
 
             <!-- Item List -->
-            <div class="mb-8 overflow-hidden rounded-xl border border-muted bg-default/35 shadow-sm backdrop-blur-lg">
+            <div class="mb-6 md:mb-8 md:overflow-hidden md:rounded-xl md:border md:border-muted md:bg-default/35 md:shadow-sm md:backdrop-blur-lg">
               <div class="hidden grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_40px] gap-3 border-b border-muted px-4 py-3 text-xs font-semibold uppercase tracking-wider text-toned md:grid">
                 <span class="text-center">#</span>
                 <span>Model <span class="text-error">*</span></span>
@@ -577,7 +578,7 @@ function getErrorMessage(error: unknown) {
                 <span />
               </div>
 
-              <div class="flex flex-col gap-2 p-3">
+              <div class="flex flex-col gap-2 md:p-3">
                 <div
                   v-for="(product, index) in formState.products"
                   :key="index"
@@ -667,10 +668,16 @@ function getErrorMessage(error: unknown) {
           </section>
         </UForm>
 
+        <div
+          v-show="showPrintPreview"
+          id="print-preview-slot"
+          class="flex flex-1"
+        />
+
         <!-- Right Column: Sidebar / Status Tracker -->
         <aside class="flex w-full flex-col gap-6 lg:w-80">
           <!-- Status Tracker Panel -->
-          <div class="rounded-4xl border border-muted bg-default/45 p-6 shadow-sm backdrop-blur-xl">
+          <div class="lg:rounded-2xl lg:bg-default/45 lg:p-8 rounded-xl border border-white/60 bg-white/45 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.04)] backdrop-blur-xl">
             <div class="mb-6 flex items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-muted bg-default/60 text-highlighted shadow-sm">
                 <UIcon name="i-lucide-file-text" class="size-5" />
@@ -689,36 +696,60 @@ function getErrorMessage(error: unknown) {
               <!-- Connecting Line -->
               <div class="absolute bottom-8 left-5.5 top-8 z-0 w-0.5 border-l border-muted bg-muted" />
 
-              <div class="relative z-10 flex gap-4 rounded-2xl border border-inverted bg-inverted p-4 text-inverted shadow-sm">
-                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-default/30 bg-default/20 text-sm font-bold backdrop-blur-sm">
+              <div
+                class="relative z-10 flex gap-4 rounded-2xl p-4 shadow-sm"
+                :class="showPrintPreview ? 'border border-muted bg-default/40 backdrop-blur-sm transition-colors hover:bg-default/60' : 'border border-inverted bg-inverted text-inverted'"
+              >
+                <div
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold backdrop-blur-sm"
+                  :class="showPrintPreview ? 'border border-muted bg-default text-highlighted shadow-sm' : 'border border-default/30 bg-default/20'"
+                >
                   01
                 </div>
                 <div>
-                  <h4 class="mb-1 text-sm font-bold text-inverted">
+                  <h4
+                    class="mb-1 text-sm font-bold"
+                    :class="showPrintPreview ? 'text-highlighted' : 'text-inverted'"
+                  >
                     Lengkapi data
                   </h4>
-                  <p class="text-xs leading-relaxed text-inverted/80">
+                  <p
+                    class="text-xs leading-relaxed"
+                    :class="showPrintPreview ? 'text-muted' : 'text-inverted/80'"
+                  >
                     Isi data pemohon, alasan, dan daftar produk secara detail.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                class="relative z-10 flex gap-4 rounded-2xl p-4 shadow-sm"
+                :class="showPrintPreview ? 'border border-inverted bg-inverted text-inverted' : 'border border-muted bg-default/40 backdrop-blur-sm transition-colors hover:bg-default/60'"
+              >
+                <div
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold backdrop-blur-sm"
+                  :class="showPrintPreview ? 'border border-default/30 bg-default/20' : 'border border-muted bg-default text-highlighted shadow-sm'"
+                >
+                  02
+                </div>
+                <div>
+                  <h4
+                    class="mb-1 text-sm font-bold"
+                    :class="showPrintPreview ? 'text-inverted' : 'text-highlighted'"
+                  >
+                    Cetak draft
+                  </h4>
+                  <p
+                    class="text-xs leading-relaxed"
+                    :class="showPrintPreview ? 'text-inverted/80' : 'text-muted'"
+                  >
+                    Simpan draft, cetak form fisik, lalu minta tanda tangan basah.
                   </p>
                 </div>
               </div>
 
               <div class="relative z-10 flex gap-4 rounded-2xl border border-muted bg-default/40 p-4 shadow-sm backdrop-blur-sm transition-colors hover:bg-default/60">
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted bg-default text-sm font-bold text-highlighted shadow-sm">
-                  02
-                </div>
-                <div>
-                  <h4 class="mb-1 text-sm font-bold text-highlighted">
-                    Cetak draft
-                  </h4>
-                  <p class="text-xs leading-relaxed text-muted">
-                    Simpan draft, cetak form fisik, lalu minta tanda tangan basah.
-                  </p>
-                </div>
-              </div>
-
-              <div class="relative z-10 flex gap-4 rounded-2xl border border-dashed border-muted bg-muted/20 p-4 opacity-80 backdrop-blur-sm">
-                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-dimmed">
                   03
                 </div>
                 <div>
@@ -784,11 +815,12 @@ function getErrorMessage(error: unknown) {
       </template>
     </UModal>
 
-    <section
-      v-show="showPrintPreview"
-      id="section-print"
-      class="mx-auto max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
-    >
+    <Teleport to="#print-preview-slot">
+      <section
+        v-if="showPrintPreview"
+        id="section-print"
+        class="mx-auto w-full max-w-[210mm] max-h-[297mm] bg-white p-6 text-sm text-slate-900"
+      >
       <div class="no-print mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-900">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -805,13 +837,13 @@ function getErrorMessage(error: unknown) {
               variant="subtle"
               @click="backToForm"
             />
-            <UButton
+            <!-- <UButton
               :to="finalSubmitUrl"
               label="Final Submit"
               icon="i-lucide-upload"
               color="neutral"
               variant="outline"
-            />
+            /> -->
             <UButton
               type="button"
               label="Cetak"
@@ -960,7 +992,8 @@ function getErrorMessage(error: unknown) {
         <p>1. Untuk permintaan Kartu Garansi mohon diisi nama jelasnya.</p>
         <p>2. Untuk permintaan melalui cabang, kolom diketahui harus diisi oleh kepala service.</p>
       </div>
-    </section>
+      </section>
+    </Teleport>
   </div>
 </template>
 
