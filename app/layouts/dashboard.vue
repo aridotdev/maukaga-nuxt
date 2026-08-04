@@ -5,8 +5,20 @@ const route = useRoute()
 const toast = useToast()
 const runTimeConfig = useRuntimeConfig()
 const { isAdmin, isManagement, isQrcc } = useUserProfile()
+const {
+  rows: reviewProductRows,
+  ensureLoaded: ensureReviewProductQueueLoaded
+} = useReviewProductQueue()
+const reviewProductInvalidations = useAppSheetInvalidationState()
 
 const open = ref(false)
+const pendingProductReviewCount = computed(() =>
+  reviewProductRows.value.reduce((total, group) => total + Number(group.count || 0), 0)
+)
+const productReviewBadge = computed(() =>
+  pendingProductReviewCount.value > 0 ? String(pendingProductReviewCount.value) : undefined
+)
+const canReviewProductName = computed(() => isAdmin.value || isQrcc.value)
 
 const links = [[{
   label: 'Home',
@@ -46,7 +58,6 @@ const links = [[{
   children: [{
     label: 'Product Name',
     to: '/dashboard/settings/product-name',
-    badge: '4',
     onSelect: () => {
       open.value = false
     }
@@ -92,6 +103,19 @@ const visibleLinks = computed<NavigationMenuItem[][]>(() => {
           }
 
           return true
+        }).map((child) => {
+          const childTo = String((child as { to?: unknown }).to || '')
+
+          if (childTo === '/dashboard/settings/product-name') {
+            const badge = productReviewBadge.value
+
+            return {
+              ...child,
+              ...(badge ? { badge } : {})
+            }
+          }
+
+          return child
         })
       } as NavigationMenuItem)
       continue
@@ -127,6 +151,22 @@ const groups = computed(() => [{
     target: '_blank'
   }]
 }])
+
+if (import.meta.client) {
+  watch(
+    () => [
+      canReviewProductName.value,
+      reviewProductInvalidations.value.getProductReviewQueue,
+      reviewProductInvalidations.value['*']
+    ],
+    () => {
+      if (!canReviewProductName.value) return
+
+      ensureReviewProductQueueLoaded()
+    },
+    { immediate: true }
+  )
+}
 
 onMounted(async () => {
   const cookie = useCookie('cookie-consent')
