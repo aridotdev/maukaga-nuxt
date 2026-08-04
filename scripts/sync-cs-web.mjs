@@ -17,6 +17,7 @@ const managedFiles = [
   ['public/favicon.ico', 'apps/cs-web/public/favicon.ico'],
   ['public/robots.txt', 'apps/cs-web/public/robots.txt'],
   ['app/layouts/cs.vue', 'apps/cs-web/layouts/cs.vue'],
+  ['app/pages/panduan.vue', 'apps/cs-web/pages/panduan.vue'],
 ]
 
 const forbiddenCsWebPaths = [

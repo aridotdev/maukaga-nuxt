@@ -140,6 +140,12 @@ const desktopNavLinkClass = [
         >
           Print Ulang Pengajuan
         </NuxtLink>
+        <NuxtLink
+          to="/panduan"
+          :class="desktopNavLinkClass"
+        >
+          Panduan Pengguna
+        </NuxtLink>
       </div>
 
       <button
@@ -212,6 +218,13 @@ const desktopNavLinkClass = [
           @click="isMobileMenuOpen = false"
         >
           Print Ulang Pengajuan
+        </NuxtLink>
+        <NuxtLink
+          to="/panduan"
+          class="rounded-2xl border border-white/60 bg-white/45 px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm backdrop-blur-sm transition-all duration-300 ease-out hover:bg-white/70"
+          @click="isMobileMenuOpen = false"
+        >
+          Panduan Pengguna
         </NuxtLink>
       </nav>
     </div>
