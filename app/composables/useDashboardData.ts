@@ -1,13 +1,9 @@
-/**
- * Shared dashboard data.
- * Menggantikan duplikasi `getDashboard` di HomeStats & HomePengajuan.
- * Cukup 1 call ke Apps Script, dishare ke semua komponen.
- */
-
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
+type DashboardItemDecisionFilter = 'all' | 'pending' | Exclude<DashboardItemDecision, ''>
+type PengajuanListSortDirection = 'asc' | 'desc'
 
-type DashboardSummary = {
+export type DashboardSummary = {
   total?: number
   totalItems?: number
   baru?: number
@@ -20,14 +16,14 @@ type DashboardSummary = {
   itemDitolak?: number
 }
 
-type DashboardItem = {
+export type DashboardItem = {
   noItem: number | string
   model?: string
   nomorSeri?: string
   keputusanItem?: DashboardItemDecision | string
 }
 
-type DashboardRow = {
+export type DashboardRow = {
   idPengajuan: string
   timestampSubmit: string
   nama: string
@@ -37,13 +33,23 @@ type DashboardRow = {
   items?: DashboardItem[]
 }
 
-type DashboardResponse = {
+export type DashboardResponse = {
   summary?: DashboardSummary
   rows?: DashboardRow[]
   totalRows?: number
   page?: number
   pageSize?: number
   admin?: string
+}
+
+export type PengajuanListParams = {
+  page?: number
+  pageSize?: number
+  search?: string
+  itemDecision?: DashboardItemDecisionFilter
+  status?: DashboardStatus | 'all' | ''
+  sortBy?: string
+  sortDirection?: PengajuanListSortDirection
 }
 
 type DashboardStore = {
@@ -62,6 +68,7 @@ type UseDashboardDataOptions = {
 }
 
 const DASHBOARD_TTL = 30_000
+const PENGAJUAN_LIST_TTL = 15_000
 const DASHBOARD_PAGE_SIZE = 100
 const VALID_STATUSES: ReadonlySet<DashboardStatus> = new Set(['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'])
 
@@ -105,6 +112,178 @@ function createEmptyDashboardStore(): DashboardStore {
     totalRows: 0,
     loadedPages: 0,
     totalPages: 0
+  }
+}
+
+function normalizePengajuanListParams(params: PengajuanListParams = {}) {
+  return {
+    page: Math.max(Number(params.page || 1), 1),
+    pageSize: Math.min(Math.max(Number(params.pageSize || 15), 1), 100),
+    search: String(params.search || '').trim(),
+    itemDecision: params.itemDecision || 'all',
+    status: params.status && params.status !== 'all' ? params.status : '',
+    sortBy: params.sortBy || 'timestampSubmit',
+    sortDirection: params.sortDirection || 'desc'
+  }
+}
+
+export function useDashboardSummaryData() {
+  const invalidations = useAppSheetInvalidationState()
+  const query = useAppSheetQuery<{ summary?: DashboardSummary, admin?: string }>(
+    'getDashboardSummary',
+    {},
+    { ttl: DASHBOARD_TTL }
+  )
+
+  watch(
+    () => [invalidations.value.getDashboardSummary, invalidations.value['*']],
+    () => {
+      query.invalidate()
+      if (query.data.value) void query.refresh()
+    }
+  )
+
+  return {
+    summary: computed<DashboardSummary>(() => query.data.value?.summary ?? {}),
+    isLoading: query.isLoading,
+    isRefreshing: query.isRefreshing,
+    error: query.error,
+    refresh: query.refresh,
+    ensureLoaded: query.ensureLoaded,
+    invalidate: query.invalidate
+  }
+}
+
+export function useDashboardLatestData(limit = 5) {
+  const invalidations = useAppSheetInvalidationState()
+  const query = useAppSheetQuery<DashboardResponse>(
+    'getDashboardLatest',
+    { limit },
+    { ttl: DASHBOARD_TTL }
+  )
+
+  watch(
+    () => [invalidations.value.getDashboardLatest, invalidations.value['*']],
+    () => {
+      query.invalidate()
+      if (query.data.value) void query.refresh()
+    }
+  )
+
+  const latestRows = computed<DashboardRow[]>(() =>
+    normalizeRows(query.data.value?.rows ?? [])
+      .slice(0, limit)
+      .map((row, index) => ({ ...row, nomor: index + 1 }))
+  )
+
+  return {
+    latestRows,
+    rows: latestRows,
+    isLoading: query.isLoading,
+    isRefreshing: query.isRefreshing,
+    error: query.error,
+    refresh: query.refresh,
+    ensureLoaded: query.ensureLoaded,
+    invalidate: query.invalidate
+  }
+}
+
+export function usePengajuanListData(paramsRef: MaybeRefOrGetter<PengajuanListParams>) {
+  const { callApi } = useAppsScriptApi()
+  const invalidations = useAppSheetInvalidationState()
+  const data = shallowRef<DashboardResponse | null>(null)
+  const error = ref<string | null>(null)
+  const inflight = ref(false)
+  const fetchedAt = ref(0)
+  const lastKey = ref('')
+  const requestId = ref(0)
+
+  const rows = computed<DashboardRow[]>(() => normalizeRows(data.value?.rows ?? []))
+  const loadedRows = computed(() => rows.value.length)
+  const totalRows = computed(() => Number(data.value?.totalRows ?? rows.value.length))
+  const page = computed(() => Number(data.value?.page ?? getParams().page))
+  const pageSize = computed(() => Number(data.value?.pageSize ?? getParams().pageSize))
+  const totalPages = computed(() => {
+    if (!totalRows.value) return 0
+    return Math.max(Math.ceil(totalRows.value / pageSize.value), 1)
+  })
+  const isLoading = computed(() => inflight.value && data.value === null)
+  const isRefreshing = computed(() => inflight.value && data.value !== null)
+  const isFullyLoaded = computed(() => totalPages.value === 0 || page.value >= totalPages.value)
+
+  function getParams() {
+    return normalizePengajuanListParams(toValue(paramsRef))
+  }
+
+  function getKey() {
+    return JSON.stringify(getParams())
+  }
+
+  function isFresh(key: string) {
+    return lastKey.value === key && fetchedAt.value > 0 && Date.now() - fetchedAt.value < PENGAJUAN_LIST_TTL
+  }
+
+  async function fetchList(force = false) {
+    const key = getKey()
+    if (!force && data.value && isFresh(key)) return
+
+    const currentRequestId = requestId.value + 1
+    requestId.value = currentRequestId
+    inflight.value = true
+    error.value = null
+
+    try {
+      const result = await callApi<DashboardResponse>('getPengajuanList', getParams())
+      if (requestId.value !== currentRequestId) return
+
+      data.value = result.data ?? {}
+      lastKey.value = key
+      fetchedAt.value = Date.now()
+    } catch (err) {
+      if (requestId.value !== currentRequestId) return
+
+      error.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      if (requestId.value === currentRequestId) {
+        inflight.value = false
+      }
+    }
+  }
+
+  function ensureLoaded() {
+    void fetchList(false)
+  }
+
+  async function refresh() {
+    await fetchList(true)
+  }
+
+  function invalidate() {
+    fetchedAt.value = 0
+  }
+
+  watch(
+    () => [invalidations.value.getPengajuanList, invalidations.value['*']],
+    () => {
+      invalidate()
+      if (data.value) void fetchList(true)
+    }
+  )
+
+  return {
+    rows,
+    isLoading,
+    isRefreshing,
+    loadedRows,
+    totalRows,
+    page,
+    pageSize,
+    totalPages,
+    isFullyLoaded,
+    error,
+    refresh,
+    ensureLoaded,
+    invalidate
   }
 }
 

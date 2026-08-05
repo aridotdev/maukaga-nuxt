@@ -18,9 +18,9 @@ const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
 const router = useRouter()
-const { latestRows, isLoading, error, ensureLoaded } = useDashboardData()
+const { latestRows, isLoading, error, ensureLoaded } = useDashboardLatestData()
 
-// Type data di sini kompatibel dengan UTable (latestRows dari useDashboardData).
+// Type data di sini kompatibel dengan UTable (latestRows dari useDashboardLatestData).
 const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'nomor',
   header: 'No',

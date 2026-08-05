@@ -1,28 +1,7 @@
 <script setup lang="ts">
 const router = useRouter()
 
-const { summary, rows, isLoading, error, ensureLoaded } = useDashboardData()
-
-const totalItems = computed(() => {
-  if (summary.value.totalItems !== undefined) return Number(summary.value.totalItems || 0)
-  return rows.value.reduce((total, row) => total + Number(row.jumlahItem || 0), 0)
-})
-
-const approvedItems = computed(() => {
-  if (summary.value.itemDisetujui !== undefined) return Number(summary.value.itemDisetujui || 0)
-  return rows.value
-    .reduce((total, row) => total + countItemDecisions(row, 'Disetujui'), 0)
-})
-
-const rejectedItems = computed(() => {
-  if (summary.value.itemDitolak !== undefined) return Number(summary.value.itemDitolak || 0)
-  return rows.value
-    .reduce((total, row) => total + countItemDecisions(row, 'Ditolak'), 0)
-})
-
-function countItemDecisions(row: { items?: Array<{ keputusanItem?: string }> }, decision: 'Disetujui' | 'Ditolak') {
-  return (row.items || []).filter((item) => item.keputusanItem === decision).length
-}
+const { summary, isLoading, error, ensureLoaded } = useDashboardSummaryData()
 
 const stats = computed(() => [{
   title: 'Total Pengajuan',
@@ -31,7 +10,7 @@ const stats = computed(() => [{
 }, {
   title: 'Total Item',
   icon: 'i-lucide-boxes',
-  value: totalItems.value
+  value: Number(summary.value.totalItems || 0)
 }, {
   title: 'Pengajuan Baru',
   icon: 'i-lucide-file-plus',
@@ -39,11 +18,11 @@ const stats = computed(() => [{
 }, {
   title: 'Item Disetujui',
   icon: 'i-lucide-circle-check',
-  value: approvedItems.value
+  value: Number(summary.value.itemDisetujui || 0)
 }, {
   title: 'Item Ditolak',
   icon: 'i-lucide-x-circle',
-  value: rejectedItems.value
+  value: Number(summary.value.itemDitolak || 0)
 }])
 
 const showSkeleton = computed(() => isLoading.value && !summary.value.total && !summary.value.totalItems)

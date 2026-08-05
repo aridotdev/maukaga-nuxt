@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import { getPaginationRowModel, type Table } from '@tanstack/table-core'
 
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
@@ -44,30 +43,35 @@ type DashboardPengajuanRow = {
   pengajuanStatus: DashboardStatus | string
 }
 
-type PengajuanTableRef = {
-  tableApi?: Table<DashboardPengajuanRow>
-}
-
 const router = useRouter()
+const currentPage = ref(1)
+const itemsPerPage = ref(15)
+const globalFilter = ref('')
+const serverSearch = ref('')
+const decisionFilter = ref<DashboardItemDecisionFilter>('all')
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const listParams = computed(() => ({
+  page: currentPage.value,
+  pageSize: itemsPerPage.value,
+  search: serverSearch.value,
+  itemDecision: decisionFilter.value,
+  sortBy: 'timestampSubmit',
+  sortDirection: 'desc' as const
+}))
+
 const {
   rows,
   isLoading,
   isRefreshing,
   error,
   ensureLoaded,
+  refresh,
   loadedRows,
   totalRows,
-  isFullyLoaded
-} = useDashboardData({ loadAll: true })
+  pageSize
+} = usePengajuanListData(listParams)
 const loadError = computed(() => error.value || '')
-
-const globalFilter = ref('')
-const decisionFilter = ref<DashboardItemDecisionFilter>('all')
-const pengajuanTable = useTemplateRef<PengajuanTableRef>('pengajuanTable')
-const pengajuanPagination = ref({
-  pageIndex: 0,
-  pageSize: 15
-})
 
 const decisionFilterItems = [{
   label: 'Semua',
@@ -83,54 +87,11 @@ const decisionFilterItems = [{
   value: 'Ditolak'
 }]
 
-const pengajuanTableGlobalFilterOptions = {
-  globalFilterFn: (row: { original: DashboardPengajuanRow }, _columnId: string, filterValue: unknown) => {
-    const keyword = String(filterValue || '').trim().toLowerCase()
-    if (!keyword) return true
-    return [
-      row.original.idPengajuan,
-      row.original.timestampSubmit,
-      row.original.nama,
-      row.original.model,
-      row.original.nomorSeri,
-      row.original.bagianCabang,
-      row.original.jumlahItem,
-      getItemDecisionLabel(row.original.keputusanItem),
-      row.original.pengajuanStatus
-    ].some((value) => String(value || '').toLowerCase().includes(keyword))
-  }
-}
-
-// Filter + search di sisi FE.
-// Setelah filter, baris di-"explode" per item (sesuai `jumlahItem`)
-// sehingga setiap noItem 1..N tampil sebagai baris sendiri.
-const filteredRows = computed<DashboardPengajuanSourceRow[]>(() => {
-  const keyword = globalFilter.value.trim().toLowerCase()
-  const source = rows.value as DashboardPengajuanSourceRow[]
-
-  return [...source]
-    .filter((row) => {
-      if (!keyword) return true
-      return [
-        row.idPengajuan,
-        row.timestampSubmit,
-        row.nama,
-        row.bagianCabang,
-        row.jumlahItem,
-        row.status,
-        ...getDashboardItems(row).flatMap(item => [
-          item.model,
-          item.nomorSeri,
-          getItemDecisionLabel(item.keputusanItem)
-        ])
-      ].some((value) => String(value || '').toLowerCase().includes(keyword))
-    })
-    .sort((a, b) => getTime(b.timestampSubmit) - getTime(a.timestampSubmit))
-})
-
 const explodedRows = computed<DashboardPengajuanRow[]>(() => {
   const out: DashboardPengajuanRow[] = []
-  filteredRows.value.forEach((parent) => {
+  const source = rows.value as DashboardPengajuanSourceRow[]
+
+  source.forEach((parent) => {
     for (const item of getDashboardItems(parent)) {
       out.push({
         key: getRowKey(parent.idPengajuan, item.noItem),
@@ -154,16 +115,6 @@ const filteredPengajuanCount = computed(() => new Set(explodedRows.value.map(row
 
 // Tabel di-pause saat loading awal agar skeleton loading tampil utuh.
 const tableRows = computed<DashboardPengajuanRow[]>(() => isLoading.value ? [] : explodedRows.value)
-
-const pengajuanPaginationTotal = computed<number>(() =>
-  pengajuanTable.value?.tableApi?.getFilteredRowModel().rows.length || 0
-)
-const pengajuanCurrentPage = computed<number>(() =>
-  (pengajuanTable.value?.tableApi?.getState().pagination.pageIndex ?? pengajuanPagination.value.pageIndex) + 1
-)
-const pengajuanItemsPerPage = computed<number>(() =>
-  pengajuanTable.value?.tableApi?.getState().pagination.pageSize || pengajuanPagination.value.pageSize
-)
 
 const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'idPengajuan',
@@ -234,6 +185,10 @@ onMounted(() => {
   ensureLoaded()
 })
 
+watch(listParams, () => {
+  void refresh()
+})
+
 watch(error, async (msg) => {
   if (msg && (msg.includes('Unauthorized') || msg.includes('Token admin'))) {
     sessionStorage.removeItem('admin_token')
@@ -243,26 +198,29 @@ watch(error, async (msg) => {
   }
 })
 
-watch(globalFilter, () => {
-  pengajuanTable.value?.tableApi?.setPageIndex(0)
+watch(globalFilter, (value) => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    serverSearch.value = value
+  }, 350)
 })
 watch(decisionFilter, () => {
-  pengajuanTable.value?.tableApi?.setPageIndex(0)
+  currentPage.value = 1
 })
 
 function setPengajuanPage(page: number) {
-  pengajuanTable.value?.tableApi?.setPageIndex(page - 1)
+  currentPage.value = page
 }
+
+onUnmounted(() => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+})
 
 function showDetail(row: DashboardPengajuanRow) {
   if (!row.idPengajuan) return
   const url = router.resolve(`/dashboard/pengajuan/${encodeURIComponent(row.idPengajuan)}`).href
   window.open(url, '_blank')
-}
-
-function getTime(value: string) {
-  const time = new Date(value || 0).getTime()
-  return Number.isFinite(time) ? time : 0
 }
 
 function formatSubmitTime(value: string) {
@@ -433,14 +391,14 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
                 class="text-xs text-muted"
                 aria-live="polite"
               >
-                Memuat {{ loadedRows }} dari {{ totalRows }} pengajuan...
+                Memuat data pengajuan...
               </p>
               <p
-                v-else-if="!isFullyLoaded && totalRows"
+                v-else-if="totalRows"
                 class="text-xs text-muted"
                 aria-live="polite"
               >
-                {{ loadedRows }} dari {{ totalRows }} pengajuan dimuat.
+                Menampilkan {{ loadedRows }} dari {{ totalRows }} pengajuan.
               </p>
 
               <USelect
@@ -453,14 +411,9 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
           </div>
 
           <UTable
-            ref="pengajuanTable"
-            v-model:pagination="pengajuanPagination"
-            v-model:global-filter="globalFilter"
             :get-row-id="(row) => row.key"
             :data="tableRows"
             :columns="columns"
-            :global-filter-options="pengajuanTableGlobalFilterOptions"
-            :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
             :loading="isLoading"
             loading-color="primary"
             loading-animation="carousel"
@@ -507,12 +460,12 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
 
           <div v-if="!isLoading && explodedRows.length" class="flex flex-wrap items-center justify-between gap-3 border-t border-accented px-4 py-3">
             <p class="text-xs text-muted">
-              {{ explodedRows.length }} item dari {{ filteredPengajuanCount }} pengajuan.
+              {{ explodedRows.length }} item dari {{ filteredPengajuanCount }} pengajuan di halaman ini.
             </p>
             <UPagination
-              :page="pengajuanCurrentPage"
-              :items-per-page="pengajuanItemsPerPage"
-              :total="pengajuanPaginationTotal"
+              :page="currentPage"
+              :items-per-page="pageSize"
+              :total="totalRows"
               @update:page="setPengajuanPage"
             />
           </div>

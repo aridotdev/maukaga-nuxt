@@ -23,6 +23,9 @@ type Entry<T> = {
 
 const DEFAULT_TTL = 30_000
 const INVALIDATION_STATE_KEY = 'appsheet-action-invalidations'
+const INVALIDATION_ALIASES: Record<string, string[]> = {
+  getDashboard: ['getDashboardSummary', 'getDashboardLatest', 'getPengajuanList']
+}
 
 export function useAppSheetInvalidationState() {
   return useState<Record<string, number>>(INVALIDATION_STATE_KEY, () => ({}))
@@ -140,12 +143,16 @@ export function useAppSheetInvalidate() {
 
   return {
     invalidate(action: string) {
-      for (const [key, raw] of Object.entries(store.value)) {
-        if (!key.startsWith(action + '::')) continue
-        const entry = raw as Entry<unknown>
-        entry.fetchedAt = 0
+      const actions = [action, ...(INVALIDATION_ALIASES[action] || [])]
+
+      for (const targetAction of actions) {
+        for (const [key, raw] of Object.entries(store.value)) {
+          if (!key.startsWith(targetAction + '::')) continue
+          const entry = raw as Entry<unknown>
+          entry.fetchedAt = 0
+        }
+        markInvalidated(targetAction)
       }
-      markInvalidated(action)
     },
     invalidateAll() {
       for (const raw of Object.values(store.value)) {

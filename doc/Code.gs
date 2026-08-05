@@ -190,6 +190,12 @@ function doPost(e) {
         return jsonResponse_(handleAdminUsersReactivate(data));
       case 'getDashboard':
         return jsonResponse_(handleGetDashboard(data));
+      case 'getDashboardSummary':
+        return jsonResponse_(handleGetDashboardSummary(data));
+      case 'getDashboardLatest':
+        return jsonResponse_(handleGetDashboardLatest(data));
+      case 'getPengajuanList':
+        return jsonResponse_(handleGetPengajuanList(data));
       case 'getDetail':
         return jsonResponse_(handleGetDetail(data));
       case 'updateStatus':
@@ -839,49 +845,90 @@ function assertNotLastActiveAdmin_(targetUserId, message) {
 
 function handleGetDashboard(data) {
   const session = requireSession_(data.token);
+  const payload = buildDashboardPayload_(data);
+  payload.admin = session.nama;
+  return { success: true, data: payload };
+}
+
+function handleGetDashboardSummary(data) {
+  const session = requireSession_(data.token);
+  const payload = buildDashboardPayload_({
+    page: 1,
+    pageSize: 1
+  });
+
+  return {
+    success: true,
+    data: {
+      summary: payload.summary,
+      admin: session.nama
+    }
+  };
+}
+
+function handleGetDashboardLatest(data) {
+  const session = requireSession_(data.token);
+  const limit = Math.min(Math.max(parseInt(data.limit || 5, 10), 1), 20);
+  const payload = buildDashboardPayload_({
+    page: 1,
+    pageSize: limit,
+    sortBy: 'timestampSubmit',
+    sortDirection: 'desc'
+  });
+
+  return {
+    success: true,
+    data: {
+      rows: payload.rows,
+      totalRows: payload.totalRows,
+      page: 1,
+      pageSize: limit,
+      admin: session.nama
+    }
+  };
+}
+
+function handleGetPengajuanList(data) {
+  const session = requireSession_(data.token);
+  const payload = buildDashboardPayload_(data);
+  payload.admin = session.nama;
+  return { success: true, data: payload };
+}
+
+function buildDashboardPayload_(data) {
   const page = Math.max(parseInt(data.page || 1, 10), 1);
   const pageSize = Math.min(Math.max(parseInt(data.pageSize || 20, 10), 1), 100);
   const search = clean_(data.search).toLowerCase();
   const status = clean_(data.status);
+  const itemDecision = clean_(data.itemDecision || data.decisionFilter || data.keputusanItem || 'all');
+  const sortBy = clean_(data.sortBy || 'timestampSubmit');
+  const sortDirection = clean_(data.sortDirection || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
   const dateFrom = data.dateFrom ? startOfDay_(new Date(data.dateFrom)) : null;
   const dateTo = data.dateTo ? endOfDay_(new Date(data.dateTo)) : null;
   if (status && VALID_STATUSES.indexOf(status) === -1) throw new Error('Status filter tidak valid');
+  if (['', 'all', 'pending'].indexOf(itemDecision) === -1 && ITEM_DECISION_STATUSES.indexOf(itemDecision) === -1) {
+    throw new Error('Filter keputusan item tidak valid');
+  }
 
   let rows = readObjects_(SHEETS.PENGAJUAN).filter(function (row) {
     if (VALID_STATUSES.indexOf(row['Status']) === -1) return false;
     const ts = row['Timestamp Submit'] instanceof Date ? row['Timestamp Submit'] : new Date(row['Timestamp Submit']);
-    const haystack = [row['ID Pengajuan'], row['Nama'], row['Bagian/Cabang']].join(' ').toLowerCase();
-    if (search && haystack.indexOf(search) === -1) return false;
     if (status && row['Status'] !== status) return false;
     if (dateFrom && ts < dateFrom) return false;
     if (dateTo && ts > dateTo) return false;
     return true;
   });
 
-  const summary = {
-    total: rows.length,
-    totalItems: 0,
-    baru: 0,
-    disetujui: 0,
-    ditolak: 0,
-    diprint: 0,
-    dikirim: 0,
-    selesai: 0,
-    itemDisetujui: 0,
-    itemDitolak: 0
-  };
   const rowById = {};
   rows.forEach(function (row) {
     const id = clean_(row['ID Pengajuan']);
     if (id) rowById[id] = row;
-
-    const key = String(row['Status'] || '').toLowerCase();
-    if (summary.hasOwnProperty(key)) summary[key] += 1;
   });
 
   const itemCountById = {};
   const itemDetailById = {};
   const itemDecisionById = {};
+  const itemSearchById = {};
   readObjects_(SHEETS.ITEMS).forEach(function (item) {
     const id = clean_(item['ID Pengajuan']);
     const parent = rowById[id];
@@ -899,6 +946,62 @@ function handleGetDashboard(data) {
       };
       itemDecisionById[id][noItem] = decisionItem;
     }
+    itemSearchById[id] = [
+      itemSearchById[id] || '',
+      item['Produk'],
+      item['Model'],
+      item['Nomor Seri'],
+      decisionItem
+    ].join(' ').toLowerCase();
+  });
+
+  rows = rows.filter(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    const parentHaystack = [
+      row['ID Pengajuan'],
+      row['Timestamp Submit'],
+      row['Nama'],
+      row['Bagian/Cabang'],
+      row['Jumlah Item'],
+      row['Status']
+    ].join(' ').toLowerCase();
+
+    if (search && [parentHaystack, itemSearchById[id] || ''].join(' ').indexOf(search) === -1) return false;
+    if (!dashboardRowMatchesItemDecision_(row, itemDecision, itemCountById, itemDecisionById)) return false;
+    return true;
+  });
+
+  const filteredRowById = {};
+  rows.forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    if (!id) return;
+
+    filteredRowById[id] = row;
+  });
+
+  const summary = {
+    total: rows.length,
+    totalItems: 0,
+    baru: 0,
+    disetujui: 0,
+    ditolak: 0,
+    diprint: 0,
+    dikirim: 0,
+    selesai: 0,
+    itemDisetujui: 0,
+    itemDitolak: 0
+  };
+
+  rows.forEach(function (row) {
+    const key = String(row['Status'] || '').toLowerCase();
+    if (summary.hasOwnProperty(key)) summary[key] += 1;
+  });
+
+  readObjects_(SHEETS.ITEMS).forEach(function (item) {
+    const id = clean_(item['ID Pengajuan']);
+    if (!filteredRowById[id]) return;
+
+    const decisionItem = normalizeExplicitItemDecision_(item['Keputusan Item']);
     summary.totalItems += 1;
     if (decisionItem === 'Disetujui') summary.itemDisetujui += 1;
     else if (decisionItem === 'Ditolak') summary.itemDitolak += 1;
@@ -913,7 +1016,7 @@ function handleGetDashboard(data) {
   });
 
   rows.sort(function (a, b) {
-    return new Date(b['Timestamp Submit']).getTime() - new Date(a['Timestamp Submit']).getTime();
+    return compareDashboardRows_(a, b, sortBy, sortDirection);
   });
 
   const totalRows = rows.length;
@@ -949,7 +1052,52 @@ function handleGetDashboard(data) {
     };
   });
 
-  return { success: true, data: { summary: summary, rows: paged, totalRows: totalRows, page: page, pageSize: pageSize, admin: session.nama } };
+  return { summary: summary, rows: paged, totalRows: totalRows, page: page, pageSize: pageSize };
+}
+
+function dashboardRowMatchesItemDecision_(row, itemDecision, itemCountById, itemDecisionById) {
+  if (!itemDecision || itemDecision === 'all') return true;
+
+  const id = clean_(row['ID Pengajuan']);
+  const itemCount = Number(row['Jumlah Item'] || itemCountById[id] || 0);
+
+  for (let noItem = 1; noItem <= itemCount; noItem += 1) {
+    const key = String(noItem);
+    const decision = itemDecisionById[id] && Object.prototype.hasOwnProperty.call(itemDecisionById[id], key)
+      ? itemDecisionById[id][key]
+      : '';
+
+    if (itemDecision === 'pending' && !decision) return true;
+    if (decision === itemDecision) return true;
+  }
+
+  return false;
+}
+
+function compareDashboardRows_(a, b, sortBy, sortDirection) {
+  const dir = sortDirection === 'asc' ? 1 : -1;
+  const aValue = dashboardSortValue_(a, sortBy);
+  const bValue = dashboardSortValue_(b, sortBy);
+
+  if (aValue < bValue) return -1 * dir;
+  if (aValue > bValue) return 1 * dir;
+  return 0;
+}
+
+function dashboardSortValue_(row, sortBy) {
+  switch (sortBy) {
+    case 'idPengajuan':
+      return clean_(row['ID Pengajuan']);
+    case 'nama':
+      return clean_(row['Nama']).toLowerCase();
+    case 'bagianCabang':
+      return clean_(row['Bagian/Cabang']).toLowerCase();
+    case 'status':
+      return clean_(row['Status']);
+    case 'timestampSubmit':
+    default:
+      return new Date(row['Timestamp Submit']).getTime();
+  }
 }
 
 function handleGetDetail(data) {
