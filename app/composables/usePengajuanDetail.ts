@@ -4,7 +4,7 @@
  * request berulang ke Apps Script dalam window TTL.
  *
  * - `getDetail(id)`: load detail
- * - `setItemDecision(noItem, keputusan, catatan)`: update keputusan item + invalidate cache
+ * - `setItemDecision(noItem, keputusan, catatan)`: update keputusan item + patch cache list
  */
 
 const DETAIL_TTL = 60_000
@@ -62,6 +62,10 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   const id = computed(() => toValue(idRef))
   const { callApi } = useAppsScriptApi()
   const { invalidate } = useAppSheetInvalidate()
+  const {
+    patchItemDecision: patchCachedItemDecision,
+    patchPengajuanStatus: patchCachedPengajuanStatus
+  } = useDashboardPengajuanCache()
   const toast = useToast()
 
   const query = useAppSheetQuery<DetailPengajuan>(
@@ -79,8 +83,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     return query.ensureLoaded()
   }
 
-  // Patch lokal untuk optimistic update + invalidate cache 'getDashboard'
-  // sehingga list di halaman lain ikut segar.
+  // Patch lokal untuk optimistic update detail dan cache list yang sudah termuat.
   function patchItem(
     noItem: number | string,
     patch: Pick<DetailItem, 'keputusanItem' | 'catatanAdminItem' | 'tanggalUpdateKeputusanItem'>
@@ -93,7 +96,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
       })
       return { ...current, items }
     })
-    invalidate('getDashboard')
+    patchCachedItemDecision(id.value, noItem, patch.keputusanItem || '')
   }
 
   function normalizeItemDecision(decision: string): ItemDecisionStatus {
@@ -108,6 +111,9 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   ) {
     if (!id.value) throw new Error('ID Pengajuan tidak valid.')
 
+    const previousDecision = query.data.value?.items
+      ?.find(item => String(item.noItem) === String(noItem))
+      ?.keputusanItem
     const decision = normalizeItemDecision(keputusanItem)
     patchItem(noItem, {
       keputusanItem: decision,
@@ -125,9 +131,11 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 
       // Server sudah konfirmasi. Refresh detail untuk sinkronkan status parent.
       // Tetap return cepat — UI sudah update.
+      invalidate('getDashboardSummary')
       void query.refresh()
     } catch (err) {
       // Rollback dengan fetch ulang.
+      patchCachedItemDecision(id.value, noItem, normalizeItemDecision(String(previousDecision || '')))
       toast.add({
         title: 'Gagal memperbarui keputusan item',
         description: err instanceof Error ? err.message : String(err),
@@ -151,6 +159,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
           tanggalUpdateStatusTerakhir: new Date().toISOString()
         }
       : current)
+    patchCachedPengajuanStatus(id.value, statusBaru)
 
     try {
       await callApi<Record<string, never>>('updateStatus', {
@@ -159,10 +168,13 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
         catatanAdmin
       })
 
-      invalidate('getDashboard')
+      invalidate('getDashboardSummary')
       void query.refresh()
     } catch (err) {
       query.mutate(() => previous)
+      if (previous) {
+        patchCachedPengajuanStatus(id.value, previous.status)
+      }
       toast.add({
         title: 'Gagal memperbarui status pengajuan',
         description: err instanceof Error ? err.message : String(err),

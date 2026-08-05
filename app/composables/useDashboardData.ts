@@ -63,6 +63,17 @@ type DashboardStore = {
   totalPages: number
 }
 
+type PengajuanListEntry = {
+  data: DashboardResponse | null
+  error: string | null
+  fetchedAt: number
+  inflight: Promise<void> | null
+}
+
+type AppSheetQueryEntry = {
+  data: unknown | null
+}
+
 type UseDashboardDataOptions = {
   loadAll?: boolean
 }
@@ -115,6 +126,19 @@ function createEmptyDashboardStore(): DashboardStore {
   }
 }
 
+function createEmptyPengajuanListEntry(): PengajuanListEntry {
+  return {
+    data: null,
+    error: null,
+    fetchedAt: 0,
+    inflight: null
+  }
+}
+
+function usePengajuanListStore() {
+  return useState<Record<string, PengajuanListEntry>>('pengajuan-list-data-store', () => ({}))
+}
+
 function normalizePengajuanListParams(params: PengajuanListParams = {}) {
   return {
     page: Math.max(Number(params.page || 1), 1),
@@ -124,6 +148,84 @@ function normalizePengajuanListParams(params: PengajuanListParams = {}) {
     status: params.status && params.status !== 'all' ? params.status : '',
     sortBy: params.sortBy || 'timestampSubmit',
     sortDirection: params.sortDirection || 'desc'
+  }
+}
+
+function buildPengajuanListKey(params: ReturnType<typeof normalizePengajuanListParams>) {
+  return JSON.stringify(params)
+}
+
+function getPengajuanListEntry(store: Ref<Record<string, PengajuanListEntry>>, key: string) {
+  if (!store.value[key]) {
+    store.value[key] = createEmptyPengajuanListEntry()
+  }
+
+  return store.value[key] as PengajuanListEntry
+}
+
+function patchDashboardRows(response: DashboardResponse | null, idPengajuan: string, updater: (row: DashboardRow) => DashboardRow) {
+  if (!response?.rows?.length) return response
+
+  let changed = false
+  const rows = response.rows.map((row) => {
+    if (String(row.idPengajuan) !== String(idPengajuan)) return row
+
+    changed = true
+    return updater(row)
+  })
+
+  return changed ? { ...response, rows } : response
+}
+
+function patchDashboardQueryRows(action: string, idPengajuan: string, updater: (row: DashboardRow) => DashboardRow) {
+  const store = useState<Record<string, AppSheetQueryEntry>>('appsheet-query-store', () => ({}))
+
+  for (const [key, entry] of Object.entries(store.value)) {
+    if (!key.startsWith(action + '::')) continue
+
+    const data = entry.data as DashboardResponse | null
+    entry.data = patchDashboardRows(data, idPengajuan, updater)
+  }
+}
+
+function patchDashboardStoreRows(idPengajuan: string, updater: (row: DashboardRow) => DashboardRow) {
+  const store = useState<DashboardStore>('dashboard-all-data-store', createEmptyDashboardStore)
+  store.value.data = patchDashboardRows(store.value.data, idPengajuan, updater)
+}
+
+export function useDashboardPengajuanCache() {
+  const listStore = usePengajuanListStore()
+
+  function patchPengajuanRows(idPengajuan: string, updater: (row: DashboardRow) => DashboardRow) {
+    for (const entry of Object.values(listStore.value)) {
+      entry.data = patchDashboardRows(entry.data, idPengajuan, updater)
+    }
+
+    patchDashboardStoreRows(idPengajuan, updater)
+    patchDashboardQueryRows('getDashboard', idPengajuan, updater)
+    patchDashboardQueryRows('getDashboardLatest', idPengajuan, updater)
+  }
+
+  function patchItemDecision(idPengajuan: string, noItem: number | string, keputusanItem: DashboardItemDecision | string) {
+    patchPengajuanRows(idPengajuan, (row) => ({
+      ...row,
+      items: (row.items || []).map((item) => {
+        if (String(item.noItem) !== String(noItem)) return item
+        return { ...item, keputusanItem }
+      })
+    }))
+  }
+
+  function patchPengajuanStatus(idPengajuan: string, status: DashboardStatus | string) {
+    patchPengajuanRows(idPengajuan, (row) => ({
+      ...row,
+      status
+    }))
+  }
+
+  return {
+    patchItemDecision,
+    patchPengajuanStatus
   }
 }
 
@@ -191,63 +293,53 @@ export function useDashboardLatestData(limit = 5) {
 export function usePengajuanListData(paramsRef: MaybeRefOrGetter<PengajuanListParams>) {
   const { callApi } = useAppsScriptApi()
   const invalidations = useAppSheetInvalidationState()
-  const data = shallowRef<DashboardResponse | null>(null)
-  const error = ref<string | null>(null)
-  const inflight = ref(false)
-  const fetchedAt = ref(0)
-  const lastKey = ref('')
-  const requestId = ref(0)
+  const store = usePengajuanListStore()
+  const params = computed(() => normalizePengajuanListParams(toValue(paramsRef)))
+  const key = computed(() => buildPengajuanListKey(params.value))
+  const entry = computed(() => getPengajuanListEntry(store, key.value))
 
-  const rows = computed<DashboardRow[]>(() => normalizeRows(data.value?.rows ?? []))
+  const rows = computed<DashboardRow[]>(() => normalizeRows(entry.value.data?.rows ?? []))
   const loadedRows = computed(() => rows.value.length)
-  const totalRows = computed(() => Number(data.value?.totalRows ?? rows.value.length))
-  const page = computed(() => Number(data.value?.page ?? getParams().page))
-  const pageSize = computed(() => Number(data.value?.pageSize ?? getParams().pageSize))
+  const totalRows = computed(() => Number(entry.value.data?.totalRows ?? rows.value.length))
+  const page = computed(() => Number(entry.value.data?.page ?? params.value.page))
+  const pageSize = computed(() => Number(entry.value.data?.pageSize ?? params.value.pageSize))
   const totalPages = computed(() => {
     if (!totalRows.value) return 0
     return Math.max(Math.ceil(totalRows.value / pageSize.value), 1)
   })
-  const isLoading = computed(() => inflight.value && data.value === null)
-  const isRefreshing = computed(() => inflight.value && data.value !== null)
+  const isLoading = computed(() => entry.value.inflight !== null && entry.value.data === null)
+  const isRefreshing = computed(() => entry.value.inflight !== null && entry.value.data !== null)
   const isFullyLoaded = computed(() => totalPages.value === 0 || page.value >= totalPages.value)
-
-  function getParams() {
-    return normalizePengajuanListParams(toValue(paramsRef))
-  }
-
-  function getKey() {
-    return JSON.stringify(getParams())
-  }
+  const error = computed(() => entry.value.error)
 
   function isFresh(key: string) {
-    return lastKey.value === key && fetchedAt.value > 0 && Date.now() - fetchedAt.value < PENGAJUAN_LIST_TTL
+    const targetEntry = getPengajuanListEntry(store, key)
+    return targetEntry.fetchedAt > 0 && Date.now() - targetEntry.fetchedAt < PENGAJUAN_LIST_TTL
   }
 
   async function fetchList(force = false) {
-    const key = getKey()
-    if (!force && data.value && isFresh(key)) return
+    const requestParams = params.value
+    const requestKey = buildPengajuanListKey(requestParams)
+    const targetEntry = getPengajuanListEntry(store, requestKey)
 
-    const currentRequestId = requestId.value + 1
-    requestId.value = currentRequestId
-    inflight.value = true
-    error.value = null
+    if (!force && targetEntry.data && isFresh(requestKey)) return
+    if (targetEntry.inflight) return targetEntry.inflight
 
-    try {
-      const result = await callApi<DashboardResponse>('getPengajuanList', getParams())
-      if (requestId.value !== currentRequestId) return
+    const promise = callApi<DashboardResponse>('getPengajuanList', requestParams)
+      .then((result) => {
+        targetEntry.data = result.data ?? {}
+        targetEntry.error = null
+      })
+      .catch((err) => {
+        targetEntry.error = err instanceof Error ? err.message : String(err)
+      })
+      .finally(() => {
+        targetEntry.inflight = null
+        targetEntry.fetchedAt = Date.now()
+      })
 
-      data.value = result.data ?? {}
-      lastKey.value = key
-      fetchedAt.value = Date.now()
-    } catch (err) {
-      if (requestId.value !== currentRequestId) return
-
-      error.value = err instanceof Error ? err.message : String(err)
-    } finally {
-      if (requestId.value === currentRequestId) {
-        inflight.value = false
-      }
-    }
+    targetEntry.inflight = promise
+    return promise
   }
 
   function ensureLoaded() {
@@ -259,14 +351,16 @@ export function usePengajuanListData(paramsRef: MaybeRefOrGetter<PengajuanListPa
   }
 
   function invalidate() {
-    fetchedAt.value = 0
+    entry.value.fetchedAt = 0
   }
 
   watch(
     () => [invalidations.value.getPengajuanList, invalidations.value['*']],
     () => {
-      invalidate()
-      if (data.value) void fetchList(true)
+      for (const targetEntry of Object.values(store.value)) {
+        targetEntry.fetchedAt = 0
+      }
+      if (entry.value.data) void fetchList(true)
     }
   )
 
