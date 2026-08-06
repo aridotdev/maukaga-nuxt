@@ -67,6 +67,21 @@ type DetailMutationResponse = {
   keputusanItem?: ItemDecisionStatus | string
 }
 
+type AppSheetDetailEntry = {
+  data?: DetailPengajuan | null
+  error?: string | null
+  fetchedAt?: number
+}
+
+export type AdminPengajuanPatch = {
+  nama: string
+  bagianCabang: string
+  pemilik: string
+  alasanPengajuan: string
+  tanggalForm: string
+  catatanTambahan?: string
+}
+
 export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   const id = computed(() => toValue(idRef))
   const { callApi } = useAppsScriptApi()
@@ -233,5 +248,77 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     setItemDecision,
     setPengajuanStatus,
     getParams
+  }
+}
+
+function patchCachedPengajuanDetail(idPengajuan: string, updater: (detail: DetailPengajuan) => DetailPengajuan | null) {
+  const store = useState<Record<string, AppSheetDetailEntry>>('appsheet-query-store', () => ({}))
+
+  for (const [key, entry] of Object.entries(store.value)) {
+    if (!key.startsWith('getDetail::')) continue
+    const detail = entry.data
+    if (!detail || String(detail.idPengajuan) !== String(idPengajuan)) continue
+
+    entry.data = updater(detail)
+    entry.fetchedAt = Date.now()
+  }
+}
+
+export function usePengajuanAdminMutations() {
+  const { callApi } = useAppsScriptApi()
+  const { invalidate } = useAppSheetInvalidate()
+  const {
+    patchPengajuanRow: patchCachedPengajuanRow,
+    removePengajuanRow: removeCachedPengajuanRow
+  } = useDashboardPengajuanCache()
+
+  function applyMutationResponse(idPengajuan: string, data: DetailMutationResponse | undefined) {
+    if (data?.row?.idPengajuan) {
+      patchCachedPengajuanRow(data.row)
+    }
+
+    if (data?.detail?.idPengajuan) {
+      patchCachedPengajuanDetail(data.detail.idPengajuan, () => data.detail as DetailPengajuan)
+      return
+    }
+
+    if (data?.row?.idPengajuan) {
+      patchCachedPengajuanDetail(data.row.idPengajuan, (detail) => ({
+        ...detail,
+        nama: data.row?.nama ?? detail.nama,
+        bagianCabang: data.row?.bagianCabang ?? detail.bagianCabang,
+        jumlahItem: data.row?.jumlahItem ?? detail.jumlahItem,
+        status: data.row?.status as PengajuanStatus
+      }))
+      return
+    }
+
+    patchCachedPengajuanDetail(idPengajuan, (detail) => detail)
+  }
+
+  async function updatePengajuan(idPengajuan: string, patch: AdminPengajuanPatch) {
+    if (!idPengajuan) throw new Error('ID Pengajuan tidak valid.')
+
+    const result = await callApi<DetailMutationResponse>('updatePengajuanAdmin', {
+      idPengajuan,
+      ...patch
+    })
+
+    applyMutationResponse(idPengajuan, result.data)
+    return result.data
+  }
+
+  async function deletePengajuan(idPengajuan: string) {
+    if (!idPengajuan) throw new Error('ID Pengajuan tidak valid.')
+
+    await callApi<DetailMutationResponse>('deletePengajuan', { idPengajuan })
+    removeCachedPengajuanRow(idPengajuan)
+    patchCachedPengajuanDetail(idPengajuan, () => null)
+    invalidate('getDashboardSummary')
+  }
+
+  return {
+    updatePengajuan,
+    deletePengajuan
   }
 }

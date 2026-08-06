@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
+import type { AdminPengajuanPatch, DetailPengajuan } from '~/composables/usePengajuanDetail'
 
 definePageMeta({
   middleware: ['auth-guard', 'role-guard']
@@ -18,6 +19,10 @@ type DashboardPengajuanSourceRow = {
   timestampSubmit: string
   nama: string
   bagianCabang: string
+  pemilik?: string
+  alasanPengajuan?: string
+  tanggalForm?: string
+  catatanTambahan?: string
   jumlahItem: number | string
   status: DashboardStatus | string
   items?: Array<{
@@ -43,15 +48,37 @@ type DashboardPengajuanRow = {
   pengajuanStatus: DashboardStatus | string
 }
 
+type EditPengajuanForm = AdminPengajuanPatch
+
 const router = useRouter()
+const toast = useToast()
+const { callApi } = useAppsScriptApi()
 const { isAdmin } = useUserProfile()
+const { updatePengajuan, deletePengajuan } = usePengajuanAdminMutations()
 const currentPage = ref(1)
 const itemsPerPage = ref(15)
 const globalFilter = ref('')
 const serverSearch = ref('')
 const decisionFilter = ref<DashboardItemDecisionFilter>('all')
 const isLoadAllMode = ref(false)
+const selectedPengajuan = ref<DashboardPengajuanSourceRow | null>(null)
+const editPengajuanOpen = ref(false)
+const deletePengajuanOpen = ref(false)
+const isEditPrefillLoading = ref(false)
+const isSavingPengajuan = ref(false)
+const isDeletingPengajuan = ref(false)
+const editPengajuanError = ref('')
+const deletePengajuanError = ref('')
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const editPengajuanForm = reactive<EditPengajuanForm>({
+  nama: '',
+  bagianCabang: '',
+  pemilik: '',
+  alasanPengajuan: '',
+  tanggalForm: '',
+  catatanTambahan: ''
+})
 
 const listParams = computed(() => ({
   page: currentPage.value,
@@ -223,17 +250,42 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
 }, {
   id: 'actions',
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
-  meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
-  cell: ({ row }) => h('div', { class: 'flex justify-end' }, [
-    h(UButton, {
-      label: 'Detail',
-      icon: 'i-lucide-eye',
-      color: 'neutral',
-      variant: 'soft',
-      size: 'sm',
-      onClick: () => showDetail(row.original)
-    })
-  ])
+  meta: { class: { th: 'w-[18%]', td: 'w-[18%]' } },
+  cell: ({ row }) => {
+    const buttons = [
+      h(UButton, {
+        label: 'Detail',
+        icon: 'i-lucide-eye',
+        color: 'neutral',
+        variant: 'soft',
+        size: 'sm',
+        onClick: () => showDetail(row.original)
+      })
+    ]
+
+    if (isAdmin.value) {
+      buttons.push(
+        h(UButton, {
+          label: 'Edit',
+          icon: 'i-lucide-pencil',
+          color: 'primary',
+          variant: 'soft',
+          size: 'sm',
+          onClick: () => openEditPengajuan(row.original)
+        }),
+        h(UButton, {
+          label: 'Hapus',
+          icon: 'i-lucide-trash-2',
+          color: 'error',
+          variant: 'soft',
+          size: 'sm',
+          onClick: () => openDeletePengajuan(row.original)
+        })
+      )
+    }
+
+    return h('div', { class: 'flex flex-wrap justify-end gap-2' }, buttons)
+  }
 }]
 
 onMounted(() => {
@@ -302,6 +354,150 @@ function showDetail(row: DashboardPengajuanRow) {
   if (!row.idPengajuan) return
   const url = router.resolve(`/dashboard/pengajuan/${encodeURIComponent(row.idPengajuan)}`).href
   window.open(url, '_blank')
+}
+
+async function openEditPengajuan(row: DashboardPengajuanRow) {
+  if (!isAdmin.value || !row.idPengajuan) return
+
+  const source = findPengajuanSource(row.idPengajuan)
+  selectedPengajuan.value = source
+  fillEditPengajuanForm(source)
+  editPengajuanError.value = ''
+  editPengajuanOpen.value = true
+  isEditPrefillLoading.value = true
+
+  try {
+    const result = await callApi<DetailPengajuan>('getDetail', { idPengajuan: row.idPengajuan })
+    if (selectedPengajuan.value?.idPengajuan !== row.idPengajuan) return
+    if (result.data) fillEditPengajuanForm(result.data)
+  } catch (err) {
+    editPengajuanError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    isEditPrefillLoading.value = false
+  }
+}
+
+function openDeletePengajuan(row: DashboardPengajuanRow) {
+  if (!isAdmin.value || !row.idPengajuan) return
+
+  selectedPengajuan.value = findPengajuanSource(row.idPengajuan)
+  deletePengajuanError.value = ''
+  deletePengajuanOpen.value = true
+}
+
+async function submitEditPengajuan() {
+  const idPengajuan = selectedPengajuan.value?.idPengajuan
+  if (!idPengajuan || isSavingPengajuan.value || isEditPrefillLoading.value) return
+
+  editPengajuanError.value = ''
+  const payload = normalizeEditPengajuanPayload(editPengajuanForm)
+  const validationError = validateEditPengajuanPayload(payload)
+
+  if (validationError) {
+    editPengajuanError.value = validationError
+    return
+  }
+
+  isSavingPengajuan.value = true
+
+  try {
+    const result = await updatePengajuan(idPengajuan, payload)
+    if (result?.row) selectedPengajuan.value = result.row as DashboardPengajuanSourceRow
+    editPengajuanOpen.value = false
+    toast.add({
+      title: 'Pengajuan berhasil diperbarui',
+      description: `${idPengajuan} sudah disimpan.`,
+      color: 'success',
+      icon: 'i-lucide-circle-check'
+    })
+  } catch (err) {
+    editPengajuanError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    isSavingPengajuan.value = false
+  }
+}
+
+async function confirmDeletePengajuan() {
+  const idPengajuan = selectedPengajuan.value?.idPengajuan
+  if (!idPengajuan || isDeletingPengajuan.value) return
+
+  deletePengajuanError.value = ''
+  isDeletingPengajuan.value = true
+
+  try {
+    await deletePengajuan(idPengajuan)
+    deletePengajuanOpen.value = false
+    toast.add({
+      title: 'Pengajuan berhasil dihapus',
+      description: `${idPengajuan} sudah dihapus dari daftar.`,
+      color: 'success',
+      icon: 'i-lucide-circle-check'
+    })
+  } catch (err) {
+    deletePengajuanError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    isDeletingPengajuan.value = false
+  }
+}
+
+function findPengajuanSource(idPengajuan: string): DashboardPengajuanSourceRow {
+  const candidates = [
+    ...rows.value,
+    ...(serverRows.value as DashboardPengajuanSourceRow[]),
+    ...(loadAllRows.value as DashboardPengajuanSourceRow[])
+  ]
+  const found = candidates.find((row) => String(row.idPengajuan) === String(idPengajuan))
+
+  return found || {
+    idPengajuan,
+    timestampSubmit: '',
+    nama: '',
+    bagianCabang: '',
+    jumlahItem: 0,
+    status: 'Baru',
+    items: []
+  }
+}
+
+function fillEditPengajuanForm(row: Partial<DashboardPengajuanSourceRow | DetailPengajuan>) {
+  editPengajuanForm.nama = String(row.nama || '')
+  editPengajuanForm.bagianCabang = String(row.bagianCabang || '')
+  editPengajuanForm.pemilik = String(row.pemilik || '')
+  editPengajuanForm.alasanPengajuan = String(row.alasanPengajuan || '')
+  editPengajuanForm.tanggalForm = normalizeDateInput(row.tanggalForm)
+  editPengajuanForm.catatanTambahan = String(row.catatanTambahan || '')
+}
+
+function normalizeEditPengajuanPayload(form: EditPengajuanForm): AdminPengajuanPatch {
+  return {
+    nama: form.nama.trim(),
+    bagianCabang: form.bagianCabang.trim(),
+    pemilik: form.pemilik.trim(),
+    alasanPengajuan: form.alasanPengajuan.trim(),
+    tanggalForm: form.tanggalForm.trim(),
+    catatanTambahan: String(form.catatanTambahan || '').trim()
+  }
+}
+
+function validateEditPengajuanPayload(payload: AdminPengajuanPatch) {
+  if (!payload.nama) return 'Nama wajib diisi.'
+  if (!payload.bagianCabang) return 'Cabang wajib diisi.'
+  if (!payload.pemilik) return 'Pemilik wajib diisi.'
+  if (!payload.alasanPengajuan) return 'Alasan Pengajuan wajib diisi.'
+  if (!payload.tanggalForm || Number.isNaN(new Date(`${payload.tanggalForm}T00:00:00`).getTime())) {
+    return 'Tanggal Form tidak valid.'
+  }
+  return ''
+}
+
+function normalizeDateInput(value: unknown) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return raw
+  return date.toISOString().slice(0, 10)
 }
 
 function formatSubmitTime(value: string) {
@@ -646,6 +842,139 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
           </div>
         </div>
       </section>
+
+      <UModal
+        v-model:open="editPengajuanOpen"
+        :title="selectedPengajuan ? `Edit ${selectedPengajuan.idPengajuan}` : 'Edit Pengajuan'"
+        description="Ubah data administratif pengajuan"
+        :ui="{ footer: 'justify-end' }"
+      >
+        <template #body>
+          <form id="edit-pengajuan-form" class="space-y-4" @submit.prevent="submitEditPengajuan">
+            <UAlert
+              v-if="isEditPrefillLoading"
+              color="info"
+              variant="subtle"
+              icon="i-lucide-loader-circle"
+              title="Memuat detail pengajuan"
+            />
+            <UAlert
+              v-if="editPengajuanError"
+              color="error"
+              variant="subtle"
+              icon="i-lucide-circle-alert"
+              :title="editPengajuanError"
+            />
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <UFormField label="Nama" name="nama" required>
+                <UInput
+                  v-model="editPengajuanForm.nama"
+                  class="w-full"
+                  autocomplete="name"
+                  :disabled="isEditPrefillLoading || isSavingPengajuan"
+                />
+              </UFormField>
+
+              <UFormField label="Cabang" name="bagianCabang" required>
+                <UInput
+                  v-model="editPengajuanForm.bagianCabang"
+                  class="w-full"
+                  autocomplete="organization"
+                  :disabled="isEditPrefillLoading || isSavingPengajuan"
+                />
+              </UFormField>
+
+              <UFormField label="Pemilik" name="pemilik" required>
+                <UInput
+                  v-model="editPengajuanForm.pemilik"
+                  class="w-full"
+                  :disabled="isEditPrefillLoading || isSavingPengajuan"
+                />
+              </UFormField>
+
+              <UFormField label="Tanggal Form" name="tanggalForm" required>
+                <UInput
+                  v-model="editPengajuanForm.tanggalForm"
+                  type="date"
+                  class="w-full"
+                  :disabled="isEditPrefillLoading || isSavingPengajuan"
+                />
+              </UFormField>
+            </div>
+
+            <UFormField label="Alasan Pengajuan" name="alasanPengajuan" required>
+              <UTextarea
+                v-model="editPengajuanForm.alasanPengajuan"
+                :rows="3"
+                class="w-full"
+                :disabled="isEditPrefillLoading || isSavingPengajuan"
+              />
+            </UFormField>
+
+            <UFormField label="Catatan Tambahan" name="catatanTambahan">
+              <UTextarea
+                v-model="editPengajuanForm.catatanTambahan"
+                :rows="3"
+                class="w-full"
+                :disabled="isEditPrefillLoading || isSavingPengajuan"
+              />
+            </UFormField>
+          </form>
+        </template>
+
+        <template #footer="{ close }">
+          <UButton
+            label="Batal"
+            color="neutral"
+            variant="outline"
+            :disabled="isSavingPengajuan"
+            @click="close"
+          />
+          <UButton
+            type="submit"
+            form="edit-pengajuan-form"
+            label="Simpan"
+            icon="i-lucide-save"
+            :loading="isSavingPengajuan"
+            :disabled="isEditPrefillLoading"
+          />
+        </template>
+      </UModal>
+
+      <UModal
+        v-model:open="deletePengajuanOpen"
+        title="Hapus pengajuan?"
+        :description="selectedPengajuan ? `${selectedPengajuan.idPengajuan} akan dihapus beserta data terkaitnya.` : 'Pengajuan akan dihapus beserta data terkaitnya.'"
+        :ui="{ footer: 'justify-end' }"
+      >
+        <template #body>
+          <UAlert
+            v-if="deletePengajuanError"
+            color="error"
+            variant="subtle"
+            icon="i-lucide-circle-alert"
+            :title="deletePengajuanError"
+          />
+        </template>
+
+        <template #footer="{ close }">
+          <UButton
+            label="Batal"
+            color="neutral"
+            variant="outline"
+            :disabled="isDeletingPengajuan"
+            @click="close"
+          />
+          <UButton
+            label="Hapus"
+            icon="i-lucide-trash-2"
+            color="error"
+            :loading="isDeletingPengajuan"
+            @click="confirmDeletePengajuan"
+          />
+        </template>
+      </UModal>
     </template>
   </UDashboardPanel>
 </template>

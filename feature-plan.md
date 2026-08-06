@@ -123,7 +123,7 @@ Acceptance:
 - Admin bisa memilih kapan mengambil seluruh data.
 - Default `/dashboard/pengajuan` tetap cepat.
 
-## Phase 4 - Fitur Admin Edit/Delete Pengajuan
+## Phase 4 - Fitur Admin Edit/Delete Pengajuan - DONE
 
 ### 4.1 Tambahkan edit pengajuan dari dashboard admin
 

@@ -28,6 +28,10 @@ export type DashboardRow = {
   timestampSubmit: string
   nama: string
   bagianCabang: string
+  pemilik?: string
+  alasanPengajuan?: string
+  tanggalForm?: string
+  catatanTambahan?: string
   jumlahItem: number | string
   status: DashboardStatus | string
   items?: DashboardItem[]
@@ -178,6 +182,21 @@ function patchDashboardRows(response: DashboardResponse | null, idPengajuan: str
   return changed ? { ...response, rows } : response
 }
 
+function removeDashboardRows(response: DashboardResponse | null, idPengajuan: string) {
+  if (!response?.rows?.length) return response
+
+  const rows = response.rows.filter((row) => String(row.idPengajuan) !== String(idPengajuan))
+  if (rows.length === response.rows.length) return response
+
+  const totalRows = Number(response.totalRows ?? response.rows.length)
+
+  return {
+    ...response,
+    rows,
+    totalRows: Math.max(totalRows - 1, rows.length)
+  }
+}
+
 function patchDashboardQueryRows(action: string, idPengajuan: string, updater: (row: DashboardRow) => DashboardRow) {
   const store = useState<Record<string, AppSheetQueryEntry>>('appsheet-query-store', () => ({}))
 
@@ -189,9 +208,28 @@ function patchDashboardQueryRows(action: string, idPengajuan: string, updater: (
   }
 }
 
+function removeDashboardQueryRows(action: string, idPengajuan: string) {
+  const store = useState<Record<string, AppSheetQueryEntry>>('appsheet-query-store', () => ({}))
+
+  for (const [key, entry] of Object.entries(store.value)) {
+    if (!key.startsWith(action + '::')) continue
+
+    const data = entry.data as DashboardResponse | null
+    entry.data = removeDashboardRows(data, idPengajuan)
+  }
+}
+
 function patchDashboardStoreRows(idPengajuan: string, updater: (row: DashboardRow) => DashboardRow) {
   const store = useState<DashboardStore>('dashboard-all-data-store', createEmptyDashboardStore)
   store.value.data = patchDashboardRows(store.value.data, idPengajuan, updater)
+}
+
+function removeDashboardStoreRows(idPengajuan: string) {
+  const store = useState<DashboardStore>('dashboard-all-data-store', createEmptyDashboardStore)
+  store.value.data = removeDashboardRows(store.value.data, idPengajuan)
+  const rowsLength = store.value.data?.rows?.length ?? 0
+  store.value.loadedRows = rowsLength
+  store.value.totalRows = Math.max(store.value.totalRows - 1, rowsLength)
 }
 
 export function useDashboardPengajuanCache() {
@@ -205,6 +243,16 @@ export function useDashboardPengajuanCache() {
     patchDashboardStoreRows(idPengajuan, updater)
     patchDashboardQueryRows('getDashboard', idPengajuan, updater)
     patchDashboardQueryRows('getDashboardLatest', idPengajuan, updater)
+  }
+
+  function removePengajuanRow(idPengajuan: string) {
+    for (const entry of Object.values(listStore.value)) {
+      entry.data = removeDashboardRows(entry.data, idPengajuan)
+    }
+
+    removeDashboardStoreRows(idPengajuan)
+    removeDashboardQueryRows('getDashboard', idPengajuan)
+    removeDashboardQueryRows('getDashboardLatest', idPengajuan)
   }
 
   function patchItemDecision(idPengajuan: string, noItem: number | string, keputusanItem: DashboardItemDecision | string) {
@@ -232,7 +280,8 @@ export function useDashboardPengajuanCache() {
   return {
     patchItemDecision,
     patchPengajuanStatus,
-    patchPengajuanRow
+    patchPengajuanRow,
+    removePengajuanRow
   }
 }
 

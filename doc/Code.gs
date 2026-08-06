@@ -202,6 +202,10 @@ function doPost(e) {
         return jsonResponse_(handleUpdateStatus(data));
       case 'updateItemDecision':
         return jsonResponse_(handleUpdateItemDecision(data));
+      case 'updatePengajuanAdmin':
+        return jsonResponse_(handleUpdatePengajuanAdmin(data));
+      case 'deletePengajuan':
+        return jsonResponse_(handleDeletePengajuan(data));
       case 'getProductReviewQueue':
       case 'getCategoryReviewQueue':
         return jsonResponse_(handleGetProductReviewQueue(data));
@@ -1311,6 +1315,189 @@ function handleUpdateItemDecision(data) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function handleUpdatePengajuanAdmin(data) {
+  const session = requireSession_(data.token, ['admin']);
+  const id = clean_(data.idPengajuan);
+  if (!id) throw new Error('ID Pengajuan wajib diisi');
+
+  const cleaned = normalizeAdminPengajuanPatch_(data);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const record = findPengajuanRecord_(id);
+    if (!record || VALID_STATUSES.indexOf(record.row[record.col['Status']]) === -1) {
+      throw new Error('Pengajuan tidak ditemukan');
+    }
+
+    const row = record.sheet.getRange(record.rowNumber, 1, 1, record.sheet.getLastColumn()).getValues()[0];
+    const before = {
+      nama: clean_(row[record.col['Nama']]),
+      bagianCabang: clean_(row[record.col['Bagian/Cabang']]),
+      pemilik: clean_(row[record.col['Pemilik']]),
+      alasanPengajuan: clean_(row[record.col['Alasan Pengajuan']]),
+      tanggalForm: formatDateOnly_(row[record.col['Tanggal Form']]),
+      catatanTambahan: clean_(row[record.col['Catatan Tambahan']]),
+    };
+    const changedFields = getChangedPengajuanAdminFields_(before, cleaned);
+
+    if (!changedFields.length) {
+      return { success: true, data: buildPengajuanMutationPayload_(id) };
+    }
+
+    row[record.col['Nama']] = cleaned.nama;
+    row[record.col['Bagian/Cabang']] = cleaned.bagianCabang;
+    row[record.col['Pemilik']] = cleaned.pemilik;
+    row[record.col['Alasan Pengajuan']] = cleaned.alasanPengajuan;
+    row[record.col['Tanggal Form']] = cleaned.tanggalForm;
+    row[record.col['Catatan Tambahan']] = cleaned.catatanTambahan;
+
+    const now = new Date();
+    const oldHistory = row[record.col['Riwayat Singkat']] || '';
+    const entry = '[' + formatDateTime_(now) + '] Edit data pengajuan (' + changedFields.join(', ') + ') oleh ' + session.username;
+    row[record.col['Riwayat Singkat']] = oldHistory ? oldHistory + '\n' + entry : entry;
+
+    record.sheet.getRange(record.rowNumber, 1, 1, row.length).setValues([row]);
+    syncRelatedPengajuanAdminFields_(id, cleaned);
+    getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, row[record.col['Status']], row[record.col['Status']], 'Edit data: ' + changedFields.join(', '), session.username, '']);
+    SpreadsheetApp.flush();
+
+    return { success: true, data: buildPengajuanMutationPayload_(id) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleDeletePengajuan(data) {
+  const session = requireSession_(data.token, ['admin']);
+  const id = clean_(data.idPengajuan);
+  if (!id) throw new Error('ID Pengajuan wajib diisi');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const detail = buildDetailPayload_(id);
+    const deleted = {
+      pengajuan: deleteRowsByColumnValue_(SHEETS.PENGAJUAN, 'ID Pengajuan', id),
+      items: deleteRowsByColumnValue_(SHEETS.ITEMS, 'ID Pengajuan', id),
+      statusLog: deleteRowsByColumnValue_(SHEETS.STATUS_LOG, 'ID Pengajuan', id),
+      warrantyCards: deleteRowsByColumnValue_(SHEETS.WARRANTY_CARDS, 'ID Pengajuan', id),
+      shippingLabels: deleteRowsByColumnValue_(SHEETS.SHIPPING_LABELS, 'ID Pengajuan', id),
+    };
+
+    trashPengajuanFiles_(detail);
+    CacheService.getScriptCache().remove('warranty_card_state');
+    CacheService.getScriptCache().remove('shipping_label_state');
+    SpreadsheetApp.flush();
+
+    return {
+      success: true,
+      data: {
+        idPengajuan: id,
+        deleted: deleted,
+        deletedBy: session.username,
+        deletedAt: new Date().toISOString(),
+      },
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function normalizeAdminPengajuanPatch_(data) {
+  const cleaned = {
+    nama: clean_(data.nama),
+    bagianCabang: clean_(data.bagianCabang),
+    pemilik: clean_(data.pemilik),
+    alasanPengajuan: clean_(data.alasanPengajuan),
+    tanggalForm: clean_(data.tanggalForm),
+    catatanTambahan: clean_(data.catatanTambahan),
+  };
+
+  ['nama', 'bagianCabang', 'pemilik', 'tanggalForm', 'alasanPengajuan'].forEach(function (field) {
+    if (!cleaned[field]) throw new Error('Field wajib belum lengkap: ' + field);
+  });
+
+  const tanggal = new Date(cleaned.tanggalForm + 'T00:00:00');
+  if (isNaN(tanggal.getTime())) throw new Error('Tanggal Form tidak valid');
+  const maxDate = endOfDay_(new Date());
+  maxDate.setDate(maxDate.getDate() + 7);
+  if (tanggal > maxDate) throw new Error('Tanggal Form tidak boleh lebih dari 7 hari ke depan');
+  cleaned.tanggalForm = formatDateOnly_(tanggal);
+
+  return cleaned;
+}
+
+function getChangedPengajuanAdminFields_(before, after) {
+  const labels = {
+    nama: 'Nama',
+    bagianCabang: 'Bagian/Cabang',
+    pemilik: 'Pemilik',
+    alasanPengajuan: 'Alasan Pengajuan',
+    tanggalForm: 'Tanggal Form',
+    catatanTambahan: 'Catatan Tambahan',
+  };
+
+  return Object.keys(labels).filter(function (field) {
+    return clean_(before[field]) !== clean_(after[field]);
+  }).map(function (field) {
+    return labels[field];
+  });
+}
+
+function syncRelatedPengajuanAdminFields_(id, cleaned) {
+  const sheet = getSheet_(SHEETS.SHIPPING_LABELS);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return;
+
+  const col = indexMap_(values[0]);
+  let changed = false;
+
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][col['ID Pengajuan']] !== id) continue;
+    values[i][col['Nama']] = cleaned.nama;
+    values[i][col['Bagian/Cabang']] = cleaned.bagianCabang;
+    values[i][col['Updated At']] = new Date();
+    changed = true;
+  }
+
+  if (changed) {
+    sheet.getRange(2, 1, values.length - 1, values[0].length).setValues(values.slice(1));
+    CacheService.getScriptCache().remove('shipping_label_state');
+  }
+}
+
+function deleteRowsByColumnValue_(sheetName, header, value) {
+  const sheet = getSheet_(sheetName);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return 0;
+
+  const col = indexMap_(values[0]);
+  if (col[header] === undefined) return 0;
+
+  let deleted = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (values[i][col[header]] !== value) continue;
+    sheet.deleteRow(i + 1);
+    deleted += 1;
+  }
+
+  return deleted;
+}
+
+function trashPengajuanFiles_(detail) {
+  const fileIds = [detail.fileHardCopyId].concat(detail.evidenceAttachmentIds || [])
+    .map(clean_)
+    .filter(Boolean);
+
+  fileIds.forEach(function (fileId) {
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+    } catch (e) {}
+  });
 }
 
 function derivePengajuanStatusFromItemDecisions_(decisions) {
