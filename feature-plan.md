@@ -222,7 +222,7 @@ Acceptance:
 - Data chart tetap benar walaupun list pengajuan sedang paginated atau difilter.
 - Approved/rejected tidak dihitung berdasarkan tanggal review, tetapi berdasarkan tanggal submit pengajuan parent.
 
-### 5.2 Pakai toolbar periode chart yang sudah ada
+### 5.2 Pakai toolbar periode chart yang sudah ada - DONE
 
 Target:
 

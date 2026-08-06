@@ -1,7 +1,10 @@
+import type { Period, Range } from '~/types'
+
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
 type DashboardItemDecisionFilter = 'all' | 'pending' | Exclude<DashboardItemDecision, ''>
 type PengajuanListSortDirection = 'asc' | 'desc'
+type DashboardChartGroupBy = 'day' | 'week' | 'month' | 'year'
 
 export type DashboardSummary = {
   total?: number
@@ -46,6 +49,33 @@ export type DashboardResponse = {
   admin?: string
 }
 
+export type DashboardChartPoint = {
+  period: string
+  totalItems: number
+  approvedItems: number
+  rejectedItems: number
+}
+
+export type DashboardChartSummary = {
+  totalItems: number
+  approvedItems: number
+  rejectedItems: number
+}
+
+export type DashboardChartResponse = {
+  points?: DashboardChartPoint[]
+  summary?: DashboardChartSummary
+  groupBy?: DashboardChartGroupBy
+  startDate?: string
+  endDate?: string
+  admin?: string
+}
+
+export type DashboardChartParams = {
+  range: Range
+  period: Period
+}
+
 export type PengajuanListParams = {
   page?: number
   pageSize?: number
@@ -74,6 +104,13 @@ type PengajuanListEntry = {
   inflight: Promise<void> | null
 }
 
+type DashboardChartEntry = {
+  data: DashboardChartResponse | null
+  error: string | null
+  fetchedAt: number
+  inflight: Promise<void> | null
+}
+
 type AppSheetQueryEntry = {
   data: unknown | null
 }
@@ -85,6 +122,7 @@ type UseDashboardDataOptions = {
 const DASHBOARD_TTL = 30_000
 const DASHBOARD_ALL_TTL = 120_000
 const PENGAJUAN_LIST_TTL = 15_000
+const DASHBOARD_CHART_TTL = 30_000
 const DASHBOARD_PAGE_SIZE = 100
 const VALID_STATUSES: ReadonlySet<DashboardStatus> = new Set(['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'])
 
@@ -140,8 +178,55 @@ function createEmptyPengajuanListEntry(): PengajuanListEntry {
   }
 }
 
+function createEmptyDashboardChartEntry(): DashboardChartEntry {
+  return {
+    data: null,
+    error: null,
+    fetchedAt: 0,
+    inflight: null
+  }
+}
+
 function usePengajuanListStore() {
   return useState<Record<string, PengajuanListEntry>>('pengajuan-list-data-store', () => ({}))
+}
+
+function useDashboardChartStore() {
+  return useState<Record<string, DashboardChartEntry>>('dashboard-chart-data-store', () => ({}))
+}
+
+function toDateInputValue(value: Date) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function toDashboardChartGroupBy(period: Period): DashboardChartGroupBy {
+  if (period === 'weekly') return 'week'
+  if (period === 'monthly') return 'month'
+  return 'day'
+}
+
+function normalizeDashboardChartParams(params: DashboardChartParams) {
+  return {
+    startDate: toDateInputValue(params.range.start),
+    endDate: toDateInputValue(params.range.end),
+    groupBy: toDashboardChartGroupBy(params.period)
+  }
+}
+
+function buildDashboardChartKey(params: ReturnType<typeof normalizeDashboardChartParams>) {
+  return JSON.stringify(params)
+}
+
+function getDashboardChartEntry(store: Ref<Record<string, DashboardChartEntry>>, key: string) {
+  if (!store.value[key]) {
+    store.value[key] = createEmptyDashboardChartEntry()
+  }
+
+  return store.value[key] as DashboardChartEntry
 }
 
 function normalizePengajuanListParams(params: PengajuanListParams = {}) {
@@ -343,6 +428,88 @@ export function useDashboardLatestData(limit = 5) {
     refresh: query.refresh,
     ensureLoaded: query.ensureLoaded,
     invalidate: query.invalidate
+  }
+}
+
+export function useDashboardChartData(paramsRef: MaybeRefOrGetter<DashboardChartParams>) {
+  const { callApi } = useAppsScriptApi()
+  const invalidations = useAppSheetInvalidationState()
+  const store = useDashboardChartStore()
+  const params = computed(() => normalizeDashboardChartParams(toValue(paramsRef)))
+  const key = computed(() => buildDashboardChartKey(params.value))
+  const entry = computed(() => getDashboardChartEntry(store, key.value))
+
+  const points = computed<DashboardChartPoint[]>(() => entry.value.data?.points ?? [])
+  const summary = computed<DashboardChartSummary>(() => entry.value.data?.summary ?? {
+    totalItems: 0,
+    approvedItems: 0,
+    rejectedItems: 0
+  })
+  const isLoading = computed(() => entry.value.inflight !== null && entry.value.data === null)
+  const isRefreshing = computed(() => entry.value.inflight !== null && entry.value.data !== null)
+  const error = computed(() => entry.value.error)
+
+  function isFresh(key: string) {
+    const targetEntry = getDashboardChartEntry(store, key)
+    return targetEntry.fetchedAt > 0 && Date.now() - targetEntry.fetchedAt < DASHBOARD_CHART_TTL
+  }
+
+  async function fetchChart(force = false) {
+    const requestParams = params.value
+    const requestKey = buildDashboardChartKey(requestParams)
+    const targetEntry = getDashboardChartEntry(store, requestKey)
+
+    if (!force && targetEntry.data && isFresh(requestKey)) return
+    if (targetEntry.inflight) return targetEntry.inflight
+
+    const promise = callApi<DashboardChartResponse>('getDashboardChartAggregate', requestParams)
+      .then((result) => {
+        targetEntry.data = result.data ?? {}
+        targetEntry.error = null
+      })
+      .catch((err) => {
+        targetEntry.error = err instanceof Error ? err.message : String(err)
+      })
+      .finally(() => {
+        targetEntry.inflight = null
+        targetEntry.fetchedAt = Date.now()
+      })
+
+    targetEntry.inflight = promise
+    return promise
+  }
+
+  function ensureLoaded() {
+    void fetchChart(false)
+  }
+
+  async function refresh() {
+    await fetchChart(true)
+  }
+
+  function invalidate() {
+    entry.value.fetchedAt = 0
+  }
+
+  watch(
+    () => [invalidations.value.getDashboardChartAggregate, invalidations.value['*']],
+    () => {
+      for (const targetEntry of Object.values(store.value)) {
+        targetEntry.fetchedAt = 0
+      }
+      if (entry.value.data) void fetchChart(true)
+    }
+  )
+
+  return {
+    points,
+    summary,
+    isLoading,
+    isRefreshing,
+    error,
+    refresh,
+    ensureLoaded,
+    invalidate
   }
 }
 
