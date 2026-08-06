@@ -238,7 +238,7 @@ Acceptance:
 - Loading chart tidak mengganggu loading tabel/list.
 - Toolbar tidak perlu dibuat ulang jika komponen yang ada masih cukup.
 
-### 5.3 Tampilkan tren qty item pengajuan
+### 5.3 Tampilkan tren qty item pengajuan - ON PROGRESS
 
 Target:
 

@@ -13,7 +13,16 @@ const props = defineProps<{
 
 type DataRecord = {
   date: Date
-  amount: number
+  totalItems: number
+  approvedItems: number
+  rejectedItems: number
+}
+
+type ChartSeries = {
+  key: 'totalItems' | 'approvedItems' | 'rejectedItems'
+  label: string
+  color: string
+  value: number
 }
 
 const { width } = useElementSize(cardRef)
@@ -33,7 +42,9 @@ const {
 const data = computed<DataRecord[]>(() => {
   return points.value.map(point => ({
     date: parsePeriodDate(point.period),
-    amount: Number(point.totalItems || 0)
+    totalItems: Number(point.totalItems || 0),
+    approvedItems: Number(point.approvedItems || 0),
+    rejectedItems: Number(point.rejectedItems || 0)
   }))
 })
 
@@ -42,10 +53,31 @@ watch(chartParams, () => {
 }, { immediate: true })
 
 const x = (_: DataRecord, i: number) => i
-const y = (d: DataRecord) => d.amount
+const totalY = (d: DataRecord) => d.totalItems
+const approvedY = (d: DataRecord) => d.approvedItems
+const rejectedY = (d: DataRecord) => d.rejectedItems
 
 const total = computed(() => summary.value.totalItems)
+const approved = computed(() => summary.value.approvedItems)
+const rejected = computed(() => summary.value.rejectedItems)
 const isBusy = computed(() => isLoading.value || isRefreshing.value)
+
+const series = computed<ChartSeries[]>(() => [{
+  key: 'totalItems',
+  label: 'Total Item Diajukan',
+  color: 'var(--ui-primary)',
+  value: total.value
+}, {
+  key: 'approvedItems',
+  label: 'Disetujui',
+  color: 'var(--ui-success)',
+  value: approved.value
+}, {
+  key: 'rejectedItems',
+  label: 'Ditolak',
+  color: 'var(--ui-error)',
+  value: rejected.value
+}])
 
 const formatNumber = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format
 
@@ -70,26 +102,54 @@ const xTicks = (i: number) => {
   return formatDate(data.value[i].date)
 }
 
-const template = (d: DataRecord) => `${formatDate(d.date)}: ${formatNumber(d.amount)}`
+const template = (d: DataRecord) => [
+  `<strong>${formatDate(d.date)}</strong>`,
+  `Total Item Diajukan: ${formatNumber(d.totalItems)}`,
+  `Disetujui: ${formatNumber(d.approvedItems)}`,
+  `Ditolak: ${formatNumber(d.rejectedItems)}`
+].join('<br>')
 </script>
 
 <template>
   <UCard ref="cardRef" :ui="{ root: 'overflow-visible', body: 'px-0! pt-0! pb-3!' }">
     <template #header>
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <p class="text-xs text-muted uppercase mb-1.5">
-            Total Item Diajukan
-          </p>
-          <p class="text-3xl text-highlighted font-semibold">
-            {{ formatNumber(total) }}
-          </p>
+      <div class="flex flex-col gap-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-xs text-muted uppercase mb-1.5">
+              Tren Qty Item Pengajuan
+            </p>
+            <p class="text-3xl text-highlighted font-semibold">
+              {{ formatNumber(total) }}
+            </p>
+          </div>
+          <UIcon
+            v-if="isBusy"
+            name="i-lucide-loader-circle"
+            class="mt-1 size-4 animate-spin text-muted"
+          />
         </div>
-        <UIcon
-          v-if="isBusy"
-          name="i-lucide-loader-circle"
-          class="mt-1 size-4 animate-spin text-muted"
-        />
+
+        <div class="grid gap-2 sm:grid-cols-3">
+          <div
+            v-for="item in series"
+            :key="item.key"
+            class="min-w-0 rounded-md border border-muted px-3 py-2"
+          >
+            <div class="flex items-center gap-2">
+              <span
+                class="size-2.5 shrink-0 rounded-full"
+                :style="{ backgroundColor: item.color }"
+              />
+              <p class="truncate text-xs font-medium text-muted">
+                {{ item.label }}
+              </p>
+            </div>
+            <p class="mt-1 text-lg font-semibold text-highlighted">
+              {{ formatNumber(item.value) }}
+            </p>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -110,14 +170,24 @@ const template = (d: DataRecord) => `${formatDate(d.date)}: ${formatNumber(d.amo
     >
       <VisLine
         :x="x"
-        :y="y"
+        :y="totalY"
         color="var(--ui-primary)"
+      />
+      <VisLine
+        :x="x"
+        :y="approvedY"
+        color="var(--ui-success)"
+      />
+      <VisLine
+        :x="x"
+        :y="rejectedY"
+        color="var(--ui-error)"
       />
       <VisArea
         :x="x"
-        :y="y"
+        :y="totalY"
         color="var(--ui-primary)"
-        :opacity="0.1"
+        :opacity="0.08"
       />
 
       <VisAxis
