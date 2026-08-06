@@ -79,6 +79,7 @@ type UseDashboardDataOptions = {
 }
 
 const DASHBOARD_TTL = 30_000
+const DASHBOARD_ALL_TTL = 120_000
 const PENGAJUAN_LIST_TTL = 15_000
 const DASHBOARD_PAGE_SIZE = 100
 const VALID_STATUSES: ReadonlySet<DashboardStatus> = new Set(['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'])
@@ -223,9 +224,15 @@ export function useDashboardPengajuanCache() {
     }))
   }
 
+  function patchPengajuanRow(row: DashboardRow) {
+    if (!row.idPengajuan) return
+    patchPengajuanRows(row.idPengajuan, () => row)
+  }
+
   return {
     patchItemDecision,
-    patchPengajuanStatus
+    patchPengajuanStatus,
+    patchPengajuanRow
   }
 }
 
@@ -457,7 +464,7 @@ function useDashboardAllData() {
   const error = computed(() => store.value.error)
 
   function isFresh() {
-    return store.value.fetchedAt > 0 && Date.now() - store.value.fetchedAt < DASHBOARD_TTL
+    return store.value.fetchedAt > 0 && Date.now() - store.value.fetchedAt < DASHBOARD_ALL_TTL
   }
 
   async function fetchAll(force = false) {

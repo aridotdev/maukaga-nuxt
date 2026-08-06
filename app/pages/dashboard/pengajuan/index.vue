@@ -44,11 +44,13 @@ type DashboardPengajuanRow = {
 }
 
 const router = useRouter()
+const { isAdmin } = useUserProfile()
 const currentPage = ref(1)
 const itemsPerPage = ref(15)
 const globalFilter = ref('')
 const serverSearch = ref('')
 const decisionFilter = ref<DashboardItemDecisionFilter>('all')
+const isLoadAllMode = ref(false)
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const listParams = computed(() => ({
@@ -61,16 +63,67 @@ const listParams = computed(() => ({
 }))
 
 const {
-  rows,
-  isLoading,
-  isRefreshing,
-  error,
+  rows: serverRows,
+  isLoading: isServerLoading,
+  isRefreshing: isServerRefreshing,
+  error: serverError,
   ensureLoaded,
   refresh,
-  loadedRows,
-  totalRows,
-  pageSize
+  loadedRows: serverLoadedRows,
+  totalRows: serverTotalRows,
+  pageSize: serverPageSize
 } = usePengajuanListData(listParams)
+const {
+  rows: loadAllRows,
+  isLoading: isLoadAllLoading,
+  isRefreshing: isLoadAllRefreshing,
+  error: loadAllError,
+  ensureLoaded: ensureLoadAllLoaded,
+  refresh: refreshLoadAll,
+  loadedRows: loadedLoadAllRows,
+  totalRows: totalLoadAllRows
+} = useDashboardData({ loadAll: true })
+
+const loadAllBusy = computed(() => isLoadAllLoading.value || isLoadAllRefreshing.value)
+const filteredLoadAllRows = computed<DashboardPengajuanSourceRow[]>(() => (loadAllRows.value as DashboardPengajuanSourceRow[])
+  .filter((row) => matchesLoadAllSearch(row, globalFilter.value))
+  .filter((row) => parentMatchesDecisionFilter(row, decisionFilter.value)))
+const visibleLoadAllRows = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return filteredLoadAllRows.value.slice(start, start + itemsPerPage.value)
+})
+const rows = computed<DashboardPengajuanSourceRow[]>(() => {
+  if (isLoadAllMode.value) return visibleLoadAllRows.value
+  return serverRows.value as DashboardPengajuanSourceRow[]
+})
+const isLoading = computed(() => {
+  if (isLoadAllMode.value) return isLoadAllLoading.value
+  return isServerLoading.value
+})
+const isRefreshing = computed(() => {
+  if (isLoadAllMode.value) return isLoadAllRefreshing.value
+  return isServerRefreshing.value
+})
+const error = computed(() => {
+  if (isLoadAllMode.value) return loadAllError.value
+  return serverError.value
+})
+const loadedRows = computed(() => {
+  if (isLoadAllMode.value) return loadedLoadAllRows.value
+  return serverLoadedRows.value
+})
+const totalRows = computed(() => {
+  if (isLoadAllMode.value) return filteredLoadAllRows.value.length
+  return serverTotalRows.value
+})
+const pageSize = computed(() => {
+  if (isLoadAllMode.value) return itemsPerPage.value
+  return serverPageSize.value
+})
+const loadAllProgress = computed(() => {
+  if (!totalLoadAllRows.value) return 0
+  return Math.min(Math.round((loadedLoadAllRows.value / totalLoadAllRows.value) * 100), 100)
+})
 const loadError = computed(() => error.value || '')
 
 const decisionFilterItems = [{
@@ -108,7 +161,9 @@ const explodedRows = computed<DashboardPengajuanRow[]>(() => {
       })
     }
   })
-  return out.filter((row) => matchesDecisionFilter(row, decisionFilter.value))
+  return out
+    .filter((row) => matchesDecisionFilter(row, decisionFilter.value))
+    .filter((row) => !isLoadAllMode.value || matchesLoadAllRowSearch(row, globalFilter.value))
 })
 
 const filteredPengajuanCount = computed(() => new Set(explodedRows.value.map(row => row.idPengajuan)).size)
@@ -186,8 +241,13 @@ onMounted(() => {
 })
 
 watch(listParams, () => {
+  if (isLoadAllMode.value) return
   void refresh()
 })
+
+watch(isAdmin, (allowed) => {
+  if (!allowed) isLoadAllMode.value = false
+}, { immediate: true })
 
 watch(error, async (msg) => {
   if (msg && (msg.includes('Unauthorized') || msg.includes('Token admin'))) {
@@ -199,6 +259,7 @@ watch(error, async (msg) => {
 })
 
 watch(globalFilter, (value) => {
+  if (isLoadAllMode.value) currentPage.value = 1
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchDebounceTimer = setTimeout(() => {
     currentPage.value = 1
@@ -211,6 +272,26 @@ watch(decisionFilter, () => {
 
 function setPengajuanPage(page: number) {
   currentPage.value = page
+}
+
+function toggleLoadAllMode() {
+  if (!isAdmin.value) return
+
+  isLoadAllMode.value = !isLoadAllMode.value
+  currentPage.value = 1
+
+  if (isLoadAllMode.value) {
+    ensureLoadAllLoaded()
+  } else {
+    void refresh()
+  }
+}
+
+async function reloadLoadAll() {
+  if (!isAdmin.value) return
+  isLoadAllMode.value = true
+  currentPage.value = 1
+  await refreshLoadAll()
 }
 
 onUnmounted(() => {
@@ -324,6 +405,60 @@ function matchesDecisionFilter(row: DashboardPengajuanRow, filter: DashboardItem
   return row.keputusanItem === filter
 }
 
+function parentMatchesDecisionFilter(row: DashboardPengajuanSourceRow, filter: DashboardItemDecisionFilter) {
+  if (filter === 'all') return true
+  return getDashboardItems(row).some((item) => {
+    if (filter === 'pending') return !item.keputusanItem
+    return item.keputusanItem === filter
+  })
+}
+
+function matchesLoadAllSearch(row: DashboardPengajuanSourceRow, search: string) {
+  const needle = normalizeSearchValue(search)
+  if (!needle) return true
+
+  const itemText = getDashboardItems(row)
+    .map((item) => [
+      item.noItem,
+      item.model,
+      item.nomorSeri,
+      item.keputusanItem
+    ].join(' '))
+    .join(' ')
+
+  return normalizeSearchValue([
+    row.idPengajuan,
+    row.timestampSubmit,
+    row.nama,
+    row.bagianCabang,
+    row.jumlahItem,
+    row.status,
+    itemText
+  ].join(' ')).includes(needle)
+}
+
+function matchesLoadAllRowSearch(row: DashboardPengajuanRow, search: string) {
+  const needle = normalizeSearchValue(search)
+  if (!needle) return true
+
+  return normalizeSearchValue([
+    row.idPengajuan,
+    row.noItem,
+    row.timestampSubmit,
+    row.nama,
+    row.model,
+    row.nomorSeri,
+    row.bagianCabang,
+    row.jumlahItem,
+    row.keputusanItem,
+    row.pengajuanStatus
+  ].join(' ')).includes(needle)
+}
+
+function normalizeSearchValue(value: unknown) {
+  return String(value || '').trim().toLowerCase()
+}
+
 function getDashboardItems(row: DashboardPengajuanSourceRow) {
   const items = row.items || []
   if (items.length) {
@@ -386,8 +521,27 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
             />
 
             <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+              <UProgress
+                v-if="isLoadAllMode && loadAllBusy && totalLoadAllRows"
+                :model-value="loadAllProgress"
+                class="w-28"
+              />
               <p
-                v-if="isRefreshing && totalRows"
+                v-if="isLoadAllMode && loadAllBusy"
+                class="text-xs text-muted"
+                aria-live="polite"
+              >
+                Memuat semua data: {{ loadedLoadAllRows }} dari {{ totalLoadAllRows || '...' }} pengajuan.
+              </p>
+              <p
+                v-else-if="isLoadAllMode && totalLoadAllRows"
+                class="text-xs text-muted"
+                aria-live="polite"
+              >
+                Load All aktif: {{ totalRows }} hasil dari {{ totalLoadAllRows }} pengajuan.
+              </p>
+              <p
+                v-else-if="isRefreshing && totalRows"
                 class="text-xs text-muted"
                 aria-live="polite"
               >
@@ -400,6 +554,27 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
               >
                 Menampilkan {{ loadedRows }} dari {{ totalRows }} pengajuan.
               </p>
+
+              <UButton
+                v-if="isAdmin"
+                :label="isLoadAllMode ? 'Mode Halaman' : 'Load All'"
+                :icon="isLoadAllMode ? 'i-lucide-list' : 'i-lucide-database'"
+                :color="isLoadAllMode ? 'primary' : 'neutral'"
+                :variant="isLoadAllMode ? 'soft' : 'outline'"
+                size="sm"
+                :loading="!isLoadAllMode && loadAllBusy"
+                @click="toggleLoadAllMode"
+              />
+              <UButton
+                v-if="isAdmin && isLoadAllMode"
+                label="Refresh All"
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :loading="loadAllBusy"
+                @click="reloadLoadAll"
+              />
 
               <USelect
                 v-model="decisionFilter"

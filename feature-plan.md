@@ -54,7 +54,7 @@ Acceptance:
 - Update filter/search tidak mengambil semua data.
 - Pagination tetap akurat memakai `totalRows` dari server.
 
-## Phase 2 - Kurangi Reload Setelah Update
+## Phase 2 - Kurangi Reload Setelah Update - DONE
 
 ### 2.1 Patch cache list setelah update item/status
 
@@ -97,7 +97,7 @@ Acceptance:
 - Satu aksi update tidak menghasilkan rantai request yang tidak perlu.
 - Error rollback tetap aman.
 
-## Phase 3 - Load All Sebagai Fitur Opsional Admin
+## Phase 3 - Load All Sebagai Fitur Opsional Admin - DONE
 
 ### 3.1 Tambahkan tombol Load All di daftar pengajuan
 

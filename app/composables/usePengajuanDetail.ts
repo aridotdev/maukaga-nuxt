@@ -7,6 +7,8 @@
  * - `setItemDecision(noItem, keputusan, catatan)`: update keputusan item + patch cache list
  */
 
+import type { DashboardRow } from '~/composables/useDashboardData'
+
 const DETAIL_TTL = 60_000
 
 export type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
@@ -58,13 +60,21 @@ export type DetailPengajuan = {
   riwayat?: RiwayatStatus[]
 }
 
+type DetailMutationResponse = {
+  detail?: DetailPengajuan
+  row?: DashboardRow
+  status?: PengajuanStatus | string
+  keputusanItem?: ItemDecisionStatus | string
+}
+
 export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   const id = computed(() => toValue(idRef))
   const { callApi } = useAppsScriptApi()
   const { invalidate } = useAppSheetInvalidate()
   const {
     patchItemDecision: patchCachedItemDecision,
-    patchPengajuanStatus: patchCachedPengajuanStatus
+    patchPengajuanStatus: patchCachedPengajuanStatus,
+    patchPengajuanRow: patchCachedPengajuanRow
   } = useDashboardPengajuanCache()
   const toast = useToast()
 
@@ -104,6 +114,30 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     return ''
   }
 
+  function applyMutationResponse(data: DetailMutationResponse | undefined) {
+    if (!data) return false
+
+    const row = data.row
+    if (row?.idPengajuan) {
+      patchCachedPengajuanRow(row)
+    }
+
+    const detail = data.detail
+    if (detail?.idPengajuan) {
+      query.mutate(() => detail)
+      return true
+    }
+
+    if (data.status) {
+      query.mutate((current) => current
+        ? { ...current, status: data.status as PengajuanStatus }
+        : current)
+      patchCachedPengajuanStatus(id.value, data.status)
+    }
+
+    return false
+  }
+
   async function setItemDecision(
     noItem: number | string,
     keputusanItem: ItemDecisionStatus,
@@ -111,7 +145,8 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   ) {
     if (!id.value) throw new Error('ID Pengajuan tidak valid.')
 
-    const previousDecision = query.data.value?.items
+    const previous = query.data.value
+    const previousDecision = previous?.items
       ?.find(item => String(item.noItem) === String(noItem))
       ?.keputusanItem
     const decision = normalizeItemDecision(keputusanItem)
@@ -122,7 +157,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     })
 
     try {
-      await callApi<Record<string, never>>('updateItemDecision', {
+      const result = await callApi<DetailMutationResponse>('updateItemDecision', {
         idPengajuan: id.value,
         noItem,
         keputusanItem: decision,
@@ -132,10 +167,12 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
       // Server sudah konfirmasi. Refresh detail untuk sinkronkan status parent.
       // Tetap return cepat — UI sudah update.
       invalidate('getDashboardSummary')
-      void query.refresh()
+      if (!applyMutationResponse(result.data)) void query.refresh()
     } catch (err) {
       // Rollback dengan fetch ulang.
+      query.mutate(() => previous)
       patchCachedItemDecision(id.value, noItem, normalizeItemDecision(String(previousDecision || '')))
+      if (previous) patchCachedPengajuanStatus(id.value, previous.status)
       toast.add({
         title: 'Gagal memperbarui keputusan item',
         description: err instanceof Error ? err.message : String(err),
@@ -162,14 +199,14 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     patchCachedPengajuanStatus(id.value, statusBaru)
 
     try {
-      await callApi<Record<string, never>>('updateStatus', {
+      const result = await callApi<DetailMutationResponse>('updateStatus', {
         idPengajuan: id.value,
         statusBaru,
         catatanAdmin
       })
 
       invalidate('getDashboardSummary')
-      void query.refresh()
+      if (!applyMutationResponse(result.data)) void query.refresh()
     } catch (err) {
       query.mutate(() => previous)
       if (previous) {

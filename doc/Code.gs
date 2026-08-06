@@ -1102,7 +1102,11 @@ function dashboardSortValue_(row, sortBy) {
 
 function handleGetDetail(data) {
   requireSession_(data.token);
-  const id = clean_(data.idPengajuan);
+  return { success: true, data: buildDetailPayload_(data.idPengajuan) };
+}
+
+function buildDetailPayload_(idPengajuan) {
+  const id = clean_(idPengajuan);
   if (!id) throw new Error('ID Pengajuan wajib diisi');
 
   const pengajuan = readObjects_(SHEETS.PENGAJUAN).find(function (row) { return row['ID Pengajuan'] === id && VALID_STATUSES.indexOf(row['Status']) !== -1; });
@@ -1124,29 +1128,54 @@ function handleGetDetail(data) {
     });
 
   return {
-    success: true,
-    data: {
-      idPengajuan: pengajuan['ID Pengajuan'],
-      timestampSubmit: toIso_(pengajuan['Timestamp Submit']),
-      nama: pengajuan['Nama'],
-      bagianCabang: pengajuan['Bagian/Cabang'],
-      pemilik: pengajuan['Pemilik'],
-      alasanPengajuan: pengajuan['Alasan Pengajuan'],
-      tanggalForm: formatDateOnly_(pengajuan['Tanggal Form']),
-      fileHardCopyUrl: pengajuan['File Hard Copy URL'],
-      fileHardCopyId: pengajuan['File Hard Copy ID'],
-      evidenceAttachmentUrls: splitStoredLines_(pengajuan['Lampiran Foto Bukti URLs']),
-      evidenceAttachmentIds: splitStoredLines_(pengajuan['Lampiran Foto Bukti IDs']),
-      catatanTambahan: pengajuan['Catatan Tambahan'],
-      jumlahItem: pengajuan['Jumlah Item'],
-      status: pengajuan['Status'],
-      catatanAdmin: pengajuan['Catatan Admin'],
-      tanggalUpdateStatusTerakhir: toIso_(pengajuan['Tanggal Update Status Terakhir']),
-      userUpdateStatus: pengajuan['User Update Status'],
-      riwayatSingkat: pengajuan['Riwayat Singkat'],
-      items: items,
-      riwayat: riwayat,
-    },
+    idPengajuan: pengajuan['ID Pengajuan'],
+    timestampSubmit: toIso_(pengajuan['Timestamp Submit']),
+    nama: pengajuan['Nama'],
+    bagianCabang: pengajuan['Bagian/Cabang'],
+    pemilik: pengajuan['Pemilik'],
+    alasanPengajuan: pengajuan['Alasan Pengajuan'],
+    tanggalForm: formatDateOnly_(pengajuan['Tanggal Form']),
+    fileHardCopyUrl: pengajuan['File Hard Copy URL'],
+    fileHardCopyId: pengajuan['File Hard Copy ID'],
+    evidenceAttachmentUrls: splitStoredLines_(pengajuan['Lampiran Foto Bukti URLs']),
+    evidenceAttachmentIds: splitStoredLines_(pengajuan['Lampiran Foto Bukti IDs']),
+    catatanTambahan: pengajuan['Catatan Tambahan'],
+    jumlahItem: pengajuan['Jumlah Item'],
+    status: pengajuan['Status'],
+    catatanAdmin: pengajuan['Catatan Admin'],
+    tanggalUpdateStatusTerakhir: toIso_(pengajuan['Tanggal Update Status Terakhir']),
+    userUpdateStatus: pengajuan['User Update Status'],
+    riwayatSingkat: pengajuan['Riwayat Singkat'],
+    items: items,
+    riwayat: riwayat,
+  };
+}
+
+function buildDashboardRowFromDetail_(detail) {
+  return {
+    idPengajuan: detail.idPengajuan,
+    timestampSubmit: detail.timestampSubmit,
+    nama: detail.nama,
+    bagianCabang: detail.bagianCabang,
+    jumlahItem: detail.jumlahItem,
+    status: detail.status,
+    items: (detail.items || []).map(function (item) {
+      return {
+        noItem: item.noItem,
+        model: item.model,
+        nomorSeri: item.nomorSeri,
+        keputusanItem: item.keputusanItem,
+      };
+    }),
+  };
+}
+
+function buildPengajuanMutationPayload_(idPengajuan) {
+  const detail = buildDetailPayload_(idPengajuan);
+  return {
+    detail: detail,
+    row: buildDashboardRowFromDetail_(detail),
+    status: detail.status,
   };
 }
 
@@ -1187,7 +1216,8 @@ function handleUpdateStatus(data) {
     sheet.getRange(targetRow, col['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entry : entry);
 
     getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, statusLama, statusBaru, catatanAdmin, session.username, '']);
-    return { success: true, data: {} };
+    SpreadsheetApp.flush();
+    return { success: true, data: buildPengajuanMutationPayload_(id) };
   } finally {
     lock.releaseLock();
   }
@@ -1273,7 +1303,11 @@ function handleUpdateItemDecision(data) {
     pengajuanSheet.getRange(pengajuanRow, pengajuanCol['Riwayat Singkat'] + 1).setValue(oldHistory ? oldHistory + '\n' + entryLog : entryLog);
 
     getSheet_(SHEETS.STATUS_LOG).appendRow([now, id, logBefore, logAfter, catatanAdmin, session.username, noItem]);
-    return { success: true, data: { status: parentStatusBaru, keputusanItem: decisionBaru } };
+    SpreadsheetApp.flush();
+    const payload = buildPengajuanMutationPayload_(id);
+    payload.keputusanItem = decisionBaru;
+
+    return { success: true, data: payload };
   } finally {
     lock.releaseLock();
   }
