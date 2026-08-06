@@ -172,6 +172,13 @@ Acceptance:
 
 ## Phase 5 - Dashboard Homepage Chart
 
+Prinsip phase ini:
+
+- Jangan rewrite UI chart besar-besaran; pakai toolbar date range dan period select yang sudah ada.
+- Fungsionalitas chart yang ada sekarang dipertahankan, tetapi sumber datanya diganti ke data aktual pengajuan kartu garansi.
+- Chart menjawab: "item yang diajukan pada periode itu hasil akhirnya apa?"
+- Semua series dikelompokkan berdasarkan tanggal submit pengajuan (`Timestamp Submit`), bukan tanggal update keputusan item.
+
 ### 5.1 Buat endpoint aggregate chart
 
 Dependency:
@@ -180,40 +187,74 @@ Dependency:
 
 Target:
 
-- Chart mengambil data aggregate, bukan full list pengajuan.
-- Parameter minimal: `startDate`, `endDate`, `groupBy`, dan `status`.
-- `groupBy` bisa `day`, `week`, `month`, atau `year`.
+- Chart mengambil data aggregate aktual dari sheet pengajuan dan item, bukan full list pengajuan di frontend.
+- Parameter minimal: `startDate`, `endDate`, dan `groupBy`.
+- `groupBy` mengikuti period select yang sudah ada, misalnya `day`, `week`, `month`, atau `year` sesuai opsi UI saat ini.
+- Aggregate dihitung dari item pengajuan:
+  - `totalItems`: jumlah item yang diajukan pada periode submit tersebut.
+  - `approvedItems`: jumlah item dari pengajuan periode submit tersebut dengan `Keputusan Item = Disetujui`.
+  - `rejectedItems`: jumlah item dari pengajuan periode submit tersebut dengan `Keputusan Item = Ditolak`.
+- Item yang belum diputuskan tetap masuk `totalItems`, tetapi tidak masuk `approvedItems` atau `rejectedItems`.
+- Jika pengajuan tidak punya row item, gunakan `Jumlah Item` sebagai fallback untuk `totalItems`; `approvedItems` dan `rejectedItems` tetap 0.
+
+Contoh kontrak respons:
+
+```ts
+{
+  points: [{
+    period: '2026-08-01',
+    totalItems: 12,
+    approvedItems: 8,
+    rejectedItems: 2
+  }],
+  summary: {
+    totalItems: 120,
+    approvedItems: 80,
+    rejectedItems: 10
+  }
+}
+```
 
 Acceptance:
 
 - Chart tidak bergantung pada `loadAll`.
 - Mengubah periode chart hanya refresh data chart.
+- Data chart tetap benar walaupun list pengajuan sedang paginated atau difilter.
+- Approved/rejected tidak dihitung berdasarkan tanggal review, tetapi berdasarkan tanggal submit pengajuan parent.
 
-### 5.2 Tambahkan filter periode chart
+### 5.2 Pakai toolbar periode chart yang sudah ada
 
 Target:
 
-- Default: 1 bulan terakhir.
-- Opsi periode: tanggal custom, bulan, tahun.
-- Query chart debounce atau hanya jalan saat user apply filter.
+- Date range dan period select yang sudah ada tetap menjadi kontrol utama.
+- Default mengikuti perilaku chart saat ini, kecuali perlu disesuaikan ke 1 bulan terakhir.
+- Perubahan date range mengirim `startDate` dan `endDate` ke endpoint aggregate.
+- Perubahan period select mengirim `groupBy` ke endpoint aggregate.
+- Query chart debounce atau hanya jalan saat user apply filter, mengikuti pola UI saat ini.
 
 Acceptance:
 
 - User bisa melihat tren pengajuan tanpa memperberat daftar pengajuan.
 - Loading chart tidak mengganggu loading tabel/list.
+- Toolbar tidak perlu dibuat ulang jika komponen yang ada masih cukup.
 
-### 5.3 Tampilkan tren jumlah pengajuan per status
+### 5.3 Tampilkan tren qty item pengajuan
 
 Target:
 
-- Series: pending/baru, approved/disetujui, rejected/ditolak.
-- Label status mengikuti istilah app: `Baru`, `Disetujui`, `Ditolak`.
-- Pastikan definisi "pending" konsisten, apakah berarti status pengajuan `Baru` atau item `Belum Diputuskan`.
+- Series:
+  - `Total Item Diajukan` dari `totalItems`.
+  - `Disetujui` dari `approvedItems`.
+  - `Ditolak` dari `rejectedItems`.
+- Grafik memakai data aktual pengajuan kartu garansi, bukan placeholder/mock.
+- Tidak perlu menampilkan series pending pada phase ini.
+- Tooltip/legend membedakan jelas bahwa angka adalah jumlah item, bukan jumlah pengajuan parent.
 
 Acceptance:
 
-- Chart jelas membedakan status pengajuan dan keputusan item.
-- Tidak ada ambiguitas antara pending pengajuan dan pending review item.
+- Chart jelas membedakan total item diajukan, item disetujui, dan item ditolak.
+- Tidak ada ambiguitas antara status pengajuan parent dan keputusan item.
+- Angka summary/tooltip konsisten dengan aggregate endpoint untuk periode aktif.
 
 ## Urutan Implementasi Ringkas
 
