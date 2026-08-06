@@ -179,7 +179,7 @@ Prinsip phase ini:
 - Chart menjawab: "item yang diajukan pada periode itu hasil akhirnya apa?"
 - Semua series dikelompokkan berdasarkan tanggal submit pengajuan (`Timestamp Submit`), bukan tanggal update keputusan item.
 
-### 5.1 Buat endpoint aggregate chart
+### 5.1 Buat endpoint aggregate chart - DONE
 
 Dependency:
 

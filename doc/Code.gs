@@ -196,6 +196,8 @@ function doPost(e) {
         return jsonResponse_(handleGetDashboardLatest(data));
       case 'getPengajuanList':
         return jsonResponse_(handleGetPengajuanList(data));
+      case 'getDashboardChartAggregate':
+        return jsonResponse_(handleGetDashboardChartAggregate(data));
       case 'getDetail':
         return jsonResponse_(handleGetDetail(data));
       case 'updateStatus':
@@ -897,6 +899,193 @@ function handleGetPengajuanList(data) {
   const payload = buildDashboardPayload_(data);
   payload.admin = session.nama;
   return { success: true, data: payload };
+}
+
+function handleGetDashboardChartAggregate(data) {
+  const session = requireSession_(data.token);
+  const params = normalizeDashboardChartParams_(data);
+  const payload = buildDashboardChartAggregate_(params);
+  payload.admin = session.nama;
+  return { success: true, data: payload };
+}
+
+function normalizeDashboardChartParams_(data) {
+  const startDate = parseDashboardChartDate_(data.startDate, 'startDate');
+  const endDate = parseDashboardChartDate_(data.endDate, 'endDate');
+  const start = startOfDay_(startDate);
+  const end = endOfDay_(endDate);
+
+  if (start > end) throw new Error('startDate tidak boleh lebih besar dari endDate');
+
+  return {
+    startDate: start,
+    endDate: end,
+    groupBy: normalizeDashboardChartGroupBy_(data.groupBy),
+  };
+}
+
+function parseDashboardChartDate_(value, fieldName) {
+  const raw = clean_(value);
+  if (!raw) throw new Error(fieldName + ' wajib diisi');
+
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(raw + 'T00:00:00')
+    : new Date(raw);
+
+  if (isNaN(date.getTime())) throw new Error(fieldName + ' tidak valid');
+  return date;
+}
+
+function normalizeDashboardChartGroupBy_(value) {
+  const raw = clean_(value || 'day').toLowerCase();
+  const aliases = {
+    daily: 'day',
+    day: 'day',
+    weekly: 'week',
+    week: 'week',
+    monthly: 'month',
+    month: 'month',
+    yearly: 'year',
+    year: 'year',
+  };
+  const groupBy = aliases[raw];
+
+  if (!groupBy) throw new Error('groupBy tidak valid');
+  return groupBy;
+}
+
+function buildDashboardChartAggregate_(params) {
+  const parents = readObjects_(SHEETS.PENGAJUAN).filter(function (row) {
+    if (VALID_STATUSES.indexOf(row['Status']) === -1) return false;
+
+    const timestampSubmit = row['Timestamp Submit'] instanceof Date ? row['Timestamp Submit'] : new Date(row['Timestamp Submit']);
+    if (isNaN(timestampSubmit.getTime())) return false;
+    if (timestampSubmit < params.startDate) return false;
+    if (timestampSubmit > params.endDate) return false;
+
+    return true;
+  });
+
+  const parentById = {};
+  parents.forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    if (id) parentById[id] = row;
+  });
+
+  const itemAggregateById = {};
+  readObjects_(SHEETS.ITEMS).forEach(function (item) {
+    const id = clean_(item['ID Pengajuan']);
+    if (!parentById[id]) return;
+
+    const decision = normalizeExplicitItemDecision_(item['Keputusan Item']);
+    const aggregate = itemAggregateById[id] || {
+      totalItems: 0,
+      approvedItems: 0,
+      rejectedItems: 0,
+    };
+
+    aggregate.totalItems += 1;
+    if (decision === 'Disetujui') aggregate.approvedItems += 1;
+    else if (decision === 'Ditolak') aggregate.rejectedItems += 1;
+
+    itemAggregateById[id] = aggregate;
+  });
+
+  const pointByPeriod = createDashboardChartEmptyPoints_(params.startDate, params.endDate, params.groupBy);
+  const summary = {
+    totalItems: 0,
+    approvedItems: 0,
+    rejectedItems: 0,
+  };
+
+  parents.forEach(function (row) {
+    const id = clean_(row['ID Pengajuan']);
+    const timestampSubmit = row['Timestamp Submit'] instanceof Date ? row['Timestamp Submit'] : new Date(row['Timestamp Submit']);
+    const period = formatDashboardChartPeriodKey_(timestampSubmit, params.groupBy);
+    const point = pointByPeriod[period] || createDashboardChartPoint_(period);
+    const itemAggregate = itemAggregateById[id] || {
+      totalItems: normalizeDashboardChartItemCount_(row['Jumlah Item']),
+      approvedItems: 0,
+      rejectedItems: 0,
+    };
+
+    point.totalItems += itemAggregate.totalItems;
+    point.approvedItems += itemAggregate.approvedItems;
+    point.rejectedItems += itemAggregate.rejectedItems;
+
+    summary.totalItems += itemAggregate.totalItems;
+    summary.approvedItems += itemAggregate.approvedItems;
+    summary.rejectedItems += itemAggregate.rejectedItems;
+    pointByPeriod[period] = point;
+  });
+
+  return {
+    points: Object.keys(pointByPeriod).sort().map(function (period) { return pointByPeriod[period]; }),
+    summary: summary,
+    groupBy: params.groupBy,
+    startDate: formatDateOnly_(params.startDate),
+    endDate: formatDateOnly_(params.endDate),
+  };
+}
+
+function createDashboardChartEmptyPoints_(startDate, endDate, groupBy) {
+  const pointByPeriod = {};
+  let cursor = getDashboardChartPeriodStart_(startDate, groupBy);
+  const endPeriod = getDashboardChartPeriodStart_(endDate, groupBy);
+
+  while (cursor <= endPeriod) {
+    const period = formatDashboardChartPeriodKey_(cursor, groupBy);
+    pointByPeriod[period] = createDashboardChartPoint_(period);
+    cursor = getDashboardChartNextPeriod_(cursor, groupBy);
+  }
+
+  return pointByPeriod;
+}
+
+function normalizeDashboardChartItemCount_(value) {
+  const count = Number(value || 0);
+  if (!isFinite(count) || count < 0) return 0;
+  return Math.floor(count);
+}
+
+function createDashboardChartPoint_(period) {
+  return {
+    period: period,
+    totalItems: 0,
+    approvedItems: 0,
+    rejectedItems: 0,
+  };
+}
+
+function getDashboardChartPeriodStart_(dateValue, groupBy) {
+  const date = startOfDay_(new Date(dateValue));
+
+  if (groupBy === 'week') {
+    const day = date.getDay();
+    const offset = day === 0 ? 6 : day - 1;
+    date.setDate(date.getDate() - offset);
+  } else if (groupBy === 'month') {
+    date.setDate(1);
+  } else if (groupBy === 'year') {
+    date.setMonth(0, 1);
+  }
+
+  return date;
+}
+
+function getDashboardChartNextPeriod_(dateValue, groupBy) {
+  const next = new Date(dateValue);
+
+  if (groupBy === 'week') next.setDate(next.getDate() + 7);
+  else if (groupBy === 'month') next.setMonth(next.getMonth() + 1);
+  else if (groupBy === 'year') next.setFullYear(next.getFullYear() + 1);
+  else next.setDate(next.getDate() + 1);
+
+  return startOfDay_(next);
+}
+
+function formatDashboardChartPeriodKey_(dateValue, groupBy) {
+  return formatDateOnly_(getDashboardChartPeriodStart_(dateValue, groupBy));
 }
 
 function buildDashboardPayload_(data) {
