@@ -36,7 +36,7 @@ const {
   isLoading,
   isRefreshing,
   error,
-  refresh
+  ensureLoaded
 } = useDashboardChartData(chartParams)
 
 const data = computed<DataRecord[]>(() => {
@@ -49,7 +49,7 @@ const data = computed<DataRecord[]>(() => {
 })
 
 watch(chartParams, () => {
-  void refresh()
+  ensureLoaded()
 }, { immediate: true })
 
 const x = (_: DataRecord, i: number) => i
@@ -61,6 +61,7 @@ const total = computed(() => summary.value.totalItems)
 const approved = computed(() => summary.value.approvedItems)
 const rejected = computed(() => summary.value.rejectedItems)
 const isBusy = computed(() => isLoading.value || isRefreshing.value)
+const showSkeleton = computed(() => isLoading.value && !data.value.length)
 
 const series = computed<ChartSeries[]>(() => [{
   key: 'totalItems',
@@ -80,6 +81,7 @@ const series = computed<ChartSeries[]>(() => [{
 }])
 
 const formatNumber = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format
+const formatItemCount = (value: number): string => `${formatNumber(value)} item`
 
 const formatDate = (date: Date): string => {
   return ({
@@ -102,11 +104,13 @@ const xTicks = (i: number) => {
   return formatDate(data.value[i].date)
 }
 
+const yTicks = (value: number): string => formatNumber(value)
+
 const template = (d: DataRecord) => [
   `<strong>${formatDate(d.date)}</strong>`,
-  `Total Item Diajukan: ${formatNumber(d.totalItems)}`,
-  `Disetujui: ${formatNumber(d.approvedItems)}`,
-  `Ditolak: ${formatNumber(d.rejectedItems)}`
+  `Total Item Diajukan: ${formatItemCount(d.totalItems)}`,
+  `Disetujui: ${formatItemCount(d.approvedItems)}`,
+  `Ditolak: ${formatItemCount(d.rejectedItems)}`
 ].join('<br>')
 </script>
 
@@ -119,7 +123,11 @@ const template = (d: DataRecord) => [
             <p class="text-xs text-muted uppercase mb-1.5">
               Tren Qty Item Pengajuan
             </p>
-            <p class="text-3xl text-highlighted font-semibold">
+            <USkeleton
+              v-if="showSkeleton"
+              class="h-9 w-24"
+            />
+            <p v-else class="text-3xl text-highlighted font-semibold">
               {{ formatNumber(total) }}
             </p>
           </div>
@@ -145,8 +153,17 @@ const template = (d: DataRecord) => [
                 {{ item.label }}
               </p>
             </div>
-            <p class="mt-1 text-lg font-semibold text-highlighted">
-              {{ formatNumber(item.value) }}
+            <USkeleton
+              v-if="showSkeleton"
+              class="mt-2 h-6 w-20"
+            />
+            <p v-else class="mt-1 flex items-baseline gap-1 text-highlighted">
+              <span class="text-lg font-semibold">
+                {{ formatNumber(item.value) }}
+              </span>
+              <span class="text-xs text-muted">
+                item
+              </span>
             </p>
           </div>
         </div>
@@ -194,6 +211,10 @@ const template = (d: DataRecord) => [
         type="x"
         :x="x"
         :tick-format="xTicks"
+      />
+      <VisAxis
+        type="y"
+        :tick-format="yTicks"
       />
 
       <VisCrosshair

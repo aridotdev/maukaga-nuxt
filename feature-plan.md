@@ -170,7 +170,7 @@ Acceptance:
 - Delete tidak meninggalkan row stale di list.
 - Tidak ada full reload list kecuali rollback/error recovery.
 
-## Phase 5 - Dashboard Homepage Chart
+## Phase 5 - Dashboard Homepage Chart - DONE
 
 Prinsip phase ini:
 
@@ -238,7 +238,7 @@ Acceptance:
 - Loading chart tidak mengganggu loading tabel/list.
 - Toolbar tidak perlu dibuat ulang jika komponen yang ada masih cukup.
 
-### 5.3 Tampilkan tren qty item pengajuan - ON PROGRESS
+### 5.3 Tampilkan tren qty item pengajuan - DONE
 
 Target:
 

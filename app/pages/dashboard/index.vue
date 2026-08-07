@@ -2,7 +2,6 @@
 import { sub } from 'date-fns'
 import HomePengajuan from '~/components/home/HomePengajuan.vue'
 import type { Period, Range } from '~/types'
-import type { DropdownMenuItem } from '@nuxt/ui'
 
 const { isNotificationsSlideoverOpen } = useDashboard()
 

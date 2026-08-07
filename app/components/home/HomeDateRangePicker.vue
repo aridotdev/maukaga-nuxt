@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { DateFormatter, getLocalTimeZone, CalendarDate, today } from '@internationalized/date'
+import type { CalendarProps } from '@nuxt/ui/runtime/components/Calendar.vue'
 import type { Range } from '~/types'
 
 const df = new DateFormatter('en-US', {
@@ -17,23 +18,36 @@ const ranges = [
   { label: 'Last year', years: 1 }
 ]
 
-const toCalendarDate = (date: Date) => {
+type CalendarRange = CalendarProps<true>['modelValue']
+type CalendarDateValue = NonNullable<NonNullable<CalendarRange>['start']>
+
+const toCalendarDate = (date: Date): CalendarDateValue => {
   return new CalendarDate(
     date.getFullYear(),
     date.getMonth() + 1,
     date.getDate()
-  )
+  ) as unknown as CalendarDateValue
 }
 
-const calendarRange = computed({
+const toNativeDate = (value?: CalendarDateValue | null): Date => {
+  return value ? value.toDate(getLocalTimeZone()) : new Date()
+}
+
+const isSameDate = (left: Date, right: Date): boolean => {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate()
+}
+
+const calendarRange = computed<CalendarRange>({
   get: () => ({
     start: selected.value.start ? toCalendarDate(selected.value.start) : undefined,
     end: selected.value.end ? toCalendarDate(selected.value.end) : undefined
   }),
-  set: (newValue: { start: CalendarDate | null, end: CalendarDate | null }) => {
+  set: (newValue) => {
     selected.value = {
-      start: newValue.start ? newValue.start.toDate(getLocalTimeZone()) : new Date(),
-      end: newValue.end ? newValue.end.toDate(getLocalTimeZone()) : new Date()
+      start: toNativeDate(newValue?.start),
+      end: toNativeDate(newValue?.end)
     }
   }
 })
@@ -52,10 +66,8 @@ const isRangeSelected = (range: { days?: number, months?: number, years?: number
     startDate = startDate.subtract({ years: range.years })
   }
 
-  const selectedStart = toCalendarDate(selected.value.start)
-  const selectedEnd = toCalendarDate(selected.value.end)
-
-  return selectedStart.compare(startDate) === 0 && selectedEnd.compare(currentDate) === 0
+  return isSameDate(selected.value.start, startDate.toDate(getLocalTimeZone()))
+    && isSameDate(selected.value.end, currentDate.toDate(getLocalTimeZone()))
 }
 
 const selectRange = (range: { days?: number, months?: number, years?: number }) => {
