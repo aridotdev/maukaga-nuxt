@@ -207,7 +207,7 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   accessorKey: 'noItem',
   header: 'Item',
   meta: { class: { th: 'w-20', td: 'w-20' } },
-  cell: ({ row }) => h('p', { class: 'text-sm font-medium text-toned' }, `Item #${row.original.noItem}`)
+  cell: ({ row }) => h('p', { class: 'text-sm' }, `Item #${row.original.noItem}`)
 }, {
   accessorKey: 'timestampSubmit',
   header: 'Waktu Submit',
@@ -216,9 +216,9 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
 }, {
   accessorKey: 'nama',
   header: 'Nama',
-  meta: { class: { th: 'w-[20%]', td: 'w-[20%]' } },
+  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
-    h('p', { class: 'text-muted font-semibold' }, row.original.nama || '-')
+    h('p', { class: 'uppercase' }, row.original.nama || '-')
   ])
 }, {
   accessorKey: 'model',
@@ -233,14 +233,14 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
 }, {
   accessorKey: 'bagianCabang',
   header: 'Cabang',
-  meta: { class: { th: 'w-[20%]', td: 'w-[20%]' } },
+  meta: { class: { th: 'w-[15%]', td: 'w-[15%]' } },
   cell: ({ row }) => h('div', { class: 'min-w-0' }, [
     h('p', { class: 'uppercase' }, row.original.bagianCabang || '-')
   ])
 }, {
   accessorKey: 'pengajuanStatus',
   header: 'Proses Kartu',
-  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
+  meta: { class: { th: 'w-[12%]', td: 'w-[12%]' } },
   cell: ({ row }) => renderPengajuanProcess(row.original.pengajuanStatus)
 }, {
   accessorKey: 'keputusanItem',
@@ -250,11 +250,10 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
 }, {
   id: 'actions',
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
-  meta: { class: { th: 'w-[18%]', td: 'w-[18%]' } },
+  meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
   cell: ({ row }) => {
     const buttons = [
       h(UButton, {
-        label: 'Detail',
         icon: 'i-lucide-eye',
         color: 'neutral',
         variant: 'soft',
@@ -266,7 +265,6 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
     if (isAdmin.value) {
       buttons.push(
         h(UButton, {
-          label: 'Edit',
           icon: 'i-lucide-pencil',
           color: 'primary',
           variant: 'soft',
@@ -274,7 +272,6 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
           onClick: () => openEditPengajuan(row.original)
         }),
         h(UButton, {
-          label: 'Hapus',
           icon: 'i-lucide-trash-2',
           color: 'error',
           variant: 'soft',
@@ -757,7 +754,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
                 :icon="isLoadAllMode ? 'i-lucide-list' : 'i-lucide-database'"
                 :color="isLoadAllMode ? 'primary' : 'neutral'"
                 :variant="isLoadAllMode ? 'soft' : 'outline'"
-                size="sm"
+                size="md"
                 :loading="!isLoadAllMode && loadAllBusy"
                 @click="toggleLoadAllMode"
               />
@@ -767,7 +764,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
                 icon="i-lucide-refresh-cw"
                 color="neutral"
                 variant="ghost"
-                size="sm"
+                size="md"
                 :loading="loadAllBusy"
                 @click="reloadLoadAll"
               />
@@ -795,8 +792,8 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
               thead: '[&>tr]:bg-elevated/45 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0',
               tr: 'transition-colors hover:bg-elevated/30',
-              th: 'border-b border-muted px-4 py-3 text-xs font-semibold uppercase text-muted',
-              td: 'border-b border-muted px-4 py-4 text-sm align-middle',
+              th: 'border-b border-muted px-4 py-3 font-semibold uppercase text-muted',
+              td: 'border-b border-muted px-4 py-3 align-middle',
               separator: 'h-0'
             }"
           >
