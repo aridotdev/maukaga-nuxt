@@ -66,7 +66,7 @@ const showSkeleton = computed(() => isLoading.value && !data.value.length)
 const series = computed<ChartSeries[]>(() => [{
   key: 'totalItems',
   label: 'Total Item Diajukan',
-  color: 'var(--ui-primary)',
+  color: 'var(--ui-info)',
   value: total.value
 }, {
   key: 'approvedItems',
@@ -138,7 +138,7 @@ const template = (d: DataRecord) => [
           />
         </div>
 
-        <div class="grid gap-2 sm:grid-cols-3">
+        <!-- <div class="grid gap-2 sm:grid-cols-3">
           <div
             v-for="item in series"
             :key="item.key"
@@ -166,7 +166,7 @@ const template = (d: DataRecord) => [
               </span>
             </p>
           </div>
-        </div>
+        </div> -->
       </div>
     </template>
 
@@ -188,7 +188,7 @@ const template = (d: DataRecord) => [
       <VisLine
         :x="x"
         :y="totalY"
-        color="var(--ui-primary)"
+        color="var(--ui-info)"
       />
       <VisLine
         :x="x"
@@ -203,7 +203,7 @@ const template = (d: DataRecord) => [
       <VisArea
         :x="x"
         :y="totalY"
-        color="var(--ui-primary)"
+        color="var(--ui-info)"
         :opacity="0.08"
       />
 
