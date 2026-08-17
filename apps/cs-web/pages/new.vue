@@ -48,6 +48,26 @@ const pengajuanSchema = z.object({
       })
     )
     .min(1, 'Minimal 1 item produk wajib diisi')
+    .superRefine((products, ctx) => {
+      const seen = new Map<string, number>()
+
+      products.forEach((product, index) => {
+        const key = normalizeProductDuplicateKey(product.model, product.nomorSeri)
+        if (!key) return
+
+        const firstIndex = seen.get(key)
+        if (firstIndex === undefined) {
+          seen.set(key, index)
+          return
+        }
+
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Model dan nomor seri sudah sama dengan item #${firstIndex + 1}.`,
+          path: [index, 'nomorSeri']
+        })
+      })
+    })
 })
 
 type FormState = z.infer<typeof pengajuanSchema>
@@ -206,6 +226,12 @@ async function loadModelProduk() {
 
 function normalizeModelKey(value?: string) {
   return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase()
+}
+
+function normalizeProductDuplicateKey(model?: string, nomorSeri?: string) {
+  const normalizedModel = normalizeModelKey(model)
+  const normalizedSerial = String(nomorSeri || '').trim().replace(/\s+/g, ' ').toUpperCase()
+  return normalizedModel && normalizedSerial ? `${normalizedModel}|${normalizedSerial}` : ''
 }
 
 function getProdukForModel(model: string) {

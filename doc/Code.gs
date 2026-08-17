@@ -208,6 +208,8 @@ function doPost(e) {
         return jsonResponse_(handleUpdatePengajuanAdmin(data));
       case 'deletePengajuan':
         return jsonResponse_(handleDeletePengajuan(data));
+      case 'auditPengajuanDataIntegrity':
+        return jsonResponse_(handleAuditPengajuanDataIntegrity(data));
       case 'getProductReviewQueue':
       case 'getCategoryReviewQueue':
         return jsonResponse_(handleGetProductReviewQueue(data));
@@ -422,6 +424,7 @@ function handleSubmitPengajuan(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    assertNoDuplicateModelSerial_(cleaned.items, '');
     const id = generateIdUnlocked_();
     const folderId = String(config.DRIVE_FOLDER_ID || APP.DRIVE_FOLDER_ID || '').trim();
     if (!folderId) throw new Error('DRIVE_FOLDER_ID belum dikonfigurasi. Jalankan setupApp() terlebih dahulu.');
@@ -461,12 +464,14 @@ function handleSaveDraftPengajuan(data) {
     if (record) {
       if (!requestedToken || clean_(record.row[record.col['Resume Token']]) !== requestedToken) throw new Error('Link lanjutkan tidak valid atau draft tidak ditemukan');
       if (record.row[record.col['Status']] !== DRAFT_STATUS) throw new Error('Draft sudah tidak dapat diubah');
+      assertNoDuplicateModelSerial_(cleaned.items, requestedId);
       const oldHistory = record.row[record.col['Riwayat Singkat']] || '';
       history = oldHistory ? oldHistory + '\n[' + formatDateTime_(now) + '] Draft diperbarui' : '[' + formatDateTime_(now) + '] Draft diperbarui';
       draftCreatedAt = record.row[record.col['Draft Created At']] || now;
       updatePengajuanRow_(sheet, record.rowNumber, record.col, id, cleaned, DRAFT_STATUS, token, '', '', '', draftCreatedAt, now, '', history);
     } else {
       if (requestedId || requestedToken) throw new Error('Draft tidak ditemukan atau link lanjutkan tidak valid');
+      assertNoDuplicateModelSerial_(cleaned.items, '');
       id = generateIdUnlocked_();
       token = generateResumeToken_();
       appendPengajuanRow_(id, cleaned, DRAFT_STATUS, token, '', '', '', '', now, now, '', history);
@@ -645,6 +650,7 @@ function handleSubmitDraftPengajuan(data) {
     if (!record) throw new Error('Draft tidak ditemukan');
     if (clean_(record.row[record.col['Resume Token']]) !== token) throw new Error('Link lanjutkan tidak valid atau draft tidak ditemukan');
     if (record.row[record.col['Status']] !== DRAFT_STATUS) throw new Error('Draft sudah tidak dapat dilanjutkan');
+    assertNoDuplicateModelSerial_(cleaned.items, id);
 
     const folderId = String(config.DRIVE_FOLDER_ID || APP.DRIVE_FOLDER_ID || '').trim();
     if (!folderId) throw new Error('DRIVE_FOLDER_ID belum dikonfigurasi. Jalankan setupApp() terlebih dahulu.');
@@ -1594,6 +1600,247 @@ function handleDeletePengajuan(data) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function handleAuditPengajuanDataIntegrity(data) {
+  const session = requireSession_(data.token, ['admin']);
+  const parsedLimit = parseInt(data.limit || 50, 10);
+  const limit = Math.min(Math.max(isNaN(parsedLimit) ? 50 : parsedLimit, 1), 200);
+  const parents = readObjectsWithRowNumbers_(SHEETS.PENGAJUAN);
+  const items = readObjectsWithRowNumbers_(SHEETS.ITEMS);
+  const statusLogs = readObjectsWithRowNumbers_(SHEETS.STATUS_LOG);
+  const warrantyCards = readObjectsWithRowNumbers_(SHEETS.WARRANTY_CARDS);
+  const shippingLabels = readObjectsWithRowNumbers_(SHEETS.SHIPPING_LABELS);
+
+  const parentById = groupRowsByCleanValue_(parents, 'ID Pengajuan');
+  const itemsById = groupRowsByCleanValue_(items, 'ID Pengajuan');
+  const parentIds = {};
+  Object.keys(parentById).forEach(function (id) { parentIds[id] = true; });
+
+  const duplicateIds = Object.keys(parentById)
+    .filter(function (id) { return parentById[id].length > 1; })
+    .map(function (id) {
+      const rows = parentById[id];
+      return {
+        idPengajuan: id,
+        count: rows.length,
+        rows: rows.map(buildAuditParentSummary_),
+        recommendedKeep: pickLikelyValidParent_(rows, itemsById[id] || [], statusLogs, warrantyCards, shippingLabels),
+      };
+    });
+
+  const orphanItems = Object.keys(itemsById)
+    .filter(function (id) { return id && !parentIds[id]; })
+    .map(function (id) {
+      const rows = itemsById[id];
+      return {
+        idPengajuan: id,
+        count: rows.length,
+        rows: rows.slice(0, 10).map(buildAuditItemSummary_),
+      };
+    });
+
+  const parentsWithoutItems = parents
+    .filter(function (row) {
+      const id = clean_(row.data['ID Pengajuan']);
+      return id && !itemsById[id];
+    })
+    .map(buildAuditParentSummary_);
+
+  const duplicateCandidates = buildPengajuanDuplicateCandidates_(parents, itemsById);
+  const serialConflicts = buildSerialConflictCandidates_(items, parentById);
+
+  return {
+    success: true,
+    data: {
+      auditedAt: new Date().toISOString(),
+      auditedBy: session.username,
+      summary: {
+        pengajuanRows: parents.length,
+        pengajuanItemRows: items.length,
+        uniquePengajuanIds: Object.keys(parentById).length,
+        duplicateIdGroups: duplicateIds.length,
+        duplicateCandidateGroups: duplicateCandidates.length,
+        serialConflictGroups: serialConflicts.length,
+        orphanItemGroups: orphanItems.length,
+        orphanItemRows: orphanItems.reduce(function (sum, group) { return sum + group.count; }, 0),
+        parentsWithoutItems: parentsWithoutItems.length,
+      },
+      duplicateIds: duplicateIds.slice(0, limit),
+      duplicateCandidates: duplicateCandidates.slice(0, limit),
+      serialConflicts: serialConflicts.slice(0, limit),
+      orphanItems: orphanItems.slice(0, limit),
+      parentsWithoutItems: parentsWithoutItems.slice(0, limit),
+    },
+  };
+}
+
+function buildPengajuanDuplicateCandidates_(parents, itemsById) {
+  const groups = {};
+
+  parents.forEach(function (row) {
+    const id = clean_(row.data['ID Pengajuan']);
+    if (!id) return;
+
+    const key = buildPengajuanAuditFingerprint_(row.data, itemsById[id] || []);
+    if (!key) return;
+
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+
+  return Object.keys(groups)
+    .filter(function (key) {
+      const ids = uniqueCleanValues_(groups[key].map(function (row) { return row.data['ID Pengajuan']; }));
+      return ids.length > 1;
+    })
+    .map(function (key) {
+      const rows = groups[key];
+      const ids = uniqueCleanValues_(rows.map(function (row) { return row.data['ID Pengajuan']; }));
+      return {
+        fingerprint: key,
+        idPengajuan: ids,
+        count: rows.length,
+        rows: rows.map(buildAuditParentSummary_),
+      };
+    });
+}
+
+function buildSerialConflictCandidates_(items, parentById) {
+  const bySerial = {};
+
+  items.forEach(function (row) {
+    const serial = clean_(row.data['Nomor Seri']).toLowerCase();
+    const id = clean_(row.data['ID Pengajuan']);
+    if (!serial || !id) return;
+
+    if (!bySerial[serial]) bySerial[serial] = [];
+    bySerial[serial].push(row);
+  });
+
+  return Object.keys(bySerial)
+    .filter(function (serial) {
+      const ids = uniqueCleanValues_(bySerial[serial].map(function (row) { return row.data['ID Pengajuan']; }));
+      return ids.length > 1;
+    })
+    .map(function (serial) {
+      const rows = bySerial[serial];
+      const ids = uniqueCleanValues_(rows.map(function (row) { return row.data['ID Pengajuan']; }));
+      return {
+        nomorSeri: serial,
+        idPengajuan: ids,
+        rows: rows.slice(0, 10).map(function (row) {
+          const id = clean_(row.data['ID Pengajuan']);
+          const parent = parentById[id] && parentById[id][0];
+          return Object.assign(buildAuditItemSummary_(row), {
+            parent: parent ? buildAuditParentSummary_(parent) : null,
+          });
+        }),
+      };
+    });
+}
+
+function buildPengajuanAuditFingerprint_(parent, items) {
+  const serials = items
+    .map(function (item) { return clean_(item.data['Nomor Seri']).toLowerCase(); })
+    .filter(Boolean)
+    .sort()
+    .join(',');
+
+  if (!serials) return '';
+
+  return [
+    clean_(parent['Nama']).toLowerCase(),
+    clean_(parent['Bagian/Cabang']).toLowerCase(),
+    clean_(parent['Pemilik']).toLowerCase(),
+    formatDateOnly_(parent['Tanggal Form']),
+    serials,
+  ].join('|');
+}
+
+function pickLikelyValidParent_(parents, items, statusLogs, warrantyCards, shippingLabels) {
+  let best = null;
+  let bestScore = -1;
+
+  parents.forEach(function (row) {
+    const id = clean_(row.data['ID Pengajuan']);
+    const score = scoreAuditParent_(row.data, id, items, statusLogs, warrantyCards, shippingLabels);
+    if (score > bestScore) {
+      best = row;
+      bestScore = score;
+    }
+  });
+
+  return best ? Object.assign(buildAuditParentSummary_(best), { score: bestScore }) : null;
+}
+
+function scoreAuditParent_(parent, id, items, statusLogs, warrantyCards, shippingLabels) {
+  let score = 0;
+  if (VALID_STATUSES.indexOf(clean_(parent['Status'])) !== -1) score += 20;
+  if (clean_(parent['Status']) === DRAFT_STATUS) score += 5;
+  if (parent['Submitted At']) score += 15;
+  if (parent['Timestamp Submit']) score += 10;
+  if (clean_(parent['File Hard Copy ID']) || clean_(parent['File Hard Copy URL'])) score += 10;
+  if (items.length) score += Math.min(items.length, 10);
+  if (statusLogs.some(function (row) { return clean_(row.data['ID Pengajuan']) === id; })) score += 5;
+  if (warrantyCards.some(function (row) { return clean_(row.data['ID Pengajuan']) === id; })) score += 8;
+  if (shippingLabels.some(function (row) { return clean_(row.data['ID Pengajuan']) === id; })) score += 8;
+  return score;
+}
+
+function buildAuditParentSummary_(row) {
+  return {
+    rowNumber: row.rowNumber,
+    idPengajuan: row.data['ID Pengajuan'],
+    status: row.data['Status'],
+    timestampSubmit: toIso_(row.data['Timestamp Submit']),
+    submittedAt: toIso_(row.data['Submitted At']),
+    draftCreatedAt: toIso_(row.data['Draft Created At']),
+    draftUpdatedAt: toIso_(row.data['Draft Updated At']),
+    nama: row.data['Nama'],
+    bagianCabang: row.data['Bagian/Cabang'],
+    pemilik: row.data['Pemilik'],
+    tanggalForm: formatDateOnly_(row.data['Tanggal Form']),
+    jumlahItem: row.data['Jumlah Item'],
+    hasFile: !!(clean_(row.data['File Hard Copy ID']) || clean_(row.data['File Hard Copy URL'])),
+  };
+}
+
+function buildAuditItemSummary_(row) {
+  return {
+    rowNumber: row.rowNumber,
+    idPengajuan: row.data['ID Pengajuan'],
+    noItem: row.data['No Item'],
+    produk: row.data['Produk'],
+    model: row.data['Model'],
+    nomorSeri: row.data['Nomor Seri'],
+    keputusanItem: normalizeExplicitItemDecision_(row.data['Keputusan Item']),
+  };
+}
+
+function groupRowsByCleanValue_(rows, field) {
+  const groups = {};
+  rows.forEach(function (row) {
+    const key = clean_(row.data[field]);
+    if (!key) return;
+
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+  return groups;
+}
+
+function uniqueCleanValues_(values) {
+  const seen = {};
+  const result = [];
+  values.forEach(function (value) {
+    const key = clean_(value);
+    if (!key || seen[key]) return;
+
+    seen[key] = true;
+    result.push(key);
+  });
+  return result;
 }
 
 function normalizeAdminPengajuanPatch_(data) {
@@ -3166,6 +3413,57 @@ function normalizeSubmission_(data, config, includeFile) {
   return cleaned;
 }
 
+function assertNoDuplicateModelSerial_(items, currentId) {
+  const current = clean_(currentId);
+  const requested = {};
+  const requestedLabels = {};
+
+  (items || []).forEach(function (item, index) {
+    const key = buildModelSerialDuplicateKey_(item.model, item.nomorSeri);
+    if (!key) return;
+
+    if (requested[key]) {
+      throw new Error('Model dan nomor seri sudah diinput lebih dari sekali: ' + requestedLabels[key] + ' sama dengan item #' + (index + 1) + '.');
+    }
+
+    requested[key] = true;
+    requestedLabels[key] = formatModelSerialLabel_(item.model, item.nomorSeri);
+  });
+
+  const keys = Object.keys(requested);
+  if (!keys.length) return;
+
+  const keyMap = {};
+  keys.forEach(function (key) { keyMap[key] = true; });
+
+  const sheet = getSheet_(SHEETS.ITEMS);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return;
+
+  const col = indexMap_(values[0]);
+  for (let i = 1; i < values.length; i++) {
+    const existingId = clean_(values[i][col['ID Pengajuan']]);
+    if (current && existingId === current) continue;
+
+    const key = buildModelSerialDuplicateKey_(values[i][col['Model']], values[i][col['Nomor Seri']]);
+    if (!keyMap[key]) continue;
+
+    throw new Error(
+      'Model dan nomor seri sudah pernah diajukan di ID Pengajuan ' + existingId + ': ' + requestedLabels[key] + '. Gunakan data lain atau cek pengajuan yang sudah ada.'
+    );
+  }
+}
+
+function buildModelSerialDuplicateKey_(model, nomorSeri) {
+  const normalizedModel = normalizeModelKey_(model);
+  const normalizedSerial = clean_(nomorSeri).replace(/\s+/g, ' ').toUpperCase();
+  return normalizedModel && normalizedSerial ? normalizedModel + '|' + normalizedSerial : '';
+}
+
+function formatModelSerialLabel_(model, nomorSeri) {
+  return clean_(model) + ' / ' + clean_(nomorSeri);
+}
+
 function normalizeEvidenceAttachments_(attachments, config) {
   if (!Array.isArray(attachments)) return [];
 
@@ -3649,6 +3947,23 @@ function readObjects_(sheetName) {
     headers.forEach(function (header, index) { obj[header] = row[index]; });
     return obj;
   });
+}
+
+function readObjectsWithRowNumbers_(sheetName) {
+  const sheet = getSheet_(sheetName);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values[0];
+  const rows = [];
+  for (let i = 1; i < values.length; i++) {
+    if (!values[i].some(function (cell) { return cell !== ''; })) continue;
+
+    const obj = {};
+    headers.forEach(function (header, index) { obj[header] = values[i][index]; });
+    rows.push({ rowNumber: i + 1, data: obj });
+  }
+  return rows;
 }
 
 function requireSession_(token, allowedRoles) {
