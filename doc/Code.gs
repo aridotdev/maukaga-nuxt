@@ -210,6 +210,8 @@ function doPost(e) {
         return jsonResponse_(handleDeletePengajuan(data));
       case 'auditPengajuanDataIntegrity':
         return jsonResponse_(handleAuditPengajuanDataIntegrity(data));
+      case 'recoverDraftPengajuanFromItems':
+        return jsonResponse_(handleRecoverDraftPengajuanFromItems(data));
       case 'getProductReviewQueue':
       case 'getCategoryReviewQueue':
         return jsonResponse_(handleGetProductReviewQueue(data));
@@ -490,7 +492,7 @@ function handleGetDraftPengajuan(data) {
   if (!id || !token) throw new Error('Buka draft dari Draft Terakhir atau Link Lanjutkan Draft');
 
   const record = findPengajuanRecord_(id);
-  if (!record) throw new Error('Draft tidak ditemukan');
+  if (!record) throwDraftParentMissingError_(id, 'Draft tidak ditemukan');
   if (clean_(record.row[record.col['Resume Token']]) !== token) throw new Error('Link lanjutkan tidak valid atau draft tidak ditemukan');
   if (record.row[record.col['Status']] !== DRAFT_STATUS) throw new Error('Draft sudah tidak dapat dilanjutkan');
 
@@ -521,7 +523,7 @@ function handleGetPengajuanForPrint(data) {
   if (!id) throw new Error('Masukkan ID Pengajuan terlebih dahulu.');
 
   const record = findPengajuanRecord_(id);
-  if (!record) throw new Error('ID Pengajuan tidak ditemukan. Periksa kembali ID yang dimasukkan.');
+  if (!record) throwDraftParentMissingError_(id, 'ID Pengajuan tidak ditemukan. Periksa kembali ID yang dimasukkan.');
 
   const row = record.row;
   const col = record.col;
@@ -552,7 +554,7 @@ function handleCheckDraftPengajuanStatus(data) {
   if (!id) throw new Error('Masukkan ID Pengajuan terlebih dahulu.');
 
   const record = findPengajuanRecord_(id);
-  if (!record) throw new Error('ID Pengajuan tidak ditemukan. Periksa kembali ID pada printout draft.');
+  if (!record) throwDraftParentMissingError_(id, 'ID Pengajuan tidak ditemukan. Periksa kembali ID pada printout draft.');
 
   const status = record.row[record.col['Status']];
   if (status !== DRAFT_STATUS) {
@@ -1308,12 +1310,14 @@ function buildDetailPayload_(idPengajuan) {
   const id = clean_(idPengajuan);
   if (!id) throw new Error('ID Pengajuan wajib diisi');
 
-  const pengajuan = readObjects_(SHEETS.PENGAJUAN).find(function (row) { return row['ID Pengajuan'] === id && VALID_STATUSES.indexOf(row['Status']) !== -1; });
+  const record = findPengajuanRecord_(id);
+  const pengajuan = record ? listToObject_(record.headers, record.row) : null;
   if (!pengajuan) throw new Error('Pengajuan tidak ditemukan');
+  if (VALID_STATUSES.indexOf(pengajuan['Status']) === -1) throw new Error('Pengajuan tidak ditemukan');
 
   const items = getItemsForPengajuan_(id);
   const riwayat = readObjects_(SHEETS.STATUS_LOG)
-    .filter(function (row) { return row['ID Pengajuan'] === id; })
+    .filter(function (row) { return normalizePengajuanId_(row['ID Pengajuan']) === normalizePengajuanId_(id); })
     .sort(function (a, b) { return new Date(b['Timestamp']).getTime() - new Date(a['Timestamp']).getTime(); })
     .map(function (row) {
       return {
@@ -1576,11 +1580,11 @@ function handleDeletePengajuan(data) {
   try {
     const detail = buildDetailPayload_(id);
     const deleted = {
-      pengajuan: deleteRowsByColumnValue_(SHEETS.PENGAJUAN, 'ID Pengajuan', id),
       items: deleteRowsByColumnValue_(SHEETS.ITEMS, 'ID Pengajuan', id),
       statusLog: deleteRowsByColumnValue_(SHEETS.STATUS_LOG, 'ID Pengajuan', id),
       warrantyCards: deleteRowsByColumnValue_(SHEETS.WARRANTY_CARDS, 'ID Pengajuan', id),
       shippingLabels: deleteRowsByColumnValue_(SHEETS.SHIPPING_LABELS, 'ID Pengajuan', id),
+      pengajuan: deleteRowsByColumnValue_(SHEETS.PENGAJUAN, 'ID Pengajuan', id),
     };
 
     trashPengajuanFiles_(detail);
@@ -1642,7 +1646,7 @@ function handleAuditPengajuanDataIntegrity(data) {
 
   const parentsWithoutItems = parents
     .filter(function (row) {
-      const id = clean_(row.data['ID Pengajuan']);
+      const id = normalizePengajuanId_(row.data['ID Pengajuan']);
       return id && !itemsById[id];
     })
     .map(buildAuditParentSummary_);
@@ -1675,11 +1679,45 @@ function handleAuditPengajuanDataIntegrity(data) {
   };
 }
 
+function handleRecoverDraftPengajuanFromItems(data) {
+  const session = requireSession_(data.token, ['admin']);
+  const id = normalizePengajuanId_(data.idPengajuan);
+  if (!id) throw new Error('ID Pengajuan wajib diisi');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (findPengajuanRecord_(id)) throw new Error('Data utama Pengajuan sudah ada. Recovery tidak diperlukan.');
+
+    const items = getItemsForPengajuan_(id);
+    if (!items.length) throw new Error('PengajuanItems tidak ditemukan untuk ID Pengajuan ini.');
+
+    const cleaned = normalizeRecoveredDraftInput_(data, items);
+    const now = new Date();
+    const token = generateResumeToken_();
+    const history = '[' + formatDateTime_(now) + '] Draft direcovery dari PengajuanItems oleh ' + session.username;
+
+    appendPengajuanRow_(id, cleaned, DRAFT_STATUS, token, '', '', '', '', now, now, '', history);
+
+    return {
+      success: true,
+      data: {
+        idPengajuan: id,
+        resumeToken: token,
+        status: DRAFT_STATUS,
+        itemsRecovered: cleaned.items.length,
+      },
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function buildPengajuanDuplicateCandidates_(parents, itemsById) {
   const groups = {};
 
   parents.forEach(function (row) {
-    const id = clean_(row.data['ID Pengajuan']);
+    const id = normalizePengajuanId_(row.data['ID Pengajuan']);
     if (!id) return;
 
     const key = buildPengajuanAuditFingerprint_(row.data, itemsById[id] || []);
@@ -1711,7 +1749,7 @@ function buildSerialConflictCandidates_(items, parentById) {
 
   items.forEach(function (row) {
     const serial = clean_(row.data['Nomor Seri']).toLowerCase();
-    const id = clean_(row.data['ID Pengajuan']);
+    const id = normalizePengajuanId_(row.data['ID Pengajuan']);
     if (!serial || !id) return;
 
     if (!bySerial[serial]) bySerial[serial] = [];
@@ -1730,7 +1768,7 @@ function buildSerialConflictCandidates_(items, parentById) {
         nomorSeri: serial,
         idPengajuan: ids,
         rows: rows.slice(0, 10).map(function (row) {
-          const id = clean_(row.data['ID Pengajuan']);
+          const id = normalizePengajuanId_(row.data['ID Pengajuan']);
           const parent = parentById[id] && parentById[id][0];
           return Object.assign(buildAuditItemSummary_(row), {
             parent: parent ? buildAuditParentSummary_(parent) : null,
@@ -1775,6 +1813,7 @@ function pickLikelyValidParent_(parents, items, statusLogs, warrantyCards, shipp
 }
 
 function scoreAuditParent_(parent, id, items, statusLogs, warrantyCards, shippingLabels) {
+  const normalizedId = normalizePengajuanId_(id);
   let score = 0;
   if (VALID_STATUSES.indexOf(clean_(parent['Status'])) !== -1) score += 20;
   if (clean_(parent['Status']) === DRAFT_STATUS) score += 5;
@@ -1782,9 +1821,9 @@ function scoreAuditParent_(parent, id, items, statusLogs, warrantyCards, shippin
   if (parent['Timestamp Submit']) score += 10;
   if (clean_(parent['File Hard Copy ID']) || clean_(parent['File Hard Copy URL'])) score += 10;
   if (items.length) score += Math.min(items.length, 10);
-  if (statusLogs.some(function (row) { return clean_(row.data['ID Pengajuan']) === id; })) score += 5;
-  if (warrantyCards.some(function (row) { return clean_(row.data['ID Pengajuan']) === id; })) score += 8;
-  if (shippingLabels.some(function (row) { return clean_(row.data['ID Pengajuan']) === id; })) score += 8;
+  if (statusLogs.some(function (row) { return normalizePengajuanId_(row.data['ID Pengajuan']) === normalizedId; })) score += 5;
+  if (warrantyCards.some(function (row) { return normalizePengajuanId_(row.data['ID Pengajuan']) === normalizedId; })) score += 8;
+  if (shippingLabels.some(function (row) { return normalizePengajuanId_(row.data['ID Pengajuan']) === normalizedId; })) score += 8;
   return score;
 }
 
@@ -1821,7 +1860,7 @@ function buildAuditItemSummary_(row) {
 function groupRowsByCleanValue_(rows, field) {
   const groups = {};
   rows.forEach(function (row) {
-    const key = clean_(row.data[field]);
+    const key = field === 'ID Pengajuan' ? normalizePengajuanId_(row.data[field]) : clean_(row.data[field]);
     if (!key) return;
 
     if (!groups[key]) groups[key] = [];
@@ -1863,6 +1902,28 @@ function normalizeAdminPengajuanPatch_(data) {
   maxDate.setDate(maxDate.getDate() + 7);
   if (tanggal > maxDate) throw new Error('Tanggal Form tidak boleh lebih dari 7 hari ke depan');
   cleaned.tanggalForm = formatDateOnly_(tanggal);
+
+  return cleaned;
+}
+
+function normalizeRecoveredDraftInput_(data, items) {
+  const cleaned = normalizeAdminPengajuanPatch_(data);
+  cleaned.items = items.map(function (item, index) {
+    const recoveredItem = {
+      produk: clean_(item.produk),
+      model: clean_(item.model),
+      nomorSeri: clean_(item.nomorSeri),
+      modelNormalized: clean_(item.modelNormalized) || normalizeModelKey_(item.model),
+      produkStatus: clean_(item.produkStatus) || 'needs_review',
+      produkSumber: clean_(item.produkSumber),
+    };
+
+    if (!recoveredItem.produk || !recoveredItem.model || !recoveredItem.nomorSeri) {
+      throw new Error('PengajuanItems #' + (index + 1) + ' belum lengkap dan tidak bisa direcovery.');
+    }
+
+    return recoveredItem;
+  });
 
   return cleaned;
 }
@@ -1913,10 +1974,14 @@ function deleteRowsByColumnValue_(sheetName, header, value) {
 
   const col = indexMap_(values[0]);
   if (col[header] === undefined) return 0;
+  const normalizedValue = header === 'ID Pengajuan' ? normalizePengajuanId_(value) : '';
 
   let deleted = 0;
   for (let i = values.length - 1; i >= 1; i--) {
-    if (values[i][col[header]] !== value) continue;
+    const matches = header === 'ID Pengajuan'
+      ? normalizePengajuanId_(values[i][col[header]]) === normalizedValue
+      : values[i][col[header]] === value;
+    if (!matches) continue;
     sheet.deleteRow(i + 1);
     deleted += 1;
   }
@@ -3572,13 +3637,16 @@ function updatePengajuanRow_(sheet, rowNumber, col, id, cleaned, status, resumeT
 }
 
 function findPengajuanRecord_(id) {
+  const normalizedId = normalizePengajuanId_(id);
+  if (!normalizedId) return null;
+
   const sheet = getSheet_(SHEETS.PENGAJUAN);
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return null;
   const headers = values[0];
   const col = indexMap_(headers);
   for (let i = 1; i < values.length; i++) {
-    if (values[i][col['ID Pengajuan']] === id) {
+    if (normalizePengajuanId_(values[i][col['ID Pengajuan']]) === normalizedId) {
       return { sheet: sheet, values: values, headers: headers, col: col, rowNumber: i + 1, row: values[i] };
     }
   }
@@ -3619,8 +3687,9 @@ function findItemRecordBySerial_(nomorSeri) {
 }
 
 function getItemsForPengajuan_(id) {
+  const normalizedId = normalizePengajuanId_(id);
   return readObjects_(SHEETS.ITEMS)
-    .filter(function (row) { return row['ID Pengajuan'] === id; })
+    .filter(function (row) { return normalizePengajuanId_(row['ID Pengajuan']) === normalizedId; })
     .sort(function (a, b) { return Number(a['No Item']) - Number(b['No Item']); })
     .map(function (row) {
       return {
@@ -3637,6 +3706,15 @@ function getItemsForPengajuan_(id) {
         userUpdateKeputusanItem: clean_(row['User Update Keputusan Item']),
       };
     });
+}
+
+function throwDraftParentMissingError_(id, fallbackMessage) {
+  const items = getItemsForPengajuan_(id);
+  if (!items.length) throw new Error(fallbackMessage);
+
+  throw new Error(
+    'Data item pengajuan ditemukan, tetapi data utama Pengajuan tidak ditemukan. Hubungi admin untuk recovery data Pengajuan sebelum upload final submit.'
+  );
 }
 
 function getApprovedWarrantyQueueItems_() {
@@ -3894,12 +3972,15 @@ function generatePrintLayoutId_(type) {
 }
 
 function replaceItemRows_(id, items) {
+  if (!findPengajuanRecord_(id)) throw new Error('Data utama Pengajuan tidak ditemukan. Item pengajuan tidak disimpan agar data tidak yatim.');
+
   const sheet = getSheet_(SHEETS.ITEMS);
   const values = sheet.getDataRange().getValues();
+  const normalizedId = normalizePengajuanId_(id);
   if (values.length >= 2) {
     const col = indexMap_(values[0]);
     for (let i = values.length - 1; i >= 1; i--) {
-      if (values[i][col['ID Pengajuan']] === id) sheet.deleteRow(i + 1);
+      if (normalizePengajuanId_(values[i][col['ID Pengajuan']]) === normalizedId) sheet.deleteRow(i + 1);
     }
   }
 
@@ -3994,6 +4075,10 @@ function splitStoredLines_(value) {
 
 function clean_(value) {
   return String(value == null ? '' : value).trim();
+}
+
+function normalizePengajuanId_(value) {
+  return clean_(value).replace(/\s+/g, '').toUpperCase();
 }
 
 function indexMap_(headers) {
