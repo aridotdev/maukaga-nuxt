@@ -1,3 +1,5 @@
+import type { DetailPengajuan } from '../../../utils/admin-cache/types'
+
 export default defineEventHandler(async (event) => {
   const session = await requireAdminCacheSession(event)
   const idPengajuan = String(getRouterParam(event, 'id') || '').trim()
@@ -11,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   let detail = await getPengajuanDetailFromCache(idPengajuan)
 
-  if (!detail) {
+  if (!detail || shouldRefreshDetailBeforeReturn(detail)) {
     await syncAdminCache({ token: session.token, mode: 'detail', idPengajuan })
     detail = await getPengajuanDetailFromCache(idPengajuan)
   } else {
@@ -27,3 +29,15 @@ export default defineEventHandler(async (event) => {
 
   return detail
 })
+
+function shouldRefreshDetailBeforeReturn(detail: DetailPengajuan): boolean {
+  const items = detail.items || []
+  const totalItems = Number(detail.jumlahItem || items.length || 0)
+
+  if (totalItems > 0 && items.length === 0) return true
+
+  return items.some((item) => {
+    const record = item as unknown as Record<string, unknown>
+    return !String(record.produkStatus || '').trim()
+  })
+}
