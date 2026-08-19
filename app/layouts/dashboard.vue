@@ -272,11 +272,8 @@ function formatSyncTime(value: string) {
         <UNavigationMenu :collapsed="collapsed" :items="visibleLinks[0]" orientation="vertical" tooltip popover />
 
         <UNavigationMenu :collapsed="collapsed" :items="visibleLinks[1] || []" orientation="vertical" tooltip class="mt-auto" />
-      </template>
-
-      <template #footer="{ collapsed }">
         <div
-          class="mb-2 flex items-center border-b border-default pb-2"
+          class="mb-2 flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between gap-2 px-2'"
         >
           <div
@@ -291,7 +288,7 @@ function formatSyncTime(value: string) {
               {{ cacheSyncStatus?.totalRows || 0 }} pengajuan
             </div>
           </div>
-
+  
           <UTooltip text="Sync data">
             <UButton
               icon="i-lucide-refresh-cw"
@@ -305,6 +302,9 @@ function formatSyncTime(value: string) {
             />
           </UTooltip>
         </div>
+      </template>
+
+      <template #footer="{ collapsed }">
         <UserMenu :collapsed="collapsed" />
       </template>
     </UDashboardSidebar>
