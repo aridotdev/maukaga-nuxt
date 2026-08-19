@@ -52,7 +52,7 @@ type EditPengajuanForm = AdminPengajuanPatch
 
 const router = useRouter()
 const toast = useToast()
-const { callApi } = useAppsScriptApi()
+const { callAdminCache } = useAdminCacheApi()
 const { isAdmin } = useUserProfile()
 const { updatePengajuan, deletePengajuan } = usePengajuanAdminMutations()
 const currentPage = ref(1)
@@ -364,9 +364,9 @@ async function openEditPengajuan(row: DashboardPengajuanRow) {
   isEditPrefillLoading.value = true
 
   try {
-    const result = await callApi<DetailPengajuan>('getDetail', { idPengajuan: row.idPengajuan })
+    const result = await callAdminCache<DetailPengajuan>(`/api/admin-cache/pengajuan/${encodeURIComponent(row.idPengajuan)}`)
     if (selectedPengajuan.value?.idPengajuan !== row.idPengajuan) return
-    if (result.data) fillEditPengajuanForm(result.data)
+    if (result) fillEditPengajuanForm(result)
   } catch (err) {
     editPengajuanError.value = err instanceof Error ? err.message : String(err)
   } finally {

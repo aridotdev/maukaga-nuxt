@@ -1,5 +1,16 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const defaultAppsScriptApiUrl = 'https://script.google.com/macros/s/AKfycbxAikXauXo-Ct_FfawqXjrdMxa3K-cK6eyBZFuG74IlrVNW2bE2vwX4BLsEo-CS7AwIyA/exec'
+const supabaseUrl = import.meta.env.NUXT_SUPABASE_URL || import.meta.env.NUXT_PUBLIC_SUPABASE_URL || ''
+const supabasePublishableKey = import.meta.env.NUXT_SUPABASE_PUBLISHABLE_KEY
+  || import.meta.env.NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  || import.meta.env.NUXT_PUBLIC_SUPABASE_KEY
+  || ''
+const supabaseSecretKey = import.meta.env.NUXT_SUPABASE_SECRET_KEY
+  || import.meta.env.NUXT_SUPABASE_SERVICE_ROLE_KEY
+  || import.meta.env.NUXT_PUBLIC_SUPABASE_SECRET_KEY
+  || import.meta.env.SUPABASE_SECRET_KEY
+  || import.meta.env.SUPABASE_SERVICE_ROLE_KEY
+  || ''
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -8,9 +19,9 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     appsScriptApiUrl: import.meta.env.NUXT_APPS_SCRIPT_API_URL || import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
-    supabaseUrl: import.meta.env.NUXT_SUPABASE_URL || import.meta.env.NUXT_PUBLIC_SUPABASE_URL || '',
-    supabasePublishableKey: import.meta.env.NUXT_SUPABASE_PUBLISHABLE_KEY || import.meta.env.NUXT_PUBLIC_SUPABASE_KEY || '',
-    supabaseSecretKey: import.meta.env.NUXT_SUPABASE_SECRET_KEY || import.meta.env.NUXT_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_SECRET_KEY || import.meta.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    supabaseUrl,
+    supabasePublishableKey,
+    supabaseSecretKey,
     appUrl: import.meta.env.NUXT_APP_URL || import.meta.env.NUXT_PUBLIC_APP_URL || '',
     public: {
       appsScriptApiUrl: import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,

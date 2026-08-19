@@ -6,6 +6,14 @@ const toast = useToast()
 const runTimeConfig = useRuntimeConfig()
 const { isAdmin, isManagement, isQrcc } = useUserProfile()
 const {
+  status: cacheSyncStatus,
+  isLoading: isCacheSyncLoading,
+  error: cacheSyncError,
+  refreshStatus: refreshCacheSyncStatus,
+  syncNow: syncAdminCacheNow
+} = useAdminCacheSyncStatus()
+const { invalidateAll } = useAppSheetInvalidate()
+const {
   rows: reviewProductRows,
   ensureLoaded: ensureReviewProductQueueLoaded
 } = useReviewProductQueue()
@@ -19,6 +27,18 @@ const productReviewBadge = computed(() =>
   pendingProductReviewCount.value > 0 ? String(pendingProductReviewCount.value) : undefined
 )
 const canReviewProductName = computed(() => isAdmin.value || isQrcc.value)
+const cacheSyncTone = computed(() => {
+  if (cacheSyncError.value || cacheSyncStatus.value?.status === 'failed') return 'text-error'
+  if (cacheSyncStatus.value?.inProgress || isCacheSyncLoading.value) return 'text-warning'
+  if (cacheSyncStatus.value?.status === 'up to date') return 'text-success'
+  return 'text-muted'
+})
+const cacheSyncLabel = computed(() => {
+  if (cacheSyncStatus.value?.inProgress || isCacheSyncLoading.value) return 'Syncing'
+  if (cacheSyncStatus.value?.lastSuccessAt) return `Sync ${formatSyncTime(cacheSyncStatus.value.lastSuccessAt)}`
+  if (cacheSyncError.value || cacheSyncStatus.value?.lastErrorMessage) return 'Sync gagal'
+  return 'Belum sync'
+})
 
 const links = [[{
   label: 'Home',
@@ -169,6 +189,16 @@ if (import.meta.client) {
 }
 
 onMounted(async () => {
+  await refreshCacheSyncStatus()
+
+  const cacheSyncTimer = window.setInterval(() => {
+    void refreshCacheSyncStatus()
+  }, 30_000)
+
+  onUnmounted(() => {
+    window.clearInterval(cacheSyncTimer)
+  })
+
   const cookie = useCookie('cookie-consent')
   if (cookie.value === 'accepted') {
     return
@@ -192,6 +222,24 @@ onMounted(async () => {
     }]
   })
 })
+
+async function runManualCacheSync() {
+  await syncAdminCacheNow()
+  invalidateAll()
+  await refreshCacheSyncStatus()
+}
+
+function formatSyncTime(value: string) {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
 </script>
 
 <template>
@@ -227,6 +275,36 @@ onMounted(async () => {
       </template>
 
       <template #footer="{ collapsed }">
+        <div
+          class="mb-2 flex items-center border-b border-default pb-2"
+          :class="collapsed ? 'justify-center' : 'justify-between gap-2 px-2'"
+        >
+          <div
+            v-if="!collapsed"
+            class="min-w-0 text-xs"
+            :class="cacheSyncTone"
+          >
+            <div class="truncate font-medium">
+              {{ cacheSyncLabel }}
+            </div>
+            <div class="truncate text-muted">
+              {{ cacheSyncStatus?.totalRows || 0 }} pengajuan
+            </div>
+          </div>
+
+          <UTooltip text="Sync data">
+            <UButton
+              icon="i-lucide-refresh-cw"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              square
+              :loading="isCacheSyncLoading || cacheSyncStatus?.inProgress"
+              :disabled="isCacheSyncLoading || cacheSyncStatus?.inProgress"
+              @click="runManualCacheSync"
+            />
+          </UTooltip>
+        </div>
         <UserMenu :collapsed="collapsed" />
       </template>
     </UDashboardSidebar>

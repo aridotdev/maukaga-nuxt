@@ -85,6 +85,7 @@ export type AdminPengajuanPatch = {
 export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   const id = computed(() => toValue(idRef))
   const { callApi } = useAppsScriptApi()
+  const { syncDetail } = useAdminCacheSync()
   const { invalidate } = useAppSheetInvalidate()
   const {
     patchItemDecision: patchCachedItemDecision,
@@ -93,9 +94,9 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   } = useDashboardPengajuanCache()
   const toast = useToast()
 
-  const query = useAppSheetQuery<DetailPengajuan>(
-    'getDetail',
-    { idPengajuan: id.value },
+  const query = useAdminCacheQuery<DetailPengajuan>(
+    `/api/admin-cache/pengajuan/${encodeURIComponent(id.value)}`,
+    {},
     { ttl: DETAIL_TTL }
   )
 
@@ -182,6 +183,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
       // Server sudah konfirmasi. Refresh detail untuk sinkronkan status parent.
       // Tetap return cepat — UI sudah update.
       invalidate('getDashboardSummary')
+      void syncDetail(id.value)
       if (!applyMutationResponse(result.data)) void query.refresh()
     } catch (err) {
       // Rollback dengan fetch ulang.
@@ -221,6 +223,7 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
       })
 
       invalidate('getDashboardSummary')
+      void syncDetail(id.value)
       if (!applyMutationResponse(result.data)) void query.refresh()
     } catch (err) {
       query.mutate(() => previous)
@@ -266,6 +269,7 @@ function patchCachedPengajuanDetail(idPengajuan: string, updater: (detail: Detai
 
 export function usePengajuanAdminMutations() {
   const { callApi } = useAppsScriptApi()
+  const { syncDetail, deleteLocal } = useAdminCacheSync()
   const { invalidate } = useAppSheetInvalidate()
   const {
     patchPengajuanRow: patchCachedPengajuanRow,
@@ -305,6 +309,7 @@ export function usePengajuanAdminMutations() {
     })
 
     applyMutationResponse(idPengajuan, result.data)
+    void syncDetail(idPengajuan)
     return result.data
   }
 
@@ -314,6 +319,7 @@ export function usePengajuanAdminMutations() {
     await callApi<DetailMutationResponse>('deletePengajuan', { idPengajuan })
     removeCachedPengajuanRow(idPengajuan)
     patchCachedPengajuanDetail(idPengajuan, () => null)
+    void deleteLocal(idPengajuan)
     invalidate('getDashboardSummary')
   }
 

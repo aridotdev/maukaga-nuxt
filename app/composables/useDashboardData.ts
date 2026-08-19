@@ -372,8 +372,8 @@ export function useDashboardPengajuanCache() {
 
 export function useDashboardSummaryData() {
   const invalidations = useAppSheetInvalidationState()
-  const query = useAppSheetQuery<{ summary?: DashboardSummary, admin?: string }>(
-    'getDashboardSummary',
+  const query = useAdminCacheQuery<{ summary?: DashboardSummary, admin?: string }>(
+    '/api/admin-cache/dashboard',
     {},
     { ttl: DASHBOARD_TTL }
   )
@@ -399,8 +399,8 @@ export function useDashboardSummaryData() {
 
 export function useDashboardLatestData(limit = 5) {
   const invalidations = useAppSheetInvalidationState()
-  const query = useAppSheetQuery<DashboardResponse>(
-    'getDashboardLatest',
+  const query = useAdminCacheQuery<DashboardResponse>(
+    '/api/admin-cache/dashboard',
     { limit },
     { ttl: DASHBOARD_TTL }
   )
@@ -432,7 +432,7 @@ export function useDashboardLatestData(limit = 5) {
 }
 
 export function useDashboardChartData(paramsRef: MaybeRefOrGetter<DashboardChartParams>) {
-  const { callApi } = useAppsScriptApi()
+  const { callAdminCache } = useAdminCacheApi()
   const invalidations = useAppSheetInvalidationState()
   const store = useDashboardChartStore()
   const params = computed(() => normalizeDashboardChartParams(toValue(paramsRef)))
@@ -462,9 +462,9 @@ export function useDashboardChartData(paramsRef: MaybeRefOrGetter<DashboardChart
     if (!force && targetEntry.data && isFresh(requestKey)) return
     if (targetEntry.inflight) return targetEntry.inflight
 
-    const promise = callApi<DashboardChartResponse>('getDashboardChartAggregate', requestParams)
+    const promise = callAdminCache<DashboardChartResponse>('/api/admin-cache/chart', { query: requestParams })
       .then((result) => {
-        targetEntry.data = result.data ?? {}
+        targetEntry.data = result ?? {}
         targetEntry.error = null
       })
       .catch((err) => {
@@ -514,7 +514,7 @@ export function useDashboardChartData(paramsRef: MaybeRefOrGetter<DashboardChart
 }
 
 export function usePengajuanListData(paramsRef: MaybeRefOrGetter<PengajuanListParams>) {
-  const { callApi } = useAppsScriptApi()
+  const { callAdminCache } = useAdminCacheApi()
   const invalidations = useAppSheetInvalidationState()
   const store = usePengajuanListStore()
   const params = computed(() => normalizePengajuanListParams(toValue(paramsRef)))
@@ -548,9 +548,9 @@ export function usePengajuanListData(paramsRef: MaybeRefOrGetter<PengajuanListPa
     if (!force && targetEntry.data && isFresh(requestKey)) return
     if (targetEntry.inflight) return targetEntry.inflight
 
-    const promise = callApi<DashboardResponse>('getPengajuanList', requestParams)
+    const promise = callAdminCache<DashboardResponse>('/api/admin-cache/pengajuan', { query: requestParams })
       .then((result) => {
-        targetEntry.data = result.data ?? {}
+        targetEntry.data = result ?? {}
         targetEntry.error = null
       })
       .catch((err) => {
@@ -607,8 +607,8 @@ export function usePengajuanListData(paramsRef: MaybeRefOrGetter<PengajuanListPa
 export function useDashboardData(options: UseDashboardDataOptions = {}) {
   if (options.loadAll) return useDashboardAllData()
 
-  const query = useAppSheetQuery<DashboardResponse>(
-    'getDashboard',
+  const query = useAdminCacheQuery<DashboardResponse>(
+    '/api/admin-cache/dashboard',
     { page: 1, pageSize: 20 },
     { ttl: DASHBOARD_TTL }
   )
@@ -650,7 +650,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}) {
 }
 
 function useDashboardAllData() {
-  const { callApi } = useAppsScriptApi()
+  const { callAdminCache } = useAdminCacheApi()
   const store = useState<DashboardStore>('dashboard-all-data-store', createEmptyDashboardStore)
   const invalidations = useAppSheetInvalidationState()
 
@@ -730,12 +730,14 @@ function useDashboardAllData() {
   }
 
   async function fetchDashboardPage(page: number) {
-    const result = await callApi<DashboardResponse>('getDashboard', {
-      page,
-      pageSize: DASHBOARD_PAGE_SIZE
+    const result = await callAdminCache<DashboardResponse>('/api/admin-cache/dashboard', {
+      query: {
+        page,
+        pageSize: DASHBOARD_PAGE_SIZE
+      }
     })
 
-    return result.data ?? {}
+    return result ?? {}
   }
 
   function updateStore(base: DashboardResponse, rows: DashboardRow[], meta: {
