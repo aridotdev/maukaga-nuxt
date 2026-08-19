@@ -10,6 +10,7 @@ definePageMeta({
 const PENGAJUAN_STATUSES = ['Baru', 'Disetujui', 'Ditolak', 'Diprint', 'Dikirim', 'Selesai'] as const
 const LIFECYCLE_ORDER = ['Baru', 'Disetujui', 'Diprint', 'Dikirim', 'Selesai'] as const
 const EMPTY_ITEM_DECISION_VALUE = '__belum_diputuskan__' as const
+const PENGAJUAN_SELESAI_NOTE = 'Kartu garansi sudah diterima dan pengajuan selesai.'
 
 type StatusColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 type ItemDecisionSelectValue = ItemDecisionStatus | typeof EMPTY_ITEM_DECISION_VALUE
@@ -202,6 +203,13 @@ watch(detail, (next) => {
   pengajuanForm.notice = ''
   if (next.items) initItemForms(next.items)
 }, { immediate: true })
+
+watch(() => pengajuanForm.statusBaru, (next) => {
+  if (next !== 'Selesai') return
+  if (detail.value?.status === 'Selesai') return
+
+  pengajuanForm.catatanAdmin = PENGAJUAN_SELESAI_NOTE
+})
 
 onMounted(() => {
   load()
