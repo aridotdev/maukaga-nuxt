@@ -108,11 +108,10 @@ async function handleCheckStatus() {
   showStatusCheckResult('loading', 'Memeriksa status nomor seri...')
 
   try {
-    const result = await callAPI<StatusData>('checkPengajuanStatus', { keyword })
+    const result = await loadStatusData(keyword)
     if (requestId !== statusCheckRequestId.value) return
-    if (!result.success) throw new Error(result.error || 'Status nomor seri gagal dimuat')
 
-    renderStatusCheckResult(result.data || {})
+    renderStatusCheckResult(result)
   } catch (error) {
     if (requestId === statusCheckRequestId.value) {
       const message = getErrorMessage(error)
@@ -122,6 +121,24 @@ async function handleCheckStatus() {
   } finally {
     if (requestId === statusCheckRequestId.value) setStatusCheckLoading(false)
   }
+}
+
+async function loadStatusData(keyword: string): Promise<StatusData> {
+  const result = await callAPI<StatusData>('checkPengajuanStatusBySerial', { nomorSeri: keyword })
+  if (result.success) return result.data || {}
+
+  if (!isUnknownActionError(result.error)) {
+    throw new Error(result.error || 'Status nomor seri gagal dimuat')
+  }
+
+  const fallbackResult = await callAPI<StatusData>('checkPengajuanStatus', { keyword })
+  if (!fallbackResult.success) throw new Error(fallbackResult.error || 'Status nomor seri gagal dimuat')
+
+  return fallbackResult.data || {}
+}
+
+function isUnknownActionError(error?: string) {
+  return String(error || '').toLowerCase().includes('action tidak dikenal')
 }
 
 function renderStatusCheckResult(data: StatusData) {
