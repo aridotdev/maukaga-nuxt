@@ -39,6 +39,8 @@ type DraftStatusResponse = {
   resumeToken?: string
 }
 
+type DraftLoadResponse = DraftData & DraftStatusResponse
+
 type SubmitResponse = {
   idPengajuan?: string
 }
@@ -185,19 +187,10 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
   hasResumeInputError.value = false
 
   try {
-    if (!resumeToken) {
-      const statusResult = await callAPI<DraftStatusResponse>('checkDraftPengajuanStatus', { idPengajuan })
-      if (!statusResult.success) throw new Error(statusResult.error || 'ID Pengajuan tidak bisa dilanjutkan.')
-
-      resumeToken = String(statusResult.data?.resumeToken || '').trim()
-      if (!resumeToken) throw new Error('Draft ditemukan, tetapi Resume Token tidak tersedia. Draft ini tidak bisa dilanjutkan.')
-    }
-
-    const result = await callAPI<DraftData>('getDraftPengajuan', { idPengajuan, resumeToken })
-    if (!result.success) throw new Error(result.error || 'Draft gagal dimuat')
-
-    idPengajuan = result.data?.idPengajuan || idPengajuan
-    loadedDraft.value = normalizeDraftData(result.data || {}, idPengajuan)
+    const draftResult = await loadDraftData(idPengajuan, resumeToken)
+    idPengajuan = draftResult.data.idPengajuan || idPengajuan
+    resumeToken = draftResult.resumeToken
+    loadedDraft.value = normalizeDraftData(draftResult.data, idPengajuan)
     setDraftReference(idPengajuan, resumeToken)
     resetSelectedFile()
     resetEvidenceFiles()
@@ -210,6 +203,37 @@ async function handleLoadDraft(reference: LoadDraftReference = {}) {
   } finally {
     loadingState.value = false
   }
+}
+
+async function loadDraftData(idPengajuan: string, resumeToken: string): Promise<{ data: DraftData, resumeToken: string }> {
+  if (!resumeToken) {
+    const result = await callAPI<DraftLoadResponse>('loadDraftPengajuanById', { idPengajuan })
+    if (result.success) {
+      const nextToken = String(result.data?.resumeToken || '').trim()
+      if (!nextToken) throw new Error('Draft ditemukan, tetapi Resume Token tidak tersedia. Draft ini tidak bisa dilanjutkan.')
+
+      return { data: result.data || {}, resumeToken: nextToken }
+    }
+
+    if (!isUnknownActionError(result.error)) {
+      throw new Error(result.error || 'ID Pengajuan tidak bisa dilanjutkan.')
+    }
+
+    const statusResult = await callAPI<DraftStatusResponse>('checkDraftPengajuanStatus', { idPengajuan })
+    if (!statusResult.success) throw new Error(statusResult.error || 'ID Pengajuan tidak bisa dilanjutkan.')
+
+    resumeToken = String(statusResult.data?.resumeToken || '').trim()
+    if (!resumeToken) throw new Error('Draft ditemukan, tetapi Resume Token tidak tersedia. Draft ini tidak bisa dilanjutkan.')
+  }
+
+  const result = await callAPI<DraftData>('getDraftPengajuan', { idPengajuan, resumeToken })
+  if (!result.success) throw new Error(result.error || 'Draft gagal dimuat')
+
+  return { data: result.data || {}, resumeToken }
+}
+
+function isUnknownActionError(error?: string) {
+  return String(error || '').toLowerCase().includes('action tidak dikenal')
 }
 
 function handleLoadStoredDraft() {

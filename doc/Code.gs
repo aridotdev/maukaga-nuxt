@@ -163,6 +163,8 @@ function doPost(e) {
         return jsonResponse_(handleSubmitPengajuan(data));
       case 'saveDraftPengajuan':
         return jsonResponse_(handleSaveDraftPengajuan(data));
+      case 'loadDraftPengajuanById':
+        return jsonResponse_(handleLoadDraftPengajuanById(data));
       case 'getDraftPengajuan':
         return jsonResponse_(handleGetDraftPengajuan(data));
       case 'getPengajuanForPrint':
@@ -494,15 +496,36 @@ function handleGetDraftPengajuan(data) {
   const record = findPengajuanRecord_(id);
   if (!record) throwDraftParentMissingError_(id, 'Draft tidak ditemukan');
   if (clean_(record.row[record.col['Resume Token']]) !== token) throw new Error('Link lanjutkan tidak valid atau draft tidak ditemukan');
-  if (record.row[record.col['Status']] !== DRAFT_STATUS) throw new Error('Draft sudah tidak dapat dilanjutkan');
+  return buildDraftPengajuanResponse_(record, id, token);
+}
 
+function handleLoadDraftPengajuanById(data) {
+  const id = clean_(data.idPengajuan);
+  if (!id) throw new Error('Masukkan ID Pengajuan terlebih dahulu.');
+
+  const record = findPengajuanRecord_(id);
+  if (!record) throwDraftParentMissingError_(id, 'ID Pengajuan tidak ditemukan. Periksa kembali ID pada printout draft.');
+
+  const resumeToken = clean_(record.row[record.col['Resume Token']]);
+  if (!resumeToken) {
+    throw new Error('Draft ditemukan, tetapi Resume Token tidak tersedia. Draft ini tidak bisa dilanjutkan. Silakan buat draft baru atau hubungi admin.');
+  }
+
+  return buildDraftPengajuanResponse_(record, id, resumeToken);
+}
+
+function buildDraftPengajuanResponse_(record, id, resumeToken) {
   const row = record.row;
   const col = record.col;
+  if (row[col['Status']] !== DRAFT_STATUS) throw new Error('Draft sudah tidak dapat dilanjutkan');
+  if (clean_(row[col['Resume Token']]) !== resumeToken) throw new Error('Link lanjutkan tidak valid atau draft tidak ditemukan');
+
   return {
     success: true,
     data: {
       idPengajuan: id,
       status: row[col['Status']],
+      resumeToken: resumeToken,
       nama: row[col['Nama']],
       bagianCabang: row[col['Bagian/Cabang']],
       pemilik: row[col['Pemilik']],
@@ -3641,16 +3664,52 @@ function findPengajuanRecord_(id) {
   if (!normalizedId) return null;
 
   const sheet = getSheet_(SHEETS.PENGAJUAN);
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return null;
-  const headers = values[0];
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return null;
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   const col = indexMap_(headers);
-  for (let i = 1; i < values.length; i++) {
-    if (normalizePengajuanId_(values[i][col['ID Pengajuan']]) === normalizedId) {
-      return { sheet: sheet, values: values, headers: headers, col: col, rowNumber: i + 1, row: values[i] };
+  const idColumn = col['ID Pengajuan'] + 1;
+  const ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
+  let rowNumber = 0;
+
+  for (let i = 0; i < ids.length; i++) {
+    if (normalizePengajuanId_(ids[i][0]) === normalizedId) {
+      rowNumber = i + 2;
+      break;
     }
   }
-  return null;
+
+  if (!rowNumber) return null;
+
+  const row = sheet.getRange(rowNumber, 1, 1, lastColumn).getValues()[0];
+  return { sheet: sheet, values: [headers, row], headers: headers, col: col, rowNumber: rowNumber, row: row };
+}
+
+function getItemRecordsForPengajuan_(id) {
+  const normalizedId = normalizePengajuanId_(id);
+  if (!normalizedId) return [];
+
+  const sheet = getSheet_(SHEETS.ITEMS);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return [];
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const col = indexMap_(headers);
+  const idColumn = col['ID Pengajuan'] + 1;
+  const ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
+  const records = [];
+
+  for (let i = 0; i < ids.length; i++) {
+    if (normalizePengajuanId_(ids[i][0]) !== normalizedId) continue;
+
+    const row = sheet.getRange(i + 2, 1, 1, lastColumn).getValues()[0];
+    records.push(listToObject_(headers, row));
+  }
+
+  return records;
 }
 
 function findItemRecordBySerial_(nomorSeri) {
@@ -3687,9 +3746,7 @@ function findItemRecordBySerial_(nomorSeri) {
 }
 
 function getItemsForPengajuan_(id) {
-  const normalizedId = normalizePengajuanId_(id);
-  return readObjects_(SHEETS.ITEMS)
-    .filter(function (row) { return normalizePengajuanId_(row['ID Pengajuan']) === normalizedId; })
+  return getItemRecordsForPengajuan_(id)
     .sort(function (a, b) { return Number(a['No Item']) - Number(b['No Item']); })
     .map(function (row) {
       return {
