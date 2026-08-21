@@ -471,4 +471,23 @@ Jika Apps Script lambat:
 - CS tetap submit langsung ke Google Sheet tanpa perubahan behavior.
 - Google Sheet tetap source of truth.
 - Admin tetap usable walau sync Google Sheet sedang lambat/gagal, selama cache lokal sudah pernah terisi.
-- Mutasi admin tetap tersimpan ke Google Sheet dan cache lokal ikut diperbarui setelahnya.
+- Mutasi admin tetap tersimpan ke Google Sheet dan cache lokal ikut diperbarui setelahnya
+
+
+you act as a senior software engineer joining a large unfamiliar codebase. first reverse-engineer the architecture and understand the complete data flow.
+
+then identify:
+- poor architecture decisions
+- potential performance bottlenecks
+- duplicated logic or code smells
+- scalability issues or risk
+- maintainability problems
+
+finally provide:
+- a clear architecture breakdown
+- critical problems areas
+- refactoring strategies
+- improved productions-grade code
+
+Do not change the existing functionality. only improve code quality, scalability, and maintainability. 
+

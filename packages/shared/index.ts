@@ -1,4 +1,6 @@
 export * from './app/composables/useAppsScriptApi'
+export * from './app/composables/useCsAppsScriptApi'
+export * from './app/composables/useCsDraftReferenceStorage'
 export * from './app/composables/usePrintWithFilename'
 export * from './app/types/database.types'
 export * from './app/types/print'

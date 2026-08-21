@@ -72,12 +72,6 @@ const pengajuanSchema = z.object({
 
 type FormState = z.infer<typeof pengajuanSchema>
 
-type ApiResult<T = Record<string, unknown>> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
 type ModelProdukRow = {
   model?: string
   produk?: string
@@ -115,9 +109,9 @@ type PrintRow = {
 
 const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
-const draftStorageKey = 'pengajuan_kartu_garansi_draft'
+const { callApi: callAPI } = useCsAppsScriptApi()
+const draftReferenceStorage = useCsDraftReferenceStorage()
 const maxItems = computed(() => Number(runtimeConfig.public.maxItems || 10))
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 const maxTanggalForm = computed(() => getDateInputValue(addDays(new Date(), 7)))
 
 const formState = reactive<FormState>({
@@ -187,24 +181,6 @@ function createProductItem(): ProductItem {
 
 function showToast(title: string, color: ToastColor = 'info', description?: string) {
   toast.add({ title, description, color })
-}
-
-async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) {
-    throw new Error('URL Google Apps Script belum dikonfigurasi.')
-  }
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload })
-  })
-
-  if (!response.ok) {
-    throw new Error(`Google Apps Script merespons ${response.status}.`)
-  }
-
-  return response.json() as Promise<ApiResult<T>>
 }
 
 async function loadModelProduk() {
@@ -383,13 +359,11 @@ function setDraftReference(idPengajuan: string, resumeToken: string) {
 
   if (!import.meta.client || !idPengajuan) return
 
-  const resumeUrl = buildFinalSubmitUrl(idPengajuan, resumeToken)
-  localStorage.setItem(draftStorageKey, JSON.stringify({
+  draftReferenceStorage.save({
     idPengajuan,
     resumeToken,
-    resumeUrl,
-    savedAt: new Date().toISOString()
-  }))
+    resumeUrl: buildFinalSubmitUrl(idPengajuan, resumeToken)
+  })
 }
 
 function buildFinalSubmitUrl(idPengajuan: string, resumeToken: string) {
@@ -429,9 +403,7 @@ function clearDraftState() {
   formState.tanggalForm = createTodayDateValue()
   formState.products.splice(0, formState.products.length, createProductItem())
 
-  if (import.meta.client) {
-    localStorage.removeItem(draftStorageKey)
-  }
+  draftReferenceStorage.remove()
 }
 
 function clonePayload(payload: SubmissionPayload): SubmissionPayload {

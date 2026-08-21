@@ -9,6 +9,8 @@ const checkOnly = process.argv.includes('--check')
 const managedFiles = [
   ['app/app.vue', 'apps/cs-web/app.vue'],
   ['app/app.config.ts', 'apps/cs-web/app.config.ts'],
+  ['app/composables/useCsAppsScriptApi.ts', 'packages/shared/app/composables/useCsAppsScriptApi.ts'],
+  ['app/composables/useCsDraftReferenceStorage.ts', 'packages/shared/app/composables/useCsDraftReferenceStorage.ts'],
   ['app/pages/index.vue', 'apps/cs-web/pages/index.vue'],
   ['app/pages/new.vue', 'apps/cs-web/pages/new.vue'],
   ['app/pages/check-status.vue', 'apps/cs-web/pages/check-status.vue'],

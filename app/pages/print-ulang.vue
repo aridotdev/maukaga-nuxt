@@ -7,12 +7,6 @@ definePageMeta({
 
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
-type ApiResult<T = Record<string, unknown>> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
 type DraftItem = {
   produk?: string
   model?: string
@@ -45,10 +39,8 @@ type PrintRow = {
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
-const runtimeConfig = useRuntimeConfig()
-
-const draftStorageKey = 'pengajuan_kartu_garansi_draft'
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
+const { callApi: callAPI } = useCsAppsScriptApi()
+const draftReferenceStorage = useCsDraftReferenceStorage()
 
 const searchId = ref('')
 const currentDraftId = ref('')
@@ -100,24 +92,6 @@ onBeforeUnmount(() => {
 watch(searchId, () => {
   hasSearchInputError.value = false
 })
-
-async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) {
-    throw new Error('URL Google Apps Script belum dikonfigurasi.')
-  }
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload })
-  })
-
-  if (!response.ok) {
-    throw new Error(`Google Apps Script merespons ${response.status}.`)
-  }
-
-  return response.json() as Promise<ApiResult<T>>
-}
 
 function showToast(title: string, color: ToastColor = 'info', description?: string) {
   toast.add({ title, description, color })
@@ -198,27 +172,11 @@ function setDraftReference(idPengajuan: string) {
   currentDraftId.value = idPengajuan || ''
   searchId.value = currentDraftId.value
 
-  if (!import.meta.client || !currentDraftId.value) return
-
-  try {
-    localStorage.setItem(draftStorageKey, JSON.stringify({
-      idPengajuan: currentDraftId.value,
-      savedAt: new Date().toISOString()
-    }))
-  } catch {
-    // localStorage may be unavailable; reference still works in current session.
-  }
+  draftReferenceStorage.save({ idPengajuan: currentDraftId.value })
 }
 
 function getStoredDraftReference(): { idPengajuan: string } {
-  if (!import.meta.client) return { idPengajuan: '' }
-
-  try {
-    const saved = JSON.parse(localStorage.getItem(draftStorageKey) || '{}') as { idPengajuan?: string }
-    return { idPengajuan: saved.idPengajuan || '' }
-  } catch {
-    return { idPengajuan: '' }
-  }
+  return { idPengajuan: draftReferenceStorage.get().idPengajuan }
 }
 
 function getDraftReferenceFromUrl(): { idPengajuan: string } {

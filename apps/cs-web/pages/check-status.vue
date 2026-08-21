@@ -8,12 +8,6 @@ definePageMeta({
 
 type ToastType = 'info' | 'success' | 'error'
 
-type ApiResult<T = Record<string, unknown>> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
 type StatusData = {
   idPengajuan?: string
   searchBy?: 'idPengajuan' | 'nomorSeri'
@@ -38,8 +32,7 @@ type StatusTone = {
 }
 
 const toast = useToast()
-const runtimeConfig = useRuntimeConfig()
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
+const { callApi: callAPI } = useCsAppsScriptApi()
 
 const searchInput = ref('')
 const resultType = ref<ResultType>('idle')
@@ -59,24 +52,6 @@ const unitDecisionInfoText = computed(() => unitDecisionInfoTextMap(unitDecision
 const pengajuanStatusInfoText = computed(() => pengajuanStatusInfoTextMap(pengajuanStatusText.value))
 const showPengajuanStatus = computed(() => unitDecisionText.value !== 'Ditolak' && pengajuanStatusText.value !== '-')
 const itemProductText = computed(() => [statusData.value.produk, statusData.value.model].filter(Boolean).join(' - '))
-
-async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) {
-    throw new Error('URL Google Apps Script belum dikonfigurasi.')
-  }
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload })
-  })
-
-  if (!response.ok) {
-    throw new Error(`Google Apps Script merespons ${response.status}.`)
-  }
-
-  return response.json() as Promise<ApiResult<T>>
-}
 
 function showToast(message: string, type: ToastType = 'info') {
   const iconMap: Record<ToastType, string> = {

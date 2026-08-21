@@ -9,12 +9,6 @@ definePageMeta({
 
 type ToastColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
-type ApiResult<T = Record<string, unknown>> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
 type DraftItem = {
   produk?: string
   model?: string
@@ -86,14 +80,14 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
+const { callApi: callAPI } = useCsAppsScriptApi()
+const draftReferenceStorage = useCsDraftReferenceStorage()
 const fileInput = ref<HTMLInputElement | null>(null)
 const evidenceInput = ref<HTMLInputElement | null>(null)
 
-const draftStorageKey = 'pengajuan_kartu_garansi_draft'
 const maxUploadMb = computed(() => Number(runtimeConfig.public.maxUploadMb || 10))
 const maxEvidenceFiles = 10
 const maxEvidenceFileMb = 5
-const appsScriptApiUrl = computed(() => String(runtimeConfig.public.appsScriptApiUrl || ''))
 
 const resumeId = ref('')
 const currentDraftId = ref('')
@@ -138,24 +132,6 @@ onBeforeUnmount(() => {
 watch(resumeId, () => {
   hasResumeInputError.value = false
 })
-
-async function callAPI<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  if (!appsScriptApiUrl.value) {
-    throw new Error('URL Google Apps Script belum dikonfigurasi.')
-  }
-
-  const response = await fetch(appsScriptApiUrl.value, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...payload })
-  })
-
-  if (!response.ok) {
-    throw new Error(`Google Apps Script merespons ${response.status}.`)
-  }
-
-  return response.json() as Promise<ApiResult<T>>
-}
 
 function showToast(title: string, color: ToastColor = 'info', description?: string) {
   toast.add({ title, description, color })
@@ -253,18 +229,11 @@ function setDraftReference(idPengajuan: string, resumeToken: string) {
   resumeId.value = currentDraftId.value
   resumeUrl.value = currentDraftId.value && currentResumeToken.value ? buildResumeUrl(currentDraftId.value, currentResumeToken.value) : ''
 
-  if (!import.meta.client || !currentDraftId.value) return
-
-  try {
-    localStorage.setItem(draftStorageKey, JSON.stringify({
-      idPengajuan: currentDraftId.value,
-      resumeToken: currentResumeToken.value,
-      resumeUrl: resumeUrl.value,
-      savedAt: new Date().toISOString()
-    }))
-  } catch {
-    // localStorage may be unavailable; draft link still works in the current session.
-  }
+  draftReferenceStorage.save({
+    idPengajuan: currentDraftId.value,
+    resumeToken: currentResumeToken.value,
+    resumeUrl: resumeUrl.value
+  })
 }
 
 function clearDraftReference() {
@@ -274,24 +243,12 @@ function clearDraftReference() {
   resumeId.value = ''
   loadedDraft.value = null
 
-  if (!import.meta.client) return
-
-  try {
-    localStorage.removeItem(draftStorageKey)
-  } catch {
-    // localStorage may be unavailable; state has already been cleared in memory.
-  }
+  draftReferenceStorage.remove()
 }
 
 function getStoredDraftReference(): StoredDraftReference {
-  if (!import.meta.client) return { idPengajuan: '', resumeToken: '' }
-
-  try {
-    const saved = JSON.parse(localStorage.getItem(draftStorageKey) || '{}') as Partial<StoredDraftReference>
-    return { idPengajuan: saved.idPengajuan || '', resumeToken: saved.resumeToken || '' }
-  } catch {
-    return { idPengajuan: '', resumeToken: '' }
-  }
+  const saved = draftReferenceStorage.get()
+  return { idPengajuan: saved.idPengajuan, resumeToken: saved.resumeToken }
 }
 
 function getDraftReferenceFromUrl(): StoredDraftReference {
