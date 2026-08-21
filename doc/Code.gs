@@ -3692,19 +3692,19 @@ function findPengajuanRecord_(id) {
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   const col = indexMap_(headers);
   const idColumn = col['ID Pengajuan'] + 1;
-  const ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
-  let rowNumber = 0;
+  const match = sheet
+    .getRange(2, idColumn, lastRow - 1, 1)
+    .createTextFinder(normalizedId)
+    .matchCase(false)
+    .matchEntireCell(true)
+    .findNext();
 
-  for (let i = 0; i < ids.length; i++) {
-    if (normalizePengajuanId_(ids[i][0]) === normalizedId) {
-      rowNumber = i + 2;
-      break;
-    }
-  }
+  if (!match) return null;
 
-  if (!rowNumber) return null;
-
+  const rowNumber = match.getRow();
   const row = sheet.getRange(rowNumber, 1, 1, lastColumn).getValues()[0];
+  if (normalizePengajuanId_(row[col['ID Pengajuan']]) !== normalizedId) return null;
+
   return { sheet: sheet, values: [headers, row], headers: headers, col: col, rowNumber: rowNumber, row: row };
 }
 
@@ -3720,13 +3720,17 @@ function getItemRecordsForPengajuan_(id) {
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   const col = indexMap_(headers);
   const idColumn = col['ID Pengajuan'] + 1;
-  const ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
+  const matches = sheet
+    .getRange(2, idColumn, lastRow - 1, 1)
+    .createTextFinder(normalizedId)
+    .matchCase(false)
+    .matchEntireCell(true)
+    .findAll();
   const records = [];
 
-  for (let i = 0; i < ids.length; i++) {
-    if (normalizePengajuanId_(ids[i][0]) !== normalizedId) continue;
-
-    const row = sheet.getRange(i + 2, 1, 1, lastColumn).getValues()[0];
+  for (let i = 0; i < matches.length; i++) {
+    const row = sheet.getRange(matches[i].getRow(), 1, 1, lastColumn).getValues()[0];
+    if (normalizePengajuanId_(row[col['ID Pengajuan']]) !== normalizedId) continue;
     records.push(listToObject_(headers, row));
   }
 
