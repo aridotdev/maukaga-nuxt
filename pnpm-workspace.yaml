@@ -4,7 +4,6 @@ packages:
 
 allowBuilds:
   '@parcel/watcher': true
-  better-sqlite3: true
   esbuild: true
   maplibre-gl: true
   unrs-resolver: true
@@ -12,7 +11,6 @@ allowBuilds:
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
-  - better-sqlite3
   - esbuild
   - maplibre-gl
   - unrs-resolver

@@ -24,7 +24,7 @@ type UpsertOptions = {
 }
 
 export async function getAdminCacheStatus() {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const rows = await db.select().from(syncMeta)
   const meta = Object.fromEntries(rows.map(row => [row.key, row.value]))
   const total = await countPengajuanRows()
@@ -48,12 +48,12 @@ export async function getAdminCacheStatus() {
 }
 
 export async function setAdminCacheMeta(values: Record<string, string | number | boolean>) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const updatedAt = new Date().toISOString()
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const [key, value] of Object.entries(values)) {
-      tx.insert(syncMeta)
+      await tx.insert(syncMeta)
         .values({ key, value: String(value), updatedAt })
         .onConflictDoUpdate({
           target: syncMeta.key,
@@ -65,7 +65,7 @@ export async function setAdminCacheMeta(values: Record<string, string | number |
 }
 
 export async function countPengajuanRows() {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const result = await db.select({ total: count() }).from(pengajuan)
   return Number(result[0]?.total || 0)
 }
@@ -114,7 +114,7 @@ export async function getPengajuanListFromCache(params: PengajuanListParams = {}
 }
 
 export async function getPengajuanDetailFromCache(idPengajuan: string): Promise<DetailPengajuan | null> {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const rows = await db.select().from(pengajuan).where(eq(pengajuan.idPengajuan, idPengajuan)).limit(1)
   const row = rows[0]
 
@@ -214,13 +214,13 @@ export async function getChartFromCache(params: ChartParams): Promise<DashboardC
 }
 
 export async function upsertPengajuanRowsToCache(rows: unknown[], options: UpsertOptions = {}) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const now = new Date().toISOString()
   const normalized = rows
     .map(row => normalizePengajuan(row))
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const entry of normalized) {
       const source = asRecord(rows.find(row => clean(asRecord(row).idPengajuan) === entry.row.idPengajuan) || entry.row)
       const insertValue = {
@@ -253,7 +253,7 @@ export async function upsertPengajuanRowsToCache(rows: unknown[], options: Upser
         cachedAt: now
       }
 
-      tx.insert(pengajuan)
+      await tx.insert(pengajuan)
         .values(insertValue)
         .onConflictDoUpdate({
           target: pengajuan.idPengajuan,
@@ -261,10 +261,10 @@ export async function upsertPengajuanRowsToCache(rows: unknown[], options: Upser
         })
         .run()
 
-      tx.delete(pengajuanItems).where(eq(pengajuanItems.idPengajuan, entry.row.idPengajuan)).run()
+      await tx.delete(pengajuanItems).where(eq(pengajuanItems.idPengajuan, entry.row.idPengajuan)).run()
 
       for (const [index, item] of entry.items.entries()) {
-        tx.insert(pengajuanItems).values({
+        await tx.insert(pengajuanItems).values({
           id: toItemCacheId(entry.row.idPengajuan, item.noItem, index),
           idPengajuan: entry.row.idPengajuan,
           noItem: String(item.noItem || index + 1),
@@ -283,7 +283,7 @@ export async function upsertPengajuanRowsToCache(rows: unknown[], options: Upser
 }
 
 export async function reconcilePengajuanCache(ids: string[]) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const uniqueIds = Array.from(new Set(ids.filter(Boolean)))
 
   if (!uniqueIds.length) return
@@ -293,12 +293,12 @@ export async function reconcilePengajuanCache(ids: string[]) {
 }
 
 export async function deletePengajuanFromCache(idPengajuan: string) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   await db.delete(pengajuan).where(eq(pengajuan.idPengajuan, idPengajuan))
 }
 
 async function getPengajuanRowsFromCache(params: Required<Pick<PengajuanListParams, 'page' | 'pageSize'>> & PengajuanListParams) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const where = buildPengajuanWhere(params)
   const offset = (params.page - 1) * params.pageSize
   const sortColumn = getPengajuanSortColumn(params.sortBy)
@@ -314,7 +314,7 @@ async function getPengajuanRowsFromCache(params: Required<Pick<PengajuanListPara
 }
 
 async function getPengajuanRowsForChart(params: ChartParams) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const clauses = []
 
   if (params.startDate) {
@@ -334,7 +334,7 @@ async function getPengajuanRowsForChart(params: ChartParams) {
 }
 
 async function countPengajuanRowsByFilter(params: PengajuanListParams) {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const result = await db.select({ total: count() })
     .from(pengajuan)
     .where(buildPengajuanWhere(params))
@@ -428,7 +428,7 @@ function buildPengajuanWhere(params: PengajuanListParams) {
 }
 
 async function hydrateRows(records: Array<typeof pengajuan.$inferSelect>): Promise<DashboardRow[]> {
-  const db = useAdminCacheDb()
+  const db = await useAdminCacheDb()
   const ids = records.map(row => row.idPengajuan)
   const items = ids.length
     ? await db.select().from(pengajuanItems).where(inArray(pengajuanItems.idPengajuan, ids))
