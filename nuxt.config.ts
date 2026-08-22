@@ -1,5 +1,8 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { createPublicAppBuildInfo } from './config/app-version'
+
 const defaultAppsScriptApiUrl = 'https://script.google.com/macros/s/AKfycbxAikXauXo-Ct_FfawqXjrdMxa3K-cK6eyBZFuG74IlrVNW2bE2vwX4BLsEo-CS7AwIyA/exec'
+const publicAppBuildInfo = createPublicAppBuildInfo()
 const supabaseUrl = import.meta.env.NUXT_SUPABASE_URL || import.meta.env.NUXT_PUBLIC_SUPABASE_URL || ''
 const supabasePublishableKey = import.meta.env.NUXT_SUPABASE_PUBLISHABLE_KEY
   || import.meta.env.NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -24,6 +27,7 @@ export default defineNuxtConfig({
     supabaseSecretKey,
     appUrl: import.meta.env.NUXT_APP_URL || import.meta.env.NUXT_PUBLIC_APP_URL || '',
     public: {
+      ...publicAppBuildInfo,
       appsScriptApiUrl: import.meta.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
       appName: import.meta.env.NUXT_PUBLIC_APP_NAME || 'Mau KaGa',
       maxUploadMb: Number(import.meta.env.NUXT_PUBLIC_MAX_UPLOAD_MB || 10),

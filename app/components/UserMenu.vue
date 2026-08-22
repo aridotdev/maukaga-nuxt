@@ -11,6 +11,7 @@ const supabase = useSupabaseClient()
 const supabaseUser = useSupabaseUser()
 const { profile, isManagement } = useUserProfile()
 const { clearLegacySession } = useAuthBridge()
+const { label: appVersionLabel } = useAppBuildInfo()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
@@ -85,9 +86,9 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       }
     }))
   }]
-}, {
-  label: 'Appearance',
-  icon: 'i-lucide-sun-moon',
+  }, {
+    label: 'Appearance',
+    icon: 'i-lucide-sun-moon',
   children: [{
     label: 'Light',
     icon: 'i-lucide-sun',
@@ -112,6 +113,10 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       e.preventDefault()
     }
   }]
+}], [{
+  label: `v${appVersionLabel.value}`,
+  icon: 'i-lucide-info',
+  disabled: true
 }], [{
   label: 'Log out',
   icon: 'i-lucide-log-out',

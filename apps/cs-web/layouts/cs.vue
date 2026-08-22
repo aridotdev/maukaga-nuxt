@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const isMobileMenuOpen = ref(false)
+const { label: appVersionLabel, title: appVersionTitle } = useAppBuildInfo()
 const desktopNavLinkClass = [
   'rounded-full border border-transparent bg-transparent px-4 py-1.5',
   'text-xs font-semibold text-[#0F172A]',
@@ -97,7 +98,7 @@ const desktopNavLinkClass = [
         aria-label="Kembali ke halaman utama Mau KaGa"
       >
         <!-- App Logo Box -->
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0F172A] shadow-sm">
+        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0F172A] shadow-sm">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             class="h-5 w-5 text-white"
@@ -113,15 +114,12 @@ const desktopNavLinkClass = [
             />
           </svg>
         </div>
-        <div class="hidden lg:flex flex-col items-start gap-0.5">
-          <h1 class="text-lg font-bold leading-tight tracking-tight text-[#0F172A]">Mau KaGa</h1>
-          <p class="text-[10px] font-medium uppercase tracking-wide text-[#64748B] md:text-xs">
-            Sistem Pengajuan Kartu Garansi
-          </p>
+        <div class="hidden lg:flex items-start gap-2">
+          <h1 class="text-2xl font-bold leading-tight tracking-tight text-[#0F172A]">Mau KaGa</h1>
         </div>
       </NuxtLink>
 
-      <div class="hidden gap-2 md:flex">
+      <div class="hidden items-center gap-2 md:flex">
         <NuxtLink
           to="/check-status"
           :class="desktopNavLinkClass"
@@ -146,6 +144,7 @@ const desktopNavLinkClass = [
         >
           Panduan Pengguna
         </NuxtLink>
+        
       </div>
 
       <button
@@ -226,6 +225,9 @@ const desktopNavLinkClass = [
         >
           Panduan Pengguna
         </NuxtLink>
+        <div class="mt-auto rounded-xl border border-white/60 bg-white/45 px-4 py-3 font-mono text-[11px] font-semibold text-[#64748B] shadow-sm">
+          v{{ appVersionLabel }}
+        </div>
       </nav>
     </div>
 
@@ -234,8 +236,9 @@ const desktopNavLinkClass = [
     </main>
 
     <!-- FOOTER -->
-    <footer class="flex flex-col relative z-10 mx-auto w-full max-w-7xl pb-2 text-center text-xs font-medium text-[#64748B]">
-      &copy; 2026 Mau KaGa QRCC System. All rights reserved.
+    <footer class="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-1 pb-2 text-center text-xs font-medium text-[#64748B]">
+      <span>&copy; 2026 Mau KaGa QRCC System. All rights reserved.</span>
+      <span class="font-mono" :title="appVersionTitle">v{{ appVersionLabel }}</span>
     </footer>
   </div>
 </template>

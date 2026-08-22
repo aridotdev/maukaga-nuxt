@@ -273,34 +273,36 @@ function formatSyncTime(value: string) {
 
         <UNavigationMenu :collapsed="collapsed" :items="visibleLinks[1] || []" orientation="vertical" tooltip class="mt-auto" />
         <div
-          class="mb-2 flex items-center"
-          :class="collapsed ? 'justify-center' : 'justify-between gap-2 px-2'"
+          class="mb-2 flex flex-col w-full overflow-hidden"
+          :class="collapsed ? 'flex-col items-center gap-2 px-0' : 'items-center justify-between gap-2 px-2'"
         >
-          <div
-            v-if="!collapsed"
-            class="min-w-0 text-xs"
-            :class="cacheSyncTone"
-          >
-            <div class="truncate font-medium">
-              {{ cacheSyncLabel }}
+          <div class="flex w-full items-center justify-between gap-2" :class="collapsed ? 'flex-col gap-1' : 'flex-row'">
+            <div
+              v-if="!collapsed"
+              class="min-w-0 text-xs"
+              :class="cacheSyncTone"
+            >
+              <div class="truncate font-medium">
+                {{ cacheSyncLabel }}
+              </div>
+              <div class="truncate text-muted">
+                {{ cacheSyncStatus?.totalRows || 0 }} pengajuan
+              </div>
             </div>
-            <div class="truncate text-muted">
-              {{ cacheSyncStatus?.totalRows || 0 }} pengajuan
-            </div>
+            <UTooltip text="Sync data">
+              <UButton
+                class="shrink-0"
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                square
+                :loading="isCacheSyncLoading || cacheSyncStatus?.inProgress"
+                :disabled="isCacheSyncLoading || cacheSyncStatus?.inProgress"
+                @click="runManualCacheSync"
+              />
+            </UTooltip>
           </div>
-  
-          <UTooltip text="Sync data">
-            <UButton
-              icon="i-lucide-refresh-cw"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              square
-              :loading="isCacheSyncLoading || cacheSyncStatus?.inProgress"
-              :disabled="isCacheSyncLoading || cacheSyncStatus?.inProgress"
-              @click="runManualCacheSync"
-            />
-          </UTooltip>
         </div>
       </template>
 

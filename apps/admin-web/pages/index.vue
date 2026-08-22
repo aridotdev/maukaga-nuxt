@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const { label: appVersionLabel, title: appVersionTitle } = useAppBuildInfo()
+
 defineOptions({
   name: 'AdminIndexPage'
 })
@@ -15,6 +17,9 @@ defineOptions({
       </h1>
       <p class="text-sm text-muted">
         Skeleton admin terpisah untuk fase berikutnya.
+      </p>
+      <p class="rounded-md border border-muted bg-muted/30 px-2 py-1 font-mono text-xs text-muted" :title="appVersionTitle">
+        v{{ appVersionLabel }}
       </p>
     </section>
   </main>

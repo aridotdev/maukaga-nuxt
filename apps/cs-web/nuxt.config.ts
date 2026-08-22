@@ -1,4 +1,7 @@
+import { createPublicAppBuildInfo } from '../../config/app-version'
+
 const defaultAppsScriptApiUrl = 'https://script.google.com/macros/s/AKfycbxAikXauXo-Ct_FfawqXjrdMxa3K-cK6eyBZFuG74IlrVNW2bE2vwX4BLsEo-CS7AwIyA/exec'
+const publicAppBuildInfo = createPublicAppBuildInfo()
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -17,6 +20,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
+      ...publicAppBuildInfo,
       appsScriptApiUrl: process.env.NUXT_PUBLIC_APPS_SCRIPT_API_URL || defaultAppsScriptApiUrl,
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'Mau KaGa',
       maxUploadMb: Number(process.env.NUXT_PUBLIC_MAX_UPLOAD_MB || 10),

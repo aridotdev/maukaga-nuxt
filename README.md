@@ -50,6 +50,25 @@ pnpm build:cs
 
 `pnpm build:cs` otomatis menjalankan `pnpm sync:cs` sebelum `nuxt generate`, jadi artifact CS selalu mengikuti halaman publik CS dari root app.
 
+### Update Versi Build Manual
+
+Jika build hanya untuk `cs-web` lalu hasilnya dicopy ke repo Cloudflare Pages lain, naikkan versi sebelum build:
+
+```bash
+npm version patch --no-git-tag-version
+pnpm build:cs
+```
+
+Gunakan `minor` untuk fitur kecil dan `major` untuk perubahan besar. ganti teks `patch` dengan `minor` atau `major`. Nomor versi dari `package.json` akan tampil di app CS, misalnya `v0.1.1`.
+
+
+
+Untuk memberi kode build manual:
+
+```bash
+NUXT_PUBLIC_APP_REVISION=manual-001 pnpm build:cs
+```
+
 Catatan: `apps/cs-web/layouts/cs.vue` dan `apps/cs-web/pages/403.vue` sengaja menjadi override khusus CS static, sehingga tidak ditimpa oleh sync dari root app.
 
 Untuk mengecek apakah `apps/cs-web` sudah sama dengan root CS app tanpa mengubah file:
