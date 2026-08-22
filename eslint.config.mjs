@@ -26,5 +26,11 @@ export default withNuxt(
     plugins: {
       '@typescript-eslint': tsPlugin
     }
+  },
+  {
+    files: ['**/pages/**/*.vue', '**/layouts/**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off'
+    }
   }
 )
