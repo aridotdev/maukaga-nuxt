@@ -81,3 +81,10 @@ export type DetailPengajuan = DashboardRow & {
   riwayat?: Array<Record<string, unknown>>
   [key: string]: unknown
 }
+
+export type DetailMutationResponse = {
+  detail?: DetailPengajuan
+  row?: DashboardRow
+  status?: string
+  keputusanItem?: string
+}
