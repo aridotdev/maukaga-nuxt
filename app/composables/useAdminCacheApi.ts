@@ -8,6 +8,7 @@ type AdminCacheEntry<T> = {
 }
 
 const DEFAULT_ADMIN_CACHE_TTL = 30_000
+const EMPTY_ADMIN_CACHE_PARAMS: Record<string, unknown> = {}
 
 function stableAdminCacheStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
@@ -22,6 +23,26 @@ function stableAdminCacheStringify(value: unknown): string {
 
 function buildAdminCacheKey(path: string, params: Record<string, unknown>) {
   return path + '::' + stableAdminCacheStringify(params)
+}
+
+function resolveAdminCacheParams(value: MaybeRefOrGetter<Record<string, unknown> | undefined>) {
+  return toValue(value) || EMPTY_ADMIN_CACHE_PARAMS
+}
+
+function getAdminCacheEntry<T>(
+  store: Ref<Record<AdminCacheQueryKey, AdminCacheEntry<unknown>>>,
+  key: string
+) {
+  if (!store.value[key]) {
+    store.value[key] = {
+      data: null,
+      error: null,
+      fetchedAt: 0,
+      inflight: null
+    }
+  }
+
+  return store.value[key] as AdminCacheEntry<T>
 }
 
 export function useAdminCacheApi() {
@@ -62,54 +83,58 @@ export function useAdminCacheApi() {
 }
 
 export function useAdminCacheQuery<T = unknown>(
-  path: string,
-  params: Record<string, unknown> = {},
+  pathRef: MaybeRefOrGetter<string>,
+  paramsRef: MaybeRefOrGetter<Record<string, unknown> | undefined> = EMPTY_ADMIN_CACHE_PARAMS,
   options: { ttl?: number } = {}
 ) {
   const { callAdminCache } = useAdminCacheApi()
   const ttl = options.ttl ?? DEFAULT_ADMIN_CACHE_TTL
-  const key = buildAdminCacheKey(path, params)
   const store = useState<Record<AdminCacheQueryKey, AdminCacheEntry<unknown>>>('admin-cache-query-store', () => ({}))
+  const path = computed(() => toValue(pathRef))
+  const params = computed(() => resolveAdminCacheParams(paramsRef))
+  const key = computed(() => buildAdminCacheKey(path.value, params.value))
+  const entry = computed(() => getAdminCacheEntry<T>(store, key.value))
 
-  if (!store.value[key]) {
-    store.value[key] = {
-      data: null,
-      error: null,
-      fetchedAt: 0,
-      inflight: null
-    }
-  }
+  const data = computed(() => entry.value.data)
+  const error = computed(() => entry.value.error)
+  const isLoading = computed(() => entry.value.inflight !== null && entry.value.data === null)
+  const isRefreshing = computed(() => entry.value.inflight !== null && entry.value.data !== null)
 
-  const entry = store.value[key] as AdminCacheEntry<T>
-  const data = computed(() => entry.data)
-  const error = computed(() => entry.error)
-  const isLoading = computed(() => entry.inflight !== null && entry.data === null)
-  const isRefreshing = computed(() => entry.inflight !== null && entry.data !== null)
-
-  function isFresh() {
-    return entry.fetchedAt > 0 && Date.now() - entry.fetchedAt < ttl
+  function isFresh(targetEntry = entry.value) {
+    return targetEntry.fetchedAt > 0 && Date.now() - targetEntry.fetchedAt < ttl
   }
 
   async function fetchOnce(force = false) {
-    if (!force && isFresh() && entry.data !== null) return entry.data
-    if (entry.inflight) return entry.inflight
+    const requestPath = path.value
+    const requestParams = params.value
+    const requestKey = buildAdminCacheKey(requestPath, requestParams)
+    const targetEntry = getAdminCacheEntry<T>(store, requestKey)
 
-    const promise = callAdminCache<T>(path, { query: params })
+    if (!requestPath) {
+      targetEntry.error = 'Path admin-cache tidak valid.'
+      targetEntry.fetchedAt = Date.now()
+      return null
+    }
+
+    if (!force && isFresh(targetEntry) && targetEntry.data !== null) return targetEntry.data
+    if (targetEntry.inflight) return targetEntry.inflight
+
+    const promise = callAdminCache<T>(requestPath, { query: requestParams })
       .then((result) => {
-        entry.data = result
-        entry.error = null
+        targetEntry.data = result
+        targetEntry.error = null
         return result
       })
       .catch((err: unknown) => {
-        entry.error = err instanceof Error ? err.message : String(err)
+        targetEntry.error = err instanceof Error ? err.message : String(err)
         return null
       })
       .finally(() => {
-        entry.inflight = null
-        entry.fetchedAt = Date.now()
+        targetEntry.inflight = null
+        targetEntry.fetchedAt = Date.now()
       })
 
-    entry.inflight = promise
+    targetEntry.inflight = promise
     return promise
   }
 
@@ -118,17 +143,17 @@ export function useAdminCacheQuery<T = unknown>(
   }
 
   function ensureLoaded() {
-    if (entry.inflight) return
-    if (isFresh() && entry.data !== null) return
+    if (entry.value.inflight) return
+    if (isFresh() && entry.value.data !== null) return
     void fetchOnce(false)
   }
 
   function invalidate() {
-    entry.fetchedAt = 0
+    entry.value.fetchedAt = 0
   }
 
   function mutate(updater: (current: T | null) => T | null) {
-    entry.data = updater(entry.data)
+    entry.value.data = updater(entry.value.data)
   }
 
   return {

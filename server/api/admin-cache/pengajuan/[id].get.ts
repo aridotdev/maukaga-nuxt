@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   let detail = await getPengajuanDetailFromCache(idPengajuan)
 
-  if (!detail || shouldRefreshDetailBeforeReturn(detail)) {
+  if (!detail || shouldBlockForDetailRefresh(detail)) {
     await syncAdminCache({ token: session.token, mode: 'detail', idPengajuan })
     detail = await getPengajuanDetailFromCache(idPengajuan)
   } else {
@@ -30,14 +30,9 @@ export default defineEventHandler(async (event) => {
   return detail
 })
 
-function shouldRefreshDetailBeforeReturn(detail: DetailPengajuan): boolean {
+function shouldBlockForDetailRefresh(detail: DetailPengajuan): boolean {
   const items = detail.items || []
   const totalItems = Number(detail.jumlahItem || items.length || 0)
 
-  if (totalItems > 0 && items.length === 0) return true
-
-  return items.some((item) => {
-    const record = item as unknown as Record<string, unknown>
-    return !String(record.produkStatus || '').trim()
-  })
+  return totalItems > 0 && items.length === 0
 }

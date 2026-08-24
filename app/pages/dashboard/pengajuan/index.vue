@@ -252,32 +252,48 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
   header: () => h('div', { class: 'text-right' }, 'Aksi'),
   meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
   cell: ({ row }) => {
+    const UTooltip = resolveComponent('UTooltip')
+
     const buttons = [
-      h(UButton, {
+      h(UTooltip, {text: "View detail"}, () => 
+       h(UButton, {
         icon: 'i-lucide-eye',
         color: 'neutral',
         variant: 'soft',
         size: 'sm',
         onClick: () => showDetail(row.original)
       })
-    ]
+    )]
 
     if (isAdmin.value) {
       buttons.push(
-        h(UButton, {
-          icon: 'i-lucide-pencil',
-          color: 'primary',
-          variant: 'soft',
-          size: 'sm',
-          onClick: () => openEditPengajuan(row.original)
-        }),
-        h(UButton, {
-          icon: 'i-lucide-trash-2',
-          color: 'error',
-          variant: 'soft',
-          size: 'sm',
-          onClick: () => openDeletePengajuan(row.original)
-        })
+        h(UTooltip, {text: "Edit"}, () =>
+          h(UButton, {
+            icon: 'i-lucide-pencil',
+            color: 'primary',
+            variant: 'soft',
+            size: 'sm',
+            onClick: () => openEditPengajuan(row.original)
+          })
+        ),
+        h(UTooltip, {text: "Delete"}, () =>
+          h(UButton, {
+            icon: 'i-lucide-trash-2',
+            color: 'error',
+            variant: 'soft',
+            size: 'sm',
+            onClick: () => openDeletePengajuan(row.original)
+          })
+        ),
+        h(UTooltip, {text: "Completed"}, () =>
+          h(UButton, {
+            icon: 'i-lucide-check',
+            color: 'info',
+            variant: 'soft',
+            size: 'sm',
+            onClick: () => openDeletePengajuan(row.original)
+          })
+        )
       )
     }
 

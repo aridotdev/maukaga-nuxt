@@ -67,7 +67,7 @@ type DetailMutationResponse = {
   keputusanItem?: ItemDecisionStatus | string
 }
 
-type AppSheetDetailEntry = {
+type DetailCacheEntry = {
   data?: DetailPengajuan | null
   error?: string | null
   fetchedAt?: number
@@ -94,8 +94,11 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   } = useDashboardPengajuanCache()
   const toast = useToast()
 
+  const detailPath = computed(() => id.value
+    ? `/api/admin-cache/pengajuan/${encodeURIComponent(id.value)}`
+    : '')
   const query = useAdminCacheQuery<DetailPengajuan>(
-    `/api/admin-cache/pengajuan/${encodeURIComponent(id.value)}`,
+    detailPath,
     {},
     { ttl: DETAIL_TTL }
   )
@@ -105,9 +108,15 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   }
 
   async function load(force = false) {
+    if (!id.value) return null
     if (force) return query.refresh()
     return query.ensureLoaded()
   }
+
+  watch(id, (next, previous) => {
+    if (!next || next === previous) return
+    query.ensureLoaded()
+  })
 
   // Patch lokal untuk optimistic update detail dan cache list yang sudah termuat.
   function patchItem(
@@ -255,16 +264,40 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 }
 
 function patchCachedPengajuanDetail(idPengajuan: string, updater: (detail: DetailPengajuan) => DetailPengajuan | null) {
-  const store = useState<Record<string, AppSheetDetailEntry>>('appsheet-query-store', () => ({}))
+  const now = Date.now()
+  const legacyStore = useState<Record<string, DetailCacheEntry>>('appsheet-query-store', () => ({}))
+  const adminCacheStore = useState<Record<string, DetailCacheEntry>>('admin-cache-query-store', () => ({}))
+  const adminCacheKeyPrefix = `/api/admin-cache/pengajuan/${encodeURIComponent(idPengajuan)}::`
 
-  for (const [key, entry] of Object.entries(store.value)) {
+  for (const [key, entry] of Object.entries(legacyStore.value)) {
     if (!key.startsWith('getDetail::')) continue
-    const detail = entry.data
-    if (!detail || String(detail.idPengajuan) !== String(idPengajuan)) continue
-
-    entry.data = updater(detail)
-    entry.fetchedAt = Date.now()
+    patchDetailCacheEntry(entry, idPengajuan, updater, now)
   }
+
+  for (const [key, entry] of Object.entries(adminCacheStore.value)) {
+    if (!key.startsWith(adminCacheKeyPrefix) && !isCachedPengajuanDetail(entry.data, idPengajuan)) continue
+    patchDetailCacheEntry(entry, idPengajuan, updater, now)
+  }
+}
+
+function patchDetailCacheEntry(
+  entry: DetailCacheEntry,
+  idPengajuan: string,
+  updater: (detail: DetailPengajuan) => DetailPengajuan | null,
+  fetchedAt: number
+) {
+  const detail = entry.data
+  if (!isCachedPengajuanDetail(detail, idPengajuan)) return
+
+  entry.data = updater(detail)
+  entry.fetchedAt = fetchedAt
+}
+
+function isCachedPengajuanDetail(
+  detail: DetailPengajuan | null | undefined,
+  idPengajuan: string
+): detail is DetailPengajuan {
+  return String(detail?.idPengajuan || '') === String(idPengajuan)
 }
 
 export function usePengajuanAdminMutations() {
@@ -292,7 +325,7 @@ export function usePengajuanAdminMutations() {
         nama: data.row?.nama ?? detail.nama,
         bagianCabang: data.row?.bagianCabang ?? detail.bagianCabang,
         jumlahItem: data.row?.jumlahItem ?? detail.jumlahItem,
-        status: data.row?.status as PengajuanStatus
+        status: data.row?.status ? (data.row.status as PengajuanStatus) : detail.status
       }))
       return
     }
