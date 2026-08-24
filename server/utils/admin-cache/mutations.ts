@@ -7,8 +7,21 @@ type PengajuanMutationSession = {
   role: string
 }
 
+type PengajuanAdminPatch = {
+  nama: string
+  bagianCabang: string
+  pemilik: string
+  alasanPengajuan: string
+  tanggalForm: string
+  catatanTambahan: string
+}
 type PengajuanStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
 type ItemDecisionStatus = 'Disetujui' | 'Ditolak' | ''
+type PengajuanSourceMutationAction =
+  | 'updateItemDecision'
+  | 'updateStatus'
+  | 'updatePengajuanAdmin'
+  | 'deletePengajuan'
 
 const PENGAJUAN_STATUSES: ReadonlySet<PengajuanStatus> = new Set([
   'Baru',
@@ -94,12 +107,43 @@ export async function updatePengajuanStatus(
   })
 }
 
+export async function updatePengajuanAdmin(
+  session: PengajuanMutationSession,
+  idPengajuan: string,
+  body: Record<string, unknown>
+) {
+  assertCanAdminMutatePengajuan(session)
+
+  return mutatePengajuanInSource(session, 'updatePengajuanAdmin', idPengajuan, normalizePengajuanAdminPatch(body))
+}
+
+export async function deletePengajuanAdmin(
+  session: PengajuanMutationSession,
+  idPengajuan: string
+) {
+  assertCanAdminMutatePengajuan(session)
+
+  const result = await callAppsScriptMutation(session.token, 'deletePengajuan', { idPengajuan })
+  await deletePengajuanFromCache(idPengajuan)
+
+  return result.data || {}
+}
+
 function assertCanMutatePengajuan(session: PengajuanMutationSession) {
   if (PENGAJUAN_MUTATION_ROLES.has(session.role)) return
 
   throw createError({
     statusCode: 403,
     statusMessage: 'Unauthorized: role tidak boleh mengubah pengajuan.'
+  })
+}
+
+function assertCanAdminMutatePengajuan(session: PengajuanMutationSession) {
+  if (session.role === 'admin') return
+
+  throw createError({
+    statusCode: 403,
+    statusMessage: 'Unauthorized: hanya admin yang boleh mengubah data pengajuan.'
   })
 }
 
@@ -129,9 +173,39 @@ function normalizeItemDecision(value: unknown): ItemDecisionStatus {
   })
 }
 
+function normalizePengajuanAdminPatch(body: Record<string, unknown>): PengajuanAdminPatch {
+  const patch = {
+    nama: clean(body.nama),
+    bagianCabang: clean(body.bagianCabang),
+    pemilik: clean(body.pemilik),
+    alasanPengajuan: clean(body.alasanPengajuan),
+    tanggalForm: clean(body.tanggalForm),
+    catatanTambahan: clean(body.catatanTambahan)
+  }
+
+  if (!patch.nama) throwValidationError('Nama wajib diisi.')
+  if (!patch.bagianCabang) throwValidationError('Cabang wajib diisi.')
+  if (!patch.pemilik) throwValidationError('Pemilik wajib diisi.')
+  if (!patch.alasanPengajuan) throwValidationError('Alasan Pengajuan wajib diisi.')
+  if (!isValidDateInput(patch.tanggalForm)) throwValidationError('Tanggal Form tidak valid.')
+
+  return patch
+}
+
+function throwValidationError(statusMessage: string): never {
+  throw createError({
+    statusCode: 400,
+    statusMessage
+  })
+}
+
+function isValidDateInput(value: string) {
+  return Boolean(value) && !Number.isNaN(new Date(`${value}T00:00:00`).getTime())
+}
+
 async function mutatePengajuanInSource(
   session: PengajuanMutationSession,
-  action: 'updateItemDecision' | 'updateStatus',
+  action: Exclude<PengajuanSourceMutationAction, 'deletePengajuan'>,
   idPengajuan: string,
   payload: Record<string, unknown>
 ) {
@@ -148,7 +222,7 @@ async function mutatePengajuanInSource(
 
 async function callAppsScriptMutation(
   token: string,
-  action: 'updateItemDecision' | 'updateStatus',
+  action: PengajuanSourceMutationAction,
   payload: Record<string, unknown>
 ) {
   try {

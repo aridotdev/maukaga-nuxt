@@ -84,8 +84,7 @@ export type AdminPengajuanPatch = {
 
 export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
   const id = computed(() => toValue(idRef))
-  const { callApi } = useAppsScriptApi()
-  const { syncDetail } = useAdminCacheSync()
+  const { callAdminCache } = useAdminCacheApi()
   const { invalidate } = useAppSheetInvalidate()
   const {
     patchItemDecision: patchCachedItemDecision,
@@ -105,6 +104,21 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
 
   function getParams() {
     return { idPengajuan: id.value }
+  }
+
+  function getDetailMutationPath(action: 'item-decision' | 'status') {
+    if (!detailPath.value) throw new Error('ID Pengajuan tidak valid.')
+    return `${detailPath.value}/${action}`
+  }
+
+  async function postDetailMutation(
+    action: 'item-decision' | 'status',
+    body: Record<string, unknown>
+  ) {
+    return await callAdminCache<DetailMutationResponse>(getDetailMutationPath(action), {
+      method: 'POST',
+      body
+    })
   }
 
   async function load(force = false) {
@@ -182,18 +196,16 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     })
 
     try {
-      const result = await callApi<DetailMutationResponse>('updateItemDecision', {
-        idPengajuan: id.value,
+      const data = await postDetailMutation('item-decision', {
         noItem,
         keputusanItem: decision,
         catatanAdmin
       })
 
-      // Server sudah konfirmasi. Refresh detail untuk sinkronkan status parent.
-      // Tetap return cepat — UI sudah update.
+      // Server sudah mengonfirmasi dan memperbarui cache.
+      // UI tetap responsif karena optimistic update sudah terjadi.
       invalidate('getDashboardSummary')
-      void syncDetail(id.value)
-      if (!applyMutationResponse(result.data)) void query.refresh()
+      if (!applyMutationResponse(data)) void query.refresh()
     } catch (err) {
       // Rollback dengan fetch ulang.
       query.mutate(() => previous)
@@ -225,15 +237,13 @@ export function usePengajuanDetail(idRef: MaybeRefOrGetter<string>) {
     patchCachedPengajuanStatus(id.value, statusBaru)
 
     try {
-      const result = await callApi<DetailMutationResponse>('updateStatus', {
-        idPengajuan: id.value,
+      const data = await postDetailMutation('status', {
         statusBaru,
         catatanAdmin
       })
 
       invalidate('getDashboardSummary')
-      void syncDetail(id.value)
-      if (!applyMutationResponse(result.data)) void query.refresh()
+      if (!applyMutationResponse(data)) void query.refresh()
     } catch (err) {
       query.mutate(() => previous)
       if (previous) {
@@ -301,8 +311,7 @@ function isCachedPengajuanDetail(
 }
 
 export function usePengajuanAdminMutations() {
-  const { callApi } = useAppsScriptApi()
-  const { syncDetail, deleteLocal } = useAdminCacheSync()
+  const { callAdminCache } = useAdminCacheApi()
   const { invalidate } = useAppSheetInvalidate()
   const {
     patchPengajuanRow: patchCachedPengajuanRow,
@@ -333,26 +342,35 @@ export function usePengajuanAdminMutations() {
     patchCachedPengajuanDetail(idPengajuan, (detail) => detail)
   }
 
+  async function postPengajuanMutation(
+    idPengajuan: string,
+    action: 'update' | 'delete',
+    body: Record<string, unknown> = {}
+  ) {
+    return await callAdminCache<DetailMutationResponse>(
+      `/api/admin-cache/pengajuan/${encodeURIComponent(idPengajuan)}/${action}`,
+      {
+        method: 'POST',
+        body
+      }
+    )
+  }
+
   async function updatePengajuan(idPengajuan: string, patch: AdminPengajuanPatch) {
     if (!idPengajuan) throw new Error('ID Pengajuan tidak valid.')
 
-    const result = await callApi<DetailMutationResponse>('updatePengajuanAdmin', {
-      idPengajuan,
-      ...patch
-    })
+    const data = await postPengajuanMutation(idPengajuan, 'update', patch)
 
-    applyMutationResponse(idPengajuan, result.data)
-    void syncDetail(idPengajuan)
-    return result.data
+    applyMutationResponse(idPengajuan, data)
+    return data
   }
 
   async function deletePengajuan(idPengajuan: string) {
     if (!idPengajuan) throw new Error('ID Pengajuan tidak valid.')
 
-    await callApi<DetailMutationResponse>('deletePengajuan', { idPengajuan })
+    await postPengajuanMutation(idPengajuan, 'delete')
     removeCachedPengajuanRow(idPengajuan)
     patchCachedPengajuanDetail(idPengajuan, () => null)
-    void deleteLocal(idPengajuan)
     invalidate('getDashboardSummary')
   }
 
