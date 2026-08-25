@@ -317,14 +317,19 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
             size: 'sm',
             onClick: () => openDeletePengajuan(row.original)
           })
-        ),
+        )
+      )
+    }
+
+    if (row.original.pengajuanStatus === 'Dikirim') {
+      buttons.push(
         h(UTooltip, {text: "Completed"}, () =>
           h(UButton, {
             icon: 'i-lucide-check-check',
             color: 'success',
             variant: 'soft',
             size: 'sm',
-            disabled: isPengajuanSelesai(row.original.pengajuanStatus) || isCompletingPengajuan.value,
+            disabled: isCompletingPengajuan.value,
             onClick: () => openCompletePengajuan(row.original)
           })
         )
@@ -905,7 +910,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
                 :label="selectedCompletePengajuanIds.length ? `Tandai Selesai (${selectedCompletePengajuanIds.length})` : 'Tandai Selesai'"
                 icon="i-lucide-check-check"
                 color="success"
-                variant="soft"
+                variant="solid"
                 size="md"
                 :disabled="!selectedCompletePengajuanIds.length || isCompletingPengajuan"
                 :loading="isCompletingPengajuan"
@@ -1024,7 +1029,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
               <p class="text-xs font-medium uppercase text-muted">
                 ID Pengajuan
               </p>
-              <p class="mt-1 break-words font-mono text-sm text-highlighted">
+              <p class="mt-1 wrap-break-word font-mono text-sm text-highlighted">
                 {{ completePengajuanTargetPreview || '-' }}
               </p>
             </div>
