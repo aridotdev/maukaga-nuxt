@@ -67,6 +67,22 @@ type DetailMutationResponse = {
   keputusanItem?: ItemDecisionStatus | string
 }
 
+type BulkPengajuanStatusResult = {
+  idPengajuan: string
+  success: boolean
+  data?: DetailMutationResponse
+  error?: string
+}
+
+type BulkPengajuanStatusResponse = {
+  statusBaru: PengajuanStatus | string
+  catatanAdmin: string
+  total: number
+  updated: number
+  failed: number
+  results: BulkPengajuanStatusResult[]
+}
+
 type DetailCacheEntry = {
   data?: DetailPengajuan | null
   error?: string | null
@@ -315,6 +331,7 @@ export function usePengajuanAdminMutations() {
   const { invalidate } = useAppSheetInvalidate()
   const {
     patchPengajuanRow: patchCachedPengajuanRow,
+    patchPengajuanStatus: patchCachedPengajuanStatus,
     removePengajuanRow: removeCachedPengajuanRow
   } = useDashboardPengajuanCache()
 
@@ -340,6 +357,16 @@ export function usePengajuanAdminMutations() {
     }
 
     patchCachedPengajuanDetail(idPengajuan, (detail) => detail)
+  }
+
+  function patchPengajuanStatus(idPengajuan: string, status: PengajuanStatus | string, catatanAdmin = '') {
+    patchCachedPengajuanStatus(idPengajuan, status)
+    patchCachedPengajuanDetail(idPengajuan, (detail) => ({
+      ...detail,
+      status: status as PengajuanStatus,
+      catatanAdmin: catatanAdmin || detail.catatanAdmin,
+      tanggalUpdateStatusTerakhir: new Date().toISOString()
+    }))
   }
 
   async function postPengajuanMutation(
@@ -374,8 +401,36 @@ export function usePengajuanAdminMutations() {
     invalidate('getDashboardSummary')
   }
 
+  async function completePengajuanBulk(idPengajuanList: string[], catatanAdmin: string) {
+    const ids = Array.from(new Set(idPengajuanList.map(id => String(id || '').trim()).filter(Boolean)))
+    if (!ids.length) throw new Error('Pilih minimal satu pengajuan.')
+
+    const data = await callAdminCache<BulkPengajuanStatusResponse>('/api/admin-cache/pengajuan/bulk-status', {
+      method: 'POST',
+      body: {
+        ids,
+        statusBaru: 'Selesai',
+        catatanAdmin
+      }
+    })
+
+    for (const result of data.results || []) {
+      if (!result.success) continue
+
+      if (result.data?.detail || result.data?.row || result.data?.status) {
+        applyMutationResponse(result.idPengajuan, result.data)
+      } else {
+        patchPengajuanStatus(result.idPengajuan, data.statusBaru, data.catatanAdmin)
+      }
+    }
+
+    invalidate('getDashboardSummary')
+    return data
+  }
+
   return {
     updatePengajuan,
-    deletePengajuan
+    deletePengajuan,
+    completePengajuanBulk
   }
 }

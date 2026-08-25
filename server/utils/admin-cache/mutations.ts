@@ -22,6 +22,12 @@ type PengajuanSourceMutationAction =
   | 'updateStatus'
   | 'updatePengajuanAdmin'
   | 'deletePengajuan'
+type BulkPengajuanStatusItemResult = {
+  idPengajuan: string
+  success: boolean
+  data?: DetailMutationResponse
+  error?: string
+}
 
 const PENGAJUAN_STATUSES: ReadonlySet<PengajuanStatus> = new Set([
   'Baru',
@@ -37,6 +43,9 @@ const ITEM_DECISION_STATUSES: ReadonlySet<ItemDecisionStatus> = new Set([
   'Ditolak'
 ])
 const PENGAJUAN_MUTATION_ROLES = new Set(['admin', 'qrcc'])
+const BULK_STATUS_CONCURRENCY = 4
+const MAX_BULK_STATUS_IDS = 100
+const PENGAJUAN_SELESAI_NOTE = 'Kartu garansi sudah diterima dan pengajuan selesai.'
 
 export function getRequiredPengajuanId(event: H3Event) {
   const idPengajuan = clean(getRouterParam(event, 'id'))
@@ -129,6 +138,56 @@ export async function deletePengajuanAdmin(
   return result.data || {}
 }
 
+export async function bulkUpdatePengajuanStatus(
+  session: PengajuanMutationSession,
+  body: Record<string, unknown>
+) {
+  assertCanAdminMutatePengajuan(session)
+
+  const ids = normalizeBulkPengajuanIds(body.ids)
+  const statusBaru = normalizePengajuanStatus(body.statusBaru ?? 'Selesai')
+  const catatanAdmin = clean(body.catatanAdmin) || PENGAJUAN_SELESAI_NOTE
+
+  if (statusBaru !== 'Selesai') {
+    throwValidationError('Bulk update hanya mendukung status Selesai.')
+  }
+
+  const results = await mapWithConcurrency<string, BulkPengajuanStatusItemResult>(
+    ids,
+    BULK_STATUS_CONCURRENCY,
+    async (idPengajuan) => {
+      try {
+        const data = await mutatePengajuanInSource(session, 'updateStatus', idPengajuan, {
+          statusBaru,
+          catatanAdmin
+        })
+
+        return {
+          idPengajuan,
+          success: true,
+          data
+        }
+      } catch (error) {
+        return {
+          idPengajuan,
+          success: false,
+          error: getErrorMessage(error)
+        }
+      }
+    }
+  )
+  const updated = results.filter(result => result.success).length
+
+  return {
+    statusBaru,
+    catatanAdmin,
+    total: ids.length,
+    updated,
+    failed: ids.length - updated,
+    results
+  }
+}
+
 function assertCanMutatePengajuan(session: PengajuanMutationSession) {
   if (PENGAJUAN_MUTATION_ROLES.has(session.role)) return
 
@@ -192,6 +251,21 @@ function normalizePengajuanAdminPatch(body: Record<string, unknown>): PengajuanA
   return patch
 }
 
+function normalizeBulkPengajuanIds(value: unknown) {
+  if (!Array.isArray(value)) {
+    throwValidationError('ID Pengajuan wajib berupa array.')
+  }
+
+  const ids = Array.from(new Set(value.map(id => clean(id)).filter(Boolean)))
+
+  if (!ids.length) throwValidationError('Pilih minimal satu pengajuan.')
+  if (ids.length > MAX_BULK_STATUS_IDS) {
+    throwValidationError(`Maksimal ${MAX_BULK_STATUS_IDS} pengajuan per proses bulk.`)
+  }
+
+  return ids
+}
+
 function throwValidationError(statusMessage: string): never {
   throw createError({
     statusCode: 400,
@@ -201,6 +275,28 @@ function throwValidationError(statusMessage: string): never {
 
 function isValidDateInput(value: string) {
   return Boolean(value) && !Number.isNaN(new Date(`${value}T00:00:00`).getTime())
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>
+) {
+  const results: R[] = []
+  let nextIndex = 0
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await worker(items[index] as T)
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length)
+  await Promise.all(Array.from({ length: workerCount }, runWorker))
+
+  return results
 }
 
 async function mutatePengajuanInSource(
@@ -270,4 +366,13 @@ function isH3Error(error: unknown) {
     typeof error === 'object' &&
     'statusCode' in error
   )
+}
+
+function getErrorMessage(error: unknown) {
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    return clean(record.statusMessage || record.message || record.data)
+  }
+
+  return error instanceof Error ? error.message : String(error)
 }

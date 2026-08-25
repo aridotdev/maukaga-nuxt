@@ -9,6 +9,7 @@ definePageMeta({
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
+const UCheckbox = resolveComponent('UCheckbox')
 
 type DashboardStatus = 'Baru' | 'Disetujui' | 'Ditolak' | 'Diprint' | 'Dikirim' | 'Selesai'
 type DashboardItemDecision = 'Disetujui' | 'Ditolak' | ''
@@ -50,25 +51,33 @@ type DashboardPengajuanRow = {
 
 type EditPengajuanForm = AdminPengajuanPatch
 
+const PENGAJUAN_SELESAI_NOTE = 'Kartu garansi sudah diterima dan pengajuan selesai.'
+
 const router = useRouter()
 const toast = useToast()
 const { callAdminCache } = useAdminCacheApi()
 const { isAdmin } = useUserProfile()
-const { updatePengajuan, deletePengajuan } = usePengajuanAdminMutations()
+const { updatePengajuan, deletePengajuan, completePengajuanBulk } = usePengajuanAdminMutations()
 const currentPage = ref(1)
 const itemsPerPage = ref(15)
 const globalFilter = ref('')
 const serverSearch = ref('')
 const decisionFilter = ref<DashboardItemDecisionFilter>('all')
+const rowSelection = ref<Record<string, boolean>>({})
 const isLoadAllMode = ref(false)
 const selectedPengajuan = ref<DashboardPengajuanSourceRow | null>(null)
 const editPengajuanOpen = ref(false)
 const deletePengajuanOpen = ref(false)
+const completePengajuanOpen = ref(false)
 const isEditPrefillLoading = ref(false)
 const isSavingPengajuan = ref(false)
 const isDeletingPengajuan = ref(false)
+const isCompletingPengajuan = ref(false)
 const editPengajuanError = ref('')
 const deletePengajuanError = ref('')
+const completePengajuanError = ref('')
+const completePengajuanTargetIds = ref<string[]>([])
+const completePengajuanNote = ref(PENGAJUAN_SELESAI_NOTE)
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const editPengajuanForm = reactive<EditPengajuanForm>({
@@ -197,8 +206,32 @@ const filteredPengajuanCount = computed(() => new Set(explodedRows.value.map(row
 
 // Tabel di-pause saat loading awal agar skeleton loading tampil utuh.
 const tableRows = computed<DashboardPengajuanRow[]>(() => isLoading.value ? [] : explodedRows.value)
+const selectedRows = computed(() => tableRows.value.filter(row => rowSelection.value[row.key]))
+const selectedCompletePengajuanIds = computed(() => getUniquePendingPengajuanIds(selectedRows.value))
+const selectedCompletedPengajuanCount = computed(() => {
+  const selectedIds = new Set(selectedRows.value.map(row => row.idPengajuan).filter(Boolean))
+  return Math.max(selectedIds.size - selectedCompletePengajuanIds.value.length, 0)
+})
+const completePengajuanTargetPreview = computed(() => {
+  const ids = completePengajuanTargetIds.value
+  const preview = ids.slice(0, 8).join(', ')
+  return ids.length > 8 ? `${preview}, +${ids.length - 8} lainnya` : preview
+})
 
 const columns: TableColumn<DashboardPengajuanRow>[] = [{
+  id: 'select',
+  header: ({ table }) => h(UCheckbox, {
+    'modelValue': table.getIsSomePageRowsSelected() ? 'indeterminate' : table.getIsAllPageRowsSelected(),
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!value),
+    'aria-label': 'Pilih semua baris'
+  }),
+  cell: ({ row }) => h(UCheckbox, {
+    'modelValue': row.getIsSelected(),
+    'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
+    'aria-label': `Pilih ${row.original.idPengajuan}`
+  }),
+  meta: { class: { th: 'w-12', td: 'w-12' } }
+}, {
   accessorKey: 'idPengajuan',
   header: 'ID Pengajuan',
   meta: { class: { th: 'w-[16%]', td: 'w-[16%]' } },
@@ -287,11 +320,12 @@ const columns: TableColumn<DashboardPengajuanRow>[] = [{
         ),
         h(UTooltip, {text: "Completed"}, () =>
           h(UButton, {
-            icon: 'i-lucide-check',
-            color: 'info',
+            icon: 'i-lucide-check-check',
+            color: 'success',
             variant: 'soft',
             size: 'sm',
-            onClick: () => openDeletePengajuan(row.original)
+            disabled: isPengajuanSelesai(row.original.pengajuanStatus) || isCompletingPengajuan.value,
+            onClick: () => openCompletePengajuan(row.original)
           })
         )
       )
@@ -333,6 +367,13 @@ watch(globalFilter, (value) => {
 })
 watch(decisionFilter, () => {
   currentPage.value = 1
+})
+
+watch(tableRows, (next) => {
+  const visibleKeys = new Set(next.map(row => row.key))
+  rowSelection.value = Object.fromEntries(
+    Object.entries(rowSelection.value).filter(([key, selected]) => selected && visibleKeys.has(key))
+  )
 })
 
 function setPengajuanPage(page: number) {
@@ -398,6 +439,23 @@ function openDeletePengajuan(row: DashboardPengajuanRow) {
   deletePengajuanOpen.value = true
 }
 
+function openCompletePengajuan(row: DashboardPengajuanRow) {
+  if (!isAdmin.value || !row.idPengajuan || isPengajuanSelesai(row.pengajuanStatus)) return
+  openCompletePengajuanByIds([row.idPengajuan])
+}
+
+function openSelectedCompletePengajuan() {
+  if (!isAdmin.value || !selectedCompletePengajuanIds.value.length) return
+  openCompletePengajuanByIds(selectedCompletePengajuanIds.value)
+}
+
+function openCompletePengajuanByIds(ids: string[]) {
+  completePengajuanTargetIds.value = Array.from(new Set(ids.map(id => String(id || '').trim()).filter(Boolean)))
+  completePengajuanNote.value = PENGAJUAN_SELESAI_NOTE
+  completePengajuanError.value = ''
+  completePengajuanOpen.value = true
+}
+
 async function submitEditPengajuan() {
   const idPengajuan = selectedPengajuan.value?.idPengajuan
   if (!idPengajuan || isSavingPengajuan.value || isEditPrefillLoading.value) return
@@ -450,6 +508,50 @@ async function confirmDeletePengajuan() {
     deletePengajuanError.value = err instanceof Error ? err.message : String(err)
   } finally {
     isDeletingPengajuan.value = false
+  }
+}
+
+async function confirmCompletePengajuan() {
+  const ids = completePengajuanTargetIds.value
+  if (!ids.length || isCompletingPengajuan.value) return
+
+  completePengajuanError.value = ''
+  isCompletingPengajuan.value = true
+
+  try {
+    const result = await completePengajuanBulk(ids, completePengajuanNote.value.trim() || PENGAJUAN_SELESAI_NOTE)
+    const successIds = new Set((result.results || [])
+      .filter(item => item.success)
+      .map(item => item.idPengajuan))
+    const failedIds = (result.results || [])
+      .filter(item => !item.success)
+      .map(item => item.idPengajuan)
+
+    clearCompletedSelection(successIds)
+
+    if (result.failed > 0) {
+      completePengajuanTargetIds.value = failedIds
+      completePengajuanError.value = `${result.updated} berhasil, ${result.failed} gagal.`
+      toast.add({
+        title: 'Sebagian pengajuan gagal diperbarui',
+        description: completePengajuanError.value,
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert'
+      })
+      return
+    }
+
+    completePengajuanOpen.value = false
+    toast.add({
+      title: 'Status pengajuan berhasil diperbarui',
+      description: `${result.updated} pengajuan ditandai Selesai.`,
+      color: 'success',
+      icon: 'i-lucide-circle-check'
+    })
+  } catch (err) {
+    completePengajuanError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    isCompletingPengajuan.value = false
   }
 }
 
@@ -690,6 +792,26 @@ function getDashboardItems(row: DashboardPengajuanSourceRow) {
   }))
 }
 
+function getUniquePendingPengajuanIds(sourceRows: DashboardPengajuanRow[]) {
+  return Array.from(new Set(sourceRows
+    .filter(row => !isPengajuanSelesai(row.pengajuanStatus))
+    .map(row => row.idPengajuan)
+    .filter(Boolean)))
+}
+
+function clearCompletedSelection(successIds: Set<string>) {
+  rowSelection.value = Object.fromEntries(
+    Object.entries(rowSelection.value).filter(([key]) => {
+      const row = tableRows.value.find(item => item.key === key)
+      return row && !successIds.has(row.idPengajuan)
+    })
+  )
+}
+
+function isPengajuanSelesai(status: string) {
+  return String(status || '').trim() === 'Selesai'
+}
+
 function normalizeItemDecision(decision: string | undefined): DashboardItemDecision {
   const value = String(decision || '').trim()
   if (value === 'Disetujui' || value === 'Ditolak') return value
@@ -763,7 +885,32 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
               >
                 Menampilkan {{ loadedRows }} dari {{ totalRows }} pengajuan.
               </p>
+              <p
+                v-if="selectedCompletePengajuanIds.length"
+                class="text-xs text-muted"
+                aria-live="polite"
+              >
+                {{ selectedCompletePengajuanIds.length }} pengajuan dipilih.
+              </p>
+              <p
+                v-else-if="selectedCompletedPengajuanCount"
+                class="text-xs text-muted"
+                aria-live="polite"
+              >
+                Pengajuan terpilih sudah Selesai.
+              </p>
 
+              <UButton
+                v-if="isAdmin"
+                :label="selectedCompletePengajuanIds.length ? `Tandai Selesai (${selectedCompletePengajuanIds.length})` : 'Tandai Selesai'"
+                icon="i-lucide-check-check"
+                color="success"
+                variant="soft"
+                size="md"
+                :disabled="!selectedCompletePengajuanIds.length || isCompletingPengajuan"
+                :loading="isCompletingPengajuan"
+                @click="openSelectedCompletePengajuan"
+              />
               <UButton
                 v-if="isAdmin"
                 :label="isLoadAllMode ? 'Mode Halaman' : 'Load All'"
@@ -795,6 +942,7 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
           </div>
 
           <UTable
+            v-model:row-selection="rowSelection"
             :get-row-id="(row) => row.key"
             :data="tableRows"
             :columns="columns"
@@ -855,6 +1003,61 @@ function getRowKey(idPengajuan: string, noItem: number | string) {
           </div>
         </div>
       </section>
+
+      <UModal
+        v-model:open="completePengajuanOpen"
+        title="Tandai pengajuan selesai?"
+        :description="`${completePengajuanTargetIds.length} pengajuan akan diubah menjadi Selesai.`"
+        :ui="{ footer: 'justify-end' }"
+      >
+        <template #body>
+          <div class="space-y-4">
+            <UAlert
+              v-if="completePengajuanError"
+              color="error"
+              variant="subtle"
+              icon="i-lucide-circle-alert"
+              :title="completePengajuanError"
+            />
+
+            <div class="rounded-lg border border-muted bg-muted/20 p-3">
+              <p class="text-xs font-medium uppercase text-muted">
+                ID Pengajuan
+              </p>
+              <p class="mt-1 break-words font-mono text-sm text-highlighted">
+                {{ completePengajuanTargetPreview || '-' }}
+              </p>
+            </div>
+
+            <UFormField label="Catatan Admin" name="catatan-selesai">
+              <UTextarea
+                v-model="completePengajuanNote"
+                :rows="3"
+                class="w-full"
+                :disabled="isCompletingPengajuan"
+              />
+            </UFormField>
+          </div>
+        </template>
+
+        <template #footer="{ close }">
+          <UButton
+            label="Batal"
+            color="neutral"
+            variant="outline"
+            :disabled="isCompletingPengajuan"
+            @click="close"
+          />
+          <UButton
+            label="Tandai Selesai"
+            icon="i-lucide-check-check"
+            color="success"
+            :loading="isCompletingPengajuan"
+            :disabled="!completePengajuanTargetIds.length"
+            @click="confirmCompletePengajuan"
+          />
+        </template>
+      </UModal>
 
       <UModal
         v-model:open="editPengajuanOpen"
